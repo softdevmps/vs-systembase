@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
+import Rol from '../views/Sistema/Roles.vue'
 import Home from '../views/Home.vue'
 import Menu from '../views/Sistema/Menu.vue'
 import MainLayout from '../components/Layouts/MainLayout.vue'
@@ -23,8 +24,12 @@ const routes = [
       {
         path: 'menu',
         component: Menu
+      },
+      {
+        path: 'roles',
+        component: Rol
       }
-      // acá después van usuarios, roles, etc
+            // acá después van usuarios, roles, etc
     ]
   }
 ]
