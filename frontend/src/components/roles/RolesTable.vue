@@ -13,7 +13,7 @@
                     <v-icon>mdi-pencil</v-icon>
                 </v-btn>
 
-                <v-btn icon color="secondary" ß@click="$emit('menus', item)">
+                <v-btn icon color="secondary" @click="$emit('menus', item)">
                     <v-icon>mdi-menu</v-icon>
                 </v-btn>
             </template>
