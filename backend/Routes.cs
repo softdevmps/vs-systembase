@@ -9,7 +9,7 @@ namespace Backend
                 public const string Login = "api/v1/auth/login";
                 public const string Registrar = "api/v1/auth/registrar";
             }
-            
+
             public static class Menu
             {
                 public const string Obtener = "api/v1/menu";
@@ -28,6 +28,16 @@ namespace Backend
                 public const string Estado = "api/v1/roles/{id}/estado";
                 public const string AsignarMenus = "api/v1/roles/{id}/menus";
             }
+
+            public static class Usuarios
+            {
+                public const string Obtener = "api/v1/usuarios";
+                public const string ObtenerPorId = "api/v1/usuarios/{id}";
+                public const string Crear = "api/v1/usuarios";
+                public const string Editar = "api/v1/usuarios/{id}";
+                public const string Estado = "api/v1/usuarios/{id}/estado";
+            }
+
         }
     }
 }

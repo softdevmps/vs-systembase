@@ -4,6 +4,7 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Rol from '../views/Sistema/Roles.vue'
 import Home from '../views/Home.vue'
+import Usuarios from '../views/Sistema/Usuarios.vue'
 import Menu from '../views/Sistema/Menu.vue'
 import MainLayout from '../components/Layouts/MainLayout.vue'
 
@@ -28,6 +29,10 @@ const routes = [
       {
         path: 'roles',
         component: Rol
+      },
+      {
+        path: 'usuarios',
+        component: Usuarios
       }
             // acá después van usuarios, roles, etc
     ]
