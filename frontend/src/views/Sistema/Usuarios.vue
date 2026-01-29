@@ -1,12 +1,21 @@
 <template>
     <v-container fluid>
+
         <!-- HEADER -->
-        <v-row class="mb-4">
+        <v-row class="mb-6 align-center">
             <v-col>
-                <h2>Usuarios</h2>
-                <span class="grey--text">
-                    Administración de usuarios del sistema
-                </span>
+                <div class="d-flex align-center">
+                    <v-icon class="mr-2" color="primary" size="28">
+                        mdi-account-group
+                    </v-icon>
+
+                    <div>
+                        <h2 class="mb-1">Usuarios</h2>
+                        <span class="grey--text text-body-2">
+                            Administración de usuarios del sistema
+                        </span>
+                    </div>
+                </div>
             </v-col>
 
             <v-col class="text-right">
@@ -22,6 +31,7 @@
 
         <!-- DIALOG -->
         <usuario-dialog v-model="dialog" :usuario-id="usuarioId" :roles="roles" @guardado="cargarUsuarios" />
+
     </v-container>
 </template>
 
@@ -74,7 +84,10 @@ export default {
                             title: COLUMN_TITLES[key]
                         }));
 
-                    this.headers.push({ key: 'actions', title: 'Acciones' });
+                    this.headers.push({
+                        key: 'actions',
+                        title: 'Acciones'
+                    });
                 }
             });
         },
@@ -101,3 +114,9 @@ export default {
     }
 };
 </script>
+
+<style scoped>
+h2 {
+    font-weight: 600;
+}
+</style>

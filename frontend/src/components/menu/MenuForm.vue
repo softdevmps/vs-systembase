@@ -1,25 +1,70 @@
 <template>
-  <v-dialog v-model="open" max-width="500">
-    <v-card>
-      <v-card-title>
-        {{ menu ? 'Editar menú' : 'Nuevo menú' }}
+  <v-dialog v-model="open" max-width="520">
+    <v-card class="menu-dialog-card">
+
+      <!-- HEADER -->
+      <v-card-title class="d-flex align-center">
+        <v-icon class="mr-2" color="primary">
+          {{ menu ? 'mdi-pencil' : 'mdi-plus-box' }}
+        </v-icon>
+        <span class="text-h6 font-weight-medium">
+          {{ menu ? 'Editar menú' : 'Nuevo menú' }}
+        </span>
       </v-card-title>
 
-      <v-card-text>
-        <v-text-field v-model="form.titulo" label="Título" />
-        <v-text-field v-model="form.icono" label="Icono (mdi-*)" />
-        <v-text-field v-model="form.ruta" label="Ruta" />
-        <v-text-field v-model.number="form.orden" label="Orden" type="number" />
+      <v-divider />
 
-        <v-select v-model="form.padreId" :items="padres" item-title="titulo" item-value="id" label="Menú padre"
-          clearable />
+      <!-- BODY -->
+      <v-card-text>
+        <v-form class="menu-form">
+
+          <v-row>
+            <v-col cols="12">
+              <v-text-field v-model="form.titulo" label="Título" prepend-inner-icon="mdi-format-title" />
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.icono" label="Icono (mdi-*)" prepend-inner-icon="mdi-icons" />
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.orden" label="Orden" type="number"
+                prepend-inner-icon="mdi-sort-numeric-ascending" />
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col cols="12">
+              <v-text-field v-model="form.ruta" label="Ruta" prepend-inner-icon="mdi-link-variant" />
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col cols="12">
+              <v-select v-model="form.padreId" :items="padres" item-title="titulo" item-value="id" label="Menú padre"
+                prepend-inner-icon="mdi-file-tree" clearable />
+            </v-col>
+          </v-row>
+
+        </v-form>
       </v-card-text>
 
-      <v-card-actions>
+      <v-divider />
+
+      <!-- ACTIONS -->
+      <v-card-actions class="pa-4">
         <v-spacer />
-        <v-btn text @click="cerrar">Cancelar</v-btn>
-        <v-btn color="primary" @click="guardar">Guardar</v-btn>
+        <v-btn variant="text" @click="cerrar">
+          Cancelar
+        </v-btn>
+
+        <v-btn color="primary" @click="guardar">
+          Guardar
+        </v-btn>
       </v-card-actions>
+
     </v-card>
   </v-dialog>
 </template>
@@ -46,18 +91,39 @@ const form = ref({
   rolesIds: [1]
 })
 
+/* ✅ FIX CLAVE: mapear correctamente padreId */
 watch(
   () => props.menu,
   (m) => {
-    if (m) {
-      Object.assign(form.value, m)
+    if (!m) {
+      form.value = {
+        titulo: '',
+        icono: '',
+        ruta: '',
+        orden: 1,
+        padreId: null,
+        rolesIds: [1]
+      }
+      return
+    }
+
+    form.value = {
+      titulo: m.titulo,
+      icono: m.icono,
+      ruta: m.ruta,
+      orden: m.orden,
+      padreId: m.padreId ?? null,
+      rolesIds: m.rolesIds ?? [1]
     }
   },
   { immediate: true }
 )
 
 const padres = computed(() =>
-  props.menus.map(m => ({ id: m.id, titulo: m.titulo }))
+  props.menus.map(m => ({
+    id: m.id,
+    titulo: m.titulo
+  }))
 )
 
 function cerrar() {
@@ -74,3 +140,13 @@ async function guardar() {
   emit('guardado')
 }
 </script>
+
+<style scoped>
+.menu-dialog-card {
+  border-radius: 14px;
+}
+
+.menu-form :deep(.v-field) {
+  margin-bottom: 6px;
+}
+</style>

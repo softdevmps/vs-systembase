@@ -1,21 +1,38 @@
 <template>
-  <v-dialog v-model="model" max-width="400">
-    <v-card>
-      <v-card-title>
-        {{ rol ? 'Editar rol' : 'Nuevo rol' }}
+  <v-dialog v-model="model" max-width="420">
+    <v-card class="rol-dialog-card">
+
+      <!-- HEADER -->
+      <v-card-title class="d-flex align-center">
+        <v-icon class="mr-2" color="primary">
+          {{ rol ? 'mdi-shield-edit' : 'mdi-shield-plus' }}
+        </v-icon>
+        <span class="text-h6 font-weight-medium">
+          {{ rol ? 'Editar rol' : 'Nuevo rol' }}
+        </span>
       </v-card-title>
 
+      <v-divider />
+
+      <!-- BODY -->
       <v-card-text>
-        <v-text-field v-model="form.nombre" label="Nombre" />
+        <v-text-field v-model="form.nombre" label="Nombre del rol" prepend-inner-icon="mdi-shield-account" />
       </v-card-text>
 
-      <v-card-actions>
+      <v-divider />
+
+      <!-- ACTIONS -->
+      <v-card-actions class="pa-4">
         <v-spacer />
-        <v-btn text @click="cerrar">Cancelar</v-btn>
+        <v-btn variant="text" @click="cerrar">
+          Cancelar
+        </v-btn>
+
         <v-btn color="primary" @click="guardar">
           Guardar
         </v-btn>
       </v-card-actions>
+
     </v-card>
   </v-dialog>
 </template>
@@ -68,12 +85,12 @@ export default {
 
     async guardar() {
       if (this.rol?.id) {
-        // EDITAR (solo nombre)
+        // EDITAR
         await rolService.editar(this.rol.id, {
           nombre: this.form.nombre
         });
       } else {
-        // CREAR (activo por default en backend)
+        // CREAR
         await rolService.crear({
           nombre: this.form.nombre
         });
@@ -85,3 +102,9 @@ export default {
   }
 };
 </script>
+
+<style scoped>
+.rol-dialog-card {
+  border-radius: 14px;
+}
+</style>

@@ -1,29 +1,75 @@
 <template>
   <v-dialog v-model="model" max-width="600px">
-    <v-card>
-      <v-card-title>
-        {{ usuarioId ? 'Editar usuario' : 'Nuevo usuario' }}
+    <v-card class="usuario-dialog-card">
+
+      <!-- HEADER -->
+      <v-card-title class="d-flex align-center">
+        <v-icon class="mr-2" color="primary">
+          {{ usuarioId ? 'mdi-account-edit' : 'mdi-account-plus' }}
+        </v-icon>
+        <span class="text-h6 font-weight-medium">
+          {{ usuarioId ? 'Editar usuario' : 'Nuevo usuario' }}
+        </span>
       </v-card-title>
 
+      <v-divider />
+
+      <!-- BODY -->
       <v-card-text>
-        <v-form>
-          <v-text-field v-model="form.username" label="Username" />
-          <v-text-field v-model="form.email" label="Email" />
-          <v-text-field v-model="form.nombre" label="Nombre" />
-          <v-text-field v-model="form.apellido" label="Apellido" />
+        <v-form class="usuario-form">
 
-          <v-select v-model="form.rolId" :items="roles" item-title="nombre" item-value="id" label="Rol" />
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.username" label="Username" prepend-inner-icon="mdi-account" />
+            </v-col>
 
-          <v-text-field v-model="form.password" label="Password" type="password"
-            :hint="usuarioId ? 'Dejar vacío para no cambiar' : ''" persistent-hint />
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.email" label="Email" prepend-inner-icon="mdi-email" />
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.nombre" label="Nombre" prepend-inner-icon="mdi-card-account-details" />
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-text-field v-model="form.apellido" label="Apellido"
+                prepend-inner-icon="mdi-card-account-details-outline" />
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col cols="12">
+              <v-select v-model="form.rolId" :items="roles" item-title="nombre" item-value="id" label="Rol"
+                prepend-inner-icon="mdi-shield-account" />
+            </v-col>
+          </v-row>
+
+          <v-row>
+            <v-col cols="12">
+              <v-text-field v-model="form.password" label="Password" type="password" prepend-inner-icon="mdi-lock"
+                :hint="usuarioId ? 'Dejar vacío para no cambiar' : ''" persistent-hint />
+            </v-col>
+          </v-row>
+
         </v-form>
       </v-card-text>
 
-      <v-card-actions>
+      <v-divider />
+
+      <!-- ACTIONS -->
+      <v-card-actions class="pa-4">
         <v-spacer />
-        <v-btn text @click="cerrar">Cancelar</v-btn>
-        <v-btn color="primary" @click="guardar">Guardar</v-btn>
+        <v-btn variant="text" @click="cerrar">
+          Cancelar
+        </v-btn>
+
+        <v-btn color="primary" @click="guardar">
+          Guardar
+        </v-btn>
       </v-card-actions>
+
     </v-card>
   </v-dialog>
 </template>
@@ -119,3 +165,17 @@ export default {
   }
 };
 </script>
+
+<style scoped>
+.usuario-dialog-card {
+  border-radius: 14px;
+}
+
+.usuario-form {
+  margin-top: 8px;
+}
+
+.usuario-form :deep(.v-field) {
+  margin-bottom: 4px;
+}
+</style>

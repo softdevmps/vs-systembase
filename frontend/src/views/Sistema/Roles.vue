@@ -2,12 +2,20 @@
     <v-container fluid>
 
         <!-- HEADER -->
-        <v-row class="mb-4">
+        <v-row class="mb-6 align-center">
             <v-col>
-                <h2>Roles</h2>
-                <span class="grey--text">
-                    Administración de roles del sistema
-                </span>
+                <div class="d-flex align-center">
+                    <v-icon class="mr-2" color="primary" size="28">
+                        mdi-shield-account
+                    </v-icon>
+
+                    <div>
+                        <h2 class="mb-1">Roles</h2>
+                        <span class="grey--text text-body-2">
+                            Administración de roles del sistema
+                        </span>
+                    </div>
+                </div>
             </v-col>
 
             <v-col class="text-right">
@@ -104,3 +112,9 @@ export default {
     }
 };
 </script>
+
+<style scoped>
+h2 {
+    font-weight: 600;
+}
+</style>
