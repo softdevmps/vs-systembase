@@ -13,18 +13,9 @@
       </v-col>
     </v-row>
 
-    <MenuTable
-      :menus="menus"
-      @editar="editarMenu"
-    />
+    <MenuTable :menus="menus" @editar="editarMenu" />
 
-    <MenuForm
-      v-if="showForm"
-      :menu="menuSeleccionado"
-      :menus="menus"
-      @cerrar="cerrarForm"
-      @guardado="recargar"
-    />
+    <MenuForm v-if="showForm" :menu="menuSeleccionado" :menus="menus" @cerrar="cerrarForm" @guardado="recargar" />
   </v-container>
 </template>
 

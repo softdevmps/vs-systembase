@@ -12,11 +12,7 @@
 
       <tbody>
         <template v-for="menu in menus" :key="menu.id">
-          <MenuRow
-            :menu="menu"
-            :nivel="0"
-            @editar="$emit('editar', $event)"
-          />
+          <MenuRow :menu="menu" :nivel="0" @editar="$emit('editar', $event)" />
         </template>
       </tbody>
     </v-table>

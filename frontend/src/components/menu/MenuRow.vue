@@ -18,11 +18,7 @@
   </tr>
 
   <template v-for="child in menu.children" :key="child.id">
-    <MenuRow
-      :menu="child"
-      :nivel="nivel + 1"
-      @editar="$emit('editar', $event)"
-    />
+    <MenuRow :menu="child" :nivel="nivel + 1" @editar="$emit('editar', $event)" />
   </template>
 </template>
 

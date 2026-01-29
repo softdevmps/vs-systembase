@@ -11,14 +11,8 @@
         <v-text-field v-model="form.ruta" label="Ruta" />
         <v-text-field v-model.number="form.orden" label="Orden" type="number" />
 
-        <v-select
-          v-model="form.padreId"
-          :items="padres"
-          item-title="titulo"
-          item-value="id"
-          label="Menú padre"
-          clearable
-        />
+        <v-select v-model="form.padreId" :items="padres" item-title="titulo" item-value="id" label="Menú padre"
+          clearable />
       </v-card-text>
 
       <v-card-actions>

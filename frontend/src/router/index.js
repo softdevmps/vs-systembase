@@ -34,7 +34,7 @@ const routes = [
         path: 'usuarios',
         component: Usuarios
       }
-            // acá después van usuarios, roles, etc
+      // acá después van usuarios, roles, etc
     ]
   }
 ]
