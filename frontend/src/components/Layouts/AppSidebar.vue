@@ -11,50 +11,13 @@
 
     <!-- MENU -->
     <v-list nav density="compact" class="sidebar-list">
-
-      <template v-for="item in menu" :key="item.id">
-
-        <!-- ITEM SIMPLE -->
-        <v-list-item v-if="!item.children || item.children.length === 0" :to="item.ruta" router link
-          active-class="sidebar-active">
-          <template #prepend>
-            <v-icon>{{ item.icono }}</v-icon>
-          </template>
-
-          <v-list-item-title>
-            {{ item.titulo }}
-          </v-list-item-title>
-        </v-list-item>
-
-        <!-- ITEM PADRE -->
-        <v-list-group v-else :value="isGroupOpen(item)">
-          <template #activator="{ props }">
-            <v-list-item v-bind="props">
-              <template #prepend>
-                <v-icon>{{ item.icono }}</v-icon>
-              </template>
-
-              <v-list-item-title>
-                {{ item.titulo }}
-              </v-list-item-title>
-            </v-list-item>
-          </template>
-
-          <v-list-item v-for="child in item.children" :key="child.id" :to="child.ruta" router link
-            active-class="sidebar-active" class="sidebar-child">
-            <template #prepend>
-              <v-icon size="18">{{ child.icono }}</v-icon>
-            </template>
-
-            <v-list-item-title>
-              {{ child.titulo }}
-            </v-list-item-title>
-          </v-list-item>
-
-        </v-list-group>
-
-      </template>
-
+      <SidebarItem
+        v-for="item in menu"
+        :key="item.id"
+        :item="item"
+        :depth="0"
+        :active-path="route.path"
+      />
     </v-list>
   </v-navigation-drawer>
 </template>
@@ -63,6 +26,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useMenuStore } from '../../store/menu.store.js'
+import SidebarItem from './SidebarItem.vue'
 
 /* =========================
    PROPS & EMITS
@@ -86,13 +50,6 @@ const { state, cargarMenuTree } = useMenuStore()
    COMPUTED
 ========================= */
 const menu = computed(() => state.tree)
-
-/* =========================
-   METHODS
-========================= */
-function isGroupOpen(item) {
-  return item.children?.some(child => child.ruta === route.path)
-}
 
 /* =========================
    LIFECYCLE
@@ -135,10 +92,6 @@ onMounted(() => {
 }
 
 /* CHILD */
-.sidebar-child {
-  padding-left: 32px;
-}
-
 /* ICONS */
 .v-icon {
   opacity: 0.85;

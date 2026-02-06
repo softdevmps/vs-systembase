@@ -9,6 +9,9 @@ export default {
   getMenuTree() {
     return api.get('/menu/tree')
   },
+  getSidebarTree() {
+    return api.get('/menu/sidebar')
+  },
 
   // Listado plano (ABM / admin)
   getAll() {

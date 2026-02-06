@@ -34,5 +34,18 @@ namespace Backend.Controllers
             return Ok(menu);
         }
 
+        [HttpGet(Routes.v1.Menu.SidebarTree)]
+        public IActionResult ObtenerSidebarMenuTree()
+        {
+            var usuario = UsuarioToken();
+
+            if (usuario.UsuarioId == 0)
+                return Unauthorized();
+
+            var menu = MenuGestor.ObtenerSidebarTreePorUsuario(usuario.UsuarioId);
+
+            return Ok(menu);
+        }
+
     }
 }

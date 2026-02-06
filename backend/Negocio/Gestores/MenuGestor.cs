@@ -210,5 +210,65 @@ namespace Backend.Negocio.Gestores
             return root;
         }
 
+        public static List<MenuTreeResponse> ObtenerSidebarTreePorUsuario(int usuarioId)
+        {
+            using var context = new SystemBaseContext();
+
+            var baseMenu = ObtenerMenuTreePorUsuario(usuarioId);
+
+            var systemMenus = context.SystemMenus
+                .Include(m => m.System)
+                .Where(m => m.IsActive)
+                .Where(m => m.System.IsActive && m.System.Status == "published")
+                .Where(m =>
+                    !m.Role.Any() ||
+                    m.Role.Any(r => r.Usuarios.Any(u => u.Id == usuarioId))
+                )
+                .Select(m => new
+                {
+                    m.Id,
+                    m.SystemId,
+                    SystemName = m.System.Name,
+                    SystemSlug = m.System.Slug,
+                    m.Title,
+                    m.Icon,
+                    m.Route,
+                    m.ParentId,
+                    m.SortOrder
+                })
+                .ToList();
+
+            var systemGroups = systemMenus
+                .GroupBy(m => new { m.SystemId, m.SystemName, m.SystemSlug })
+                .ToList();
+
+            foreach (var group in systemGroups)
+            {
+                var systemRoot = new MenuTreeResponse
+                {
+                    Id = -100000 - group.Key.SystemId,
+                    Titulo = group.Key.SystemName,
+                    Icono = "mdi-apps",
+                    Ruta = $"/s/{group.Key.SystemSlug}",
+                    Orden = 1000 + group.Key.SystemId
+                };
+
+                var entidadesGroup = new MenuTreeResponse
+                {
+                    Id = -200000 - group.Key.SystemId,
+                    Titulo = "Entidades",
+                    Icono = "mdi-database",
+                    Ruta = $"/s/{group.Key.SystemSlug}",
+                    Orden = 1
+                };
+
+                systemRoot.Children.Add(entidadesGroup);
+                baseMenu.Add(systemRoot);
+            }
+
+            baseMenu.Sort((a, b) => a.Orden.CompareTo(b.Orden));
+            return baseMenu;
+        }
+
     }
 }

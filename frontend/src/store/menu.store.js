@@ -10,7 +10,7 @@ const state = reactive({
 async function cargarMenuTree() {
     state.loading = true
     try {
-        const response = await menuService.getMenuTree()
+        const response = await menuService.getSidebarTree()
         state.tree = response.data ?? []   // 👈 CLAVE
     } catch (error) {
         console.error('[MenuStore] Error cargando menú:', error)

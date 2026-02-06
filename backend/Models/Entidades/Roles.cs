@@ -14,4 +14,8 @@ public partial class Roles
     public virtual ICollection<Usuarios> Usuarios { get; set; } = new List<Usuarios>();
 
     public virtual ICollection<Menus> Menu { get; set; } = new List<Menus>();
+
+    public virtual ICollection<Permissions> Permission { get; set; } = new List<Permissions>();
+
+    public virtual ICollection<SystemMenus> SystemMenu { get; set; } = new List<SystemMenus>();
 }
