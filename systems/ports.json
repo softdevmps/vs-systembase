@@ -1,13 +1,20 @@
 {
-  "generatedAt": "2026-02-11T10:46:48.138803Z",
+  "generatedAt": "2026-02-11T15:46:00.603293Z",
   "basePort": 5032,
   "systems": [
     {
       "id": 1,
-      "slug": "inventario",
-      "name": "Sistema de Inventario",
+      "slug": "systembase-core",
+      "name": "SystemBase Core",
       "port": 5033,
       "baseUrl": "http://localhost:5033"
+    },
+    {
+      "id": 2,
+      "slug": "inventario",
+      "name": "Sistema de inventario",
+      "port": 5034,
+      "baseUrl": "http://localhost:5034"
     }
   ]
 }

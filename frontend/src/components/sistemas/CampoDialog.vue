@@ -130,30 +130,38 @@ export default {
     campo: {
       immediate: true,
       handler(value) {
-        if (!value) {
-          this.reset();
-          return;
-        }
-
-        this.form = {
-          name: value.name,
-          columnName: value.columnName,
-          dataType: value.dataType ?? 'string',
-          required: value.required ?? false,
-          maxLength: value.maxLength,
-          precision: value.precision,
-          scale: value.scale,
-          defaultValue: value.defaultValue ?? '',
-          isPrimaryKey: value.isPrimaryKey ?? false,
-          isIdentity: value.isIdentity ?? false,
-          isUnique: value.isUnique ?? false,
-          sortOrder: value.sortOrder ?? 1
-        };
+        this.syncForm(value);
       }
+    },
+    modelValue(value) {
+      if (!value) return;
+      // When opening, always sync to avoid stale data
+      this.syncForm(this.campo);
     }
   },
 
   methods: {
+    syncForm(value) {
+      if (!value) {
+        this.reset();
+        return;
+      }
+
+      this.form = {
+        name: value.name,
+        columnName: value.columnName,
+        dataType: value.dataType ?? 'string',
+        required: value.required ?? false,
+        maxLength: value.maxLength,
+        precision: value.precision,
+        scale: value.scale,
+        defaultValue: value.defaultValue ?? '',
+        isPrimaryKey: value.isPrimaryKey ?? false,
+        isIdentity: value.isIdentity ?? false,
+        isUnique: value.isUnique ?? false,
+        sortOrder: value.sortOrder ?? 1
+      };
+    },
     guardar() {
       const payload = {
         name: this.form.name,
@@ -181,6 +189,7 @@ export default {
     },
 
     cerrar() {
+      this.reset();
       this.model = false;
     },
 

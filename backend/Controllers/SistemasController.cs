@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO.Compression;
 using System.Net.Http;
 
 namespace Backend.Controllers
@@ -76,24 +77,77 @@ namespace Backend.Controllers
         }
 
         [HttpPost(Routes.v1.Sistemas.Exportar)]
-        public IActionResult Exportar(int id, [FromQuery] bool full = false, [FromQuery] string mode = "zip", [FromQuery] bool overwrite = false)
+        public IActionResult Exportar(
+            int id,
+            [FromQuery] bool full = false,
+            [FromQuery] string mode = "zip",
+            [FromQuery] bool overwrite = false,
+            [FromQuery] string source = "")
         {
             var normalizedMode = (mode ?? "zip").Trim().ToLowerInvariant();
+            var normalizedSource = (source ?? string.Empty).Trim().ToLowerInvariant();
             var repoRoot = Directory.GetParent(_env.ContentRootPath)?.FullName ?? _env.ContentRootPath;
 
-            string exportRoot;
-            if (normalizedMode == "workspace")
+            var systemsRoot = Environment.GetEnvironmentVariable("SYSTEMBASE_SYSTEMS_ROOT");
+            if (string.IsNullOrWhiteSpace(systemsRoot))
+                systemsRoot = Path.Combine(repoRoot, "systems");
+
+            var exportsRoot = Environment.GetEnvironmentVariable("SYSTEMBASE_EXPORT_ROOT");
+            if (string.IsNullOrWhiteSpace(exportsRoot))
+                exportsRoot = Path.Combine(repoRoot, "exports");
+
+            var preferWorkspaceZip = normalizedMode == "zip" &&
+                (string.IsNullOrWhiteSpace(normalizedSource) || normalizedSource == "workspace");
+
+            if (preferWorkspaceZip)
             {
-                exportRoot = Environment.GetEnvironmentVariable("SYSTEMBASE_SYSTEMS_ROOT");
-                if (string.IsNullOrWhiteSpace(exportRoot))
-                    exportRoot = Path.Combine(repoRoot, "systems");
+                var sistema = SistemasGestor.ObtenerPorId(id);
+                if (sistema == null)
+                    return NotFound();
+
+                var workspacePath = Path.Combine(systemsRoot, sistema.Slug);
+                if (!Directory.Exists(workspacePath))
+                {
+                    var exportResult = SistemasExportador.Exportar(
+                        id,
+                        systemsRoot,
+                        _env.ContentRootPath,
+                        full,
+                        true,
+                        overwrite
+                    );
+
+                    if (!exportResult.Ok)
+                        return BadRequest(exportResult);
+
+                    workspacePath = exportResult.ExportPath;
+                }
+
+                var metadataResult = SistemasExportador.ActualizarMetadata(
+                    id,
+                    workspacePath,
+                    _env.ContentRootPath,
+                    full
+                );
+
+                if (!metadataResult.Ok)
+                    return BadRequest(metadataResult);
+
+                Directory.CreateDirectory(exportsRoot);
+                var rawName = string.IsNullOrWhiteSpace(sistema.Name) ? sistema.Slug : sistema.Name.Trim();
+                var safeName = string.Join("_", rawName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries));
+                if (string.IsNullOrWhiteSpace(safeName))
+                    safeName = sistema.Slug;
+                var zipFileName = $"{safeName}.zip";
+                var zipPath = Path.Combine(exportsRoot, zipFileName);
+                if (System.IO.File.Exists(zipPath))
+                    System.IO.File.Delete(zipPath);
+
+                ZipFile.CreateFromDirectory(workspacePath, zipPath, CompressionLevel.Fastest, false);
+                return PhysicalFile(zipPath, "application/zip", zipFileName);
             }
-            else
-            {
-                exportRoot = Environment.GetEnvironmentVariable("SYSTEMBASE_EXPORT_ROOT");
-                if (string.IsNullOrWhiteSpace(exportRoot))
-                    exportRoot = Path.Combine(repoRoot, "exports");
-            }
+
+            var exportRoot = normalizedMode == "workspace" ? systemsRoot : exportsRoot;
 
             var result = SistemasExportador.Exportar(
                 id,

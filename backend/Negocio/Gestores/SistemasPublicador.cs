@@ -89,6 +89,7 @@ namespace Backend.Negocio.Gestores
                 AplicarRelaciones(context, schemaName, system);
                 CrearMenusSistema(context, system);
                 CrearPermisosSistema(context, system);
+                AsignarPermisosAdmin(context, system.Id);
 
                 system.Status = "published";
                 system.PublishedAt = DateTime.UtcNow;
@@ -306,6 +307,32 @@ END";
                     };
 
                     context.Permissions.Add(permiso);
+                }
+            }
+        }
+
+        private static void AsignarPermisosAdmin(SystemBaseContext context, int systemId)
+        {
+            var adminRole = context.Roles
+                .Include(r => r.Permission)
+                .FirstOrDefault(r => r.Nombre.ToLower() == "admin");
+
+            if (adminRole == null)
+                return;
+
+            var systemPermissions = context.Permissions
+                .Where(p => p.SystemId == systemId)
+                .ToList();
+
+            if (systemPermissions.Count == 0)
+                return;
+
+            var existing = adminRole.Permission.Select(p => p.Id).ToHashSet();
+            foreach (var permission in systemPermissions)
+            {
+                if (!existing.Contains(permission.Id))
+                {
+                    adminRole.Permission.Add(permission);
                 }
             }
         }

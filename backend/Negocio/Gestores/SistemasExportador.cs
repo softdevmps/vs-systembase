@@ -12,6 +12,141 @@ namespace Backend.Negocio.Gestores
     {
         private static readonly string[] Actions = { "view", "create", "edit", "delete" };
 
+        public static ExportResult ActualizarMetadata(
+            int systemId,
+            string exportPath,
+            string contentRootPath,
+            bool includeAdminMenus)
+        {
+            using var context = new SystemBaseContext();
+
+            var system = context.Systems
+                .Include(s => s.Entities)
+                    .ThenInclude(e => e.Fields)
+                .Include(s => s.Relations)
+                .FirstOrDefault(s => s.Id == systemId);
+
+            if (system == null)
+            {
+                return new ExportResult
+                {
+                    Ok = false,
+                    Message = "Sistema no encontrado."
+                };
+            }
+
+            if (system.Entities.Count == 0)
+            {
+                return new ExportResult
+                {
+                    Ok = false,
+                    Message = "El sistema no tiene entidades."
+                };
+            }
+
+            var schemaName = ToSafeSchemaName(system.Slug);
+            if (schemaName == null)
+            {
+                return new ExportResult
+                {
+                    Ok = false,
+                    Message = "Slug invalido para crear schema."
+                };
+            }
+
+            foreach (var entity in system.Entities)
+            {
+                if (entity.Fields.Count == 0)
+                {
+                    return new ExportResult
+                    {
+                        Ok = false,
+                        Message = $"Entidad sin campos: {entity.Name}"
+                    };
+                }
+
+                if (ToSafeSqlName(entity.TableName) == null)
+                {
+                    return new ExportResult
+                    {
+                        Ok = false,
+                        Message = $"TableName invalido: {entity.TableName}"
+                    };
+                }
+
+                foreach (var field in entity.Fields)
+                {
+                    if (ToSafeSqlName(field.ColumnName) == null)
+                    {
+                        return new ExportResult
+                        {
+                            Ok = false,
+                            Message = $"ColumnName invalido: {field.ColumnName}"
+                        };
+                    }
+                }
+            }
+
+            try
+            {
+                Directory.CreateDirectory(exportPath);
+
+                var metadataSql = ReadMetadataSql(contentRootPath);
+                var frontendConfig = FrontendConfigGestor.ObtenerPorSistema(system.Id);
+                var adminUser = string.IsNullOrWhiteSpace(frontendConfig?.System?.SeedAdminUser) ? "admin" : frontendConfig.System.SeedAdminUser;
+                var adminPassword = string.IsNullOrWhiteSpace(frontendConfig?.System?.SeedAdminPassword) ? "admin" : frontendConfig.System.SeedAdminPassword;
+                var adminEmail = string.IsNullOrWhiteSpace(frontendConfig?.System?.SeedAdminEmail)
+                    ? $"{adminUser}@local"
+                    : frontendConfig.System.SeedAdminEmail;
+                var adminHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
+
+                var dbName = ToSafeSqlName(Environment.GetEnvironmentVariable("DB_NAME")) ?? "systemBase";
+                var databaseSql = BuildDatabaseScript(
+                    system,
+                    schemaName,
+                    metadataSql,
+                    adminUser,
+                    adminEmail,
+                    adminHash,
+                    includeAdminMenus,
+                    dbName
+                );
+
+                var databasePath = Path.Combine(exportPath, "database.sql");
+                File.WriteAllText(databasePath, databaseSql, new UTF8Encoding(false));
+
+                var manifest = BuildManifest(system, schemaName);
+                var manifestPath = Path.Combine(exportPath, "manifest.json");
+                var manifestJson = JsonSerializer.Serialize(
+                    manifest,
+                    new JsonSerializerOptions
+                    {
+                        WriteIndented = true,
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                    });
+                File.WriteAllText(manifestPath, manifestJson, new UTF8Encoding(false));
+
+                var readmePath = Path.Combine(exportPath, "README.md");
+                File.WriteAllText(readmePath, BuildReadme(system, schemaName, includeAdminMenus, adminUser, adminPassword, dbName), new UTF8Encoding(false));
+
+                return new ExportResult
+                {
+                    Ok = true,
+                    Message = "Metadata actualizada correctamente.",
+                    ExportPath = exportPath,
+                    Files = new List<string> { "manifest.json", "database.sql", "README.md" }
+                };
+            }
+            catch (Exception ex)
+            {
+                return new ExportResult
+                {
+                    Ok = false,
+                    Message = $"Error al actualizar metadata: {ex.Message}"
+                };
+            }
+        }
+
         public static ExportResult Exportar(
             int systemId,
             string exportRoot,
@@ -121,7 +256,17 @@ namespace Backend.Negocio.Gestores
                     : frontendConfig.System.SeedAdminEmail;
                 var adminHash = BCrypt.Net.BCrypt.HashPassword(adminPassword);
 
-                var databaseSql = BuildDatabaseScript(system, schemaName, metadataSql, adminUser, adminEmail, adminHash, includeAdminMenus);
+                var dbName = ToSafeSqlName(Environment.GetEnvironmentVariable("DB_NAME")) ?? "systemBase";
+                var databaseSql = BuildDatabaseScript(
+                    system,
+                    schemaName,
+                    metadataSql,
+                    adminUser,
+                    adminEmail,
+                    adminHash,
+                    includeAdminMenus,
+                    dbName
+                );
                 var databasePath = Path.Combine(exportPath, "database.sql");
                 File.WriteAllText(databasePath, databaseSql, new UTF8Encoding(false));
 
@@ -137,7 +282,7 @@ namespace Backend.Negocio.Gestores
                 File.WriteAllText(manifestPath, manifestJson, new UTF8Encoding(false));
 
                 var readmePath = Path.Combine(exportPath, "README.md");
-                File.WriteAllText(readmePath, BuildReadme(system, schemaName, includeAdminMenus, adminUser, adminPassword), new UTF8Encoding(false));
+                File.WriteAllText(readmePath, BuildReadme(system, schemaName, includeAdminMenus, adminUser, adminPassword, dbName), new UTF8Encoding(false));
 
                 var repoRoot = Directory.GetParent(contentRootPath)?.FullName;
                 if (string.IsNullOrWhiteSpace(repoRoot))
@@ -229,13 +374,22 @@ namespace Backend.Negocio.Gestores
             string adminUser,
             string adminEmail,
             string adminHash,
-            bool includeAdminMenus)
+            bool includeAdminMenus,
+            string databaseName)
         {
             var sb = new StringBuilder();
 
             sb.AppendLine("-- =============================");
             sb.AppendLine("-- SystemBase Export - Database");
             sb.AppendLine("-- =============================");
+            sb.AppendLine();
+            sb.AppendLine($"IF DB_ID(N'{EscapeSql(databaseName)}') IS NULL");
+            sb.AppendLine("BEGIN");
+            sb.AppendLine($"    CREATE DATABASE [{databaseName}];");
+            sb.AppendLine("END");
+            sb.AppendLine("GO");
+            sb.AppendLine($"USE [{databaseName}];");
+            sb.AppendLine("GO");
             sb.AppendLine();
             sb.AppendLine("-- Base tables (dbo)");
             sb.AppendLine(BuildBaseTablesScript());
@@ -772,7 +926,7 @@ END");
             };
         }
 
-        private static string BuildReadme(Systems system, string schemaName, bool includeAdminMenus, string adminUser, string adminPassword)
+        private static string BuildReadme(Systems system, string schemaName, bool includeAdminMenus, string adminUser, string adminPassword, string databaseName)
         {
             var version = string.IsNullOrWhiteSpace(system.Version) ? "-" : system.Version.Trim();
             var modo = includeAdminMenus ? "FULL (incluye administracion)" : "RUNTIME-ONLY (solo modulo)";
@@ -795,8 +949,7 @@ Modo: {modo}
 - Password: `{adminPassword}`
 
 ## Uso rapido
-1. Crear una base de datos en SQL Server.
-2. Ejecutar `database.sql`.
+1. Ejecutar `database.sql` (crea la base `{databaseName}` si no existe).
 3. Copiar `backend/.env.example` a `backend/.env` y configurar DB/JWT.
    - Recomendado usar una base vacia para evitar duplicados.
 4. Backend:

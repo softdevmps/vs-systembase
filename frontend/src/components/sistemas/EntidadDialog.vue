@@ -99,24 +99,32 @@ export default {
     entidad: {
       immediate: true,
       handler(value) {
-        if (!value) {
-          this.reset();
-          return;
-        }
-
-        this.form = {
-          name: value.name,
-          tableName: value.tableName,
-          displayName: value.displayName ?? '',
-          description: value.description ?? '',
-          sortOrder: value.sortOrder ?? 1,
-          isActive: value.isActive ?? true
-        };
+        this.syncForm(value);
       }
+    },
+    modelValue(value) {
+      if (!value) return;
+      // When opening, always sync to avoid stale data
+      this.syncForm(this.entidad);
     }
   },
 
   methods: {
+    syncForm(value) {
+      if (!value) {
+        this.reset();
+        return;
+      }
+
+      this.form = {
+        name: value.name,
+        tableName: value.tableName,
+        displayName: value.displayName ?? '',
+        description: value.description ?? '',
+        sortOrder: value.sortOrder ?? 1,
+        isActive: value.isActive ?? true
+      };
+    },
     guardar() {
       const payload = {
         name: this.form.name,
@@ -138,6 +146,7 @@ export default {
     },
 
     cerrar() {
+      this.reset();
       this.model = false;
     },
 

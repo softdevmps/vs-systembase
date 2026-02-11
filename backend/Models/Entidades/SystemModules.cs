@@ -9,9 +9,9 @@ public partial class SystemModules
 
     public int ModuleId { get; set; }
 
-    public string? ConfigJson { get; set; }
-
     public bool IsEnabled { get; set; }
+
+    public string? ConfigJson { get; set; }
 
     public virtual Modules Module { get; set; } = null!;
 

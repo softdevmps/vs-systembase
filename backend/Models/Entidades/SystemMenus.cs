@@ -9,21 +9,19 @@ public partial class SystemMenus
 
     public int SystemId { get; set; }
 
-    public string Title { get; set; } = null!;
+    public int? ParentId { get; set; }
 
-    public string? Icon { get; set; }
+    public string? Title { get; set; }
 
     public string? Route { get; set; }
 
-    public int? ParentId { get; set; }
+    public string? Icon { get; set; }
 
     public int SortOrder { get; set; }
 
     public bool IsActive { get; set; }
 
     public DateTime CreatedAt { get; set; }
-
-    public DateTime? UpdatedAt { get; set; }
 
     public virtual ICollection<SystemMenus> InverseParent { get; set; } = new List<SystemMenus>();
 

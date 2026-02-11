@@ -48,9 +48,9 @@
 
     <v-window v-model="tab">
       <v-window-item value="datos">
-        <v-row>
-          <v-col cols="12" md="6">
-            <v-card elevation="2" class="card">
+        <v-row class="data-grid">
+          <v-col cols="12" md="6" class="d-flex">
+            <v-card elevation="2" class="card data-card">
               <v-card-title class="d-flex align-center justify-space-between">
                 <div class="d-flex align-center">
                   <v-icon class="mr-2" color="primary">mdi-table</v-icon>
@@ -74,53 +74,65 @@
 
               <v-divider />
 
-              <v-data-table :headers="headersEntidades" :items="entidades" class="table" density="compact" hover>
-                <template #item.isActive="{ item }">
-                  <v-chip size="small" :color="item.isActive ? 'green' : 'grey'">
-                    {{ item.isActive ? 'Activo' : 'Inactivo' }}
-                  </v-chip>
-                </template>
+              <v-card-text class="data-card-body">
+                <v-data-table
+                  :headers="headersEntidades"
+                  :items="entidades"
+                  :items-per-page="5"
+                  :items-per-page-options="[5, 10, 25]"
+                  class="table data-table"
+                  density="compact"
+                  hover
+                >
+                  <template #item.isActive="{ item }">
+                    <v-chip size="small" :color="item.isActive ? 'green' : 'grey'">
+                      {{ item.isActive ? 'Activo' : 'Inactivo' }}
+                    </v-chip>
+                  </template>
 
                 <template #item.actions="{ item }">
-                  <v-tooltip text="Seleccionar">
-                    <template #activator="{ props }">
-                      <v-btn v-bind="props" icon size="small" color="secondary" variant="text"
-                        @click="seleccionarEntidad(item)">
-                        <v-icon>mdi-database-search</v-icon>
-                      </v-btn>
-                    </template>
-                  </v-tooltip>
+                  <div class="table-actions">
+                    <v-tooltip text="Seleccionar">
+                      <template #activator="{ props }">
+                        <v-btn v-bind="props" icon size="small" color="secondary" variant="text"
+                          @click="seleccionarEntidad(item)">
+                          <v-icon>mdi-database-search</v-icon>
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
 
-                  <v-tooltip text="Datos">
-                    <template #activator="{ props }">
-                      <v-btn
-                        v-bind="props"
-                        icon
-                        size="small"
-                        color="teal"
-                        variant="text"
-                        @click="verDatos(item)"
-                      >
-                        <v-icon>mdi-table</v-icon>
-                      </v-btn>
-                    </template>
-                  </v-tooltip>
+                    <v-tooltip text="Datos">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon
+                          size="small"
+                          color="teal"
+                          variant="text"
+                          @click="verDatos(item)"
+                        >
+                          <v-icon>mdi-table</v-icon>
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
 
-                  <v-tooltip text="Editar">
-                    <template #activator="{ props }">
-                      <v-btn v-bind="props" icon size="small" color="primary" variant="text"
-                        @click="editarEntidad(item)">
-                        <v-icon>mdi-pencil</v-icon>
-                      </v-btn>
-                    </template>
-                  </v-tooltip>
+                    <v-tooltip text="Editar">
+                      <template #activator="{ props }">
+                        <v-btn v-bind="props" icon size="small" color="primary" variant="text"
+                          @click="editarEntidad(item)">
+                          <v-icon>mdi-pencil</v-icon>
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
+                  </div>
                 </template>
-              </v-data-table>
+                </v-data-table>
+              </v-card-text>
             </v-card>
           </v-col>
 
-          <v-col cols="12" md="6">
-            <v-card elevation="2" class="card">
+          <v-col cols="12" md="6" class="d-flex">
+            <v-card elevation="2" class="card data-card">
               <v-card-title class="d-flex align-center justify-space-between">
                 <div class="d-flex align-center">
                   <v-icon class="mr-2" color="primary">mdi-form-textbox</v-icon>
@@ -134,34 +146,45 @@
 
               <v-divider />
 
-              <div v-if="!entidadSeleccionada" class="empty-state">
-                Selecciona una entidad para ver sus campos.
-              </div>
+              <v-card-text class="data-card-body">
+                <div v-if="!entidadSeleccionada" class="empty-state data-empty">
+                  Selecciona una entidad para ver sus campos.
+                </div>
 
-              <v-data-table v-else :headers="headersCampos" :items="campos" class="table" density="compact" hover>
-                <template #item.required="{ item }">
-                  <v-chip size="small" :color="item.required ? 'green' : 'grey'">
-                    {{ item.required ? 'Si' : 'No' }}
-                  </v-chip>
-                </template>
+                <v-data-table
+                  v-else
+                  :headers="headersCampos"
+                  :items="campos"
+                  :items-per-page="5"
+                  :items-per-page-options="[5, 10, 25]"
+                  class="table data-table"
+                  density="compact"
+                  hover
+                >
+                  <template #item.required="{ item }">
+                    <v-chip size="small" :color="item.required ? 'green' : 'grey'">
+                      {{ item.required ? 'Si' : 'No' }}
+                    </v-chip>
+                  </template>
 
-                <template #item.isPrimaryKey="{ item }">
-                  <v-chip size="small" :color="item.isPrimaryKey ? 'primary' : 'grey'">
-                    {{ item.isPrimaryKey ? 'PK' : '-' }}
-                  </v-chip>
-                </template>
+                  <template #item.isPrimaryKey="{ item }">
+                    <v-chip size="small" :color="item.isPrimaryKey ? 'primary' : 'grey'">
+                      {{ item.isPrimaryKey ? 'PK' : '-' }}
+                    </v-chip>
+                  </template>
 
-                <template #item.actions="{ item }">
-                  <v-tooltip text="Editar">
-                    <template #activator="{ props }">
-                      <v-btn v-bind="props" icon size="small" color="primary" variant="text"
-                        @click="editarCampo(item)">
-                        <v-icon>mdi-pencil</v-icon>
-                      </v-btn>
-                    </template>
-                  </v-tooltip>
-                </template>
-              </v-data-table>
+                  <template #item.actions="{ item }">
+                    <v-tooltip text="Editar">
+                      <template #activator="{ props }">
+                        <v-btn v-bind="props" icon size="small" color="primary" variant="text"
+                          @click="editarCampo(item)">
+                          <v-icon>mdi-pencil</v-icon>
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
+                  </template>
+                </v-data-table>
+              </v-card-text>
             </v-card>
           </v-col>
         </v-row>
@@ -2049,7 +2072,7 @@ const headersEntidades = [
   { title: 'Nombre', key: 'name' },
   { title: 'TableName', key: 'tableName' },
   { title: 'Activo', key: 'isActive' },
-  { title: 'Acciones', key: 'actions', sortable: false }
+  { title: 'Acciones', key: 'actions', sortable: false, width: 140 }
 ]
 
 const headersCampos = [
@@ -3311,6 +3334,57 @@ function entidadNombre(id) {
 
 .backend-log-stdout {
   color: #e2e8f0;
+}
+
+.data-grid {
+  align-items: stretch;
+}
+
+.data-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.data-card-body {
+  flex: 1 1 auto;
+  min-height: clamp(260px, 36vh, 420px);
+  display: flex;
+  flex-direction: column;
+}
+
+.data-card-body :deep(.v-data-table) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.data-card-body :deep(.v-table__wrapper) {
+  flex: 1 1 auto;
+  overflow-y: auto;
+}
+
+.data-card-body :deep(.v-data-table-footer) {
+  flex: 0 0 auto;
+}
+
+.data-empty {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.table-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: nowrap;
+}
+
+.table-actions :deep(.v-btn) {
+  min-width: 32px;
 }
 
 .api-textarea :deep(textarea) {

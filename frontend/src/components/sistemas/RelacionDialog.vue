@@ -146,32 +146,13 @@ export default {
     relacion: {
       immediate: true,
       handler(value) {
-        if (!value) {
-          this.form = {
-            sourceEntityId: null,
-            targetEntityId: null,
-            foreignKey: '',
-            relationType: 'ManyToOne',
-            inverseProperty: '',
-            cascadeDelete: false
-          }
-          this.camposOptions = []
-          return
-        }
-
-        this.form = {
-          sourceEntityId: value.sourceEntityId,
-          targetEntityId: value.targetEntityId,
-          foreignKey: value.foreignKey || '',
-          relationType: value.relationType || 'ManyToOne',
-          inverseProperty: value.inverseProperty || '',
-          cascadeDelete: !!value.cascadeDelete
-        }
-
-        if (value.sourceEntityId) {
-          this.cargarCampos(value.sourceEntityId)
-        }
+        this.syncForm(value)
       }
+    },
+    modelValue(value) {
+      if (!value) return
+      // When opening, always sync to avoid stale data
+      this.syncForm(this.relacion)
     },
 
     'form.sourceEntityId': {
@@ -187,6 +168,38 @@ export default {
   },
 
   methods: {
+    reset() {
+      this.form = {
+        sourceEntityId: null,
+        targetEntityId: null,
+        foreignKey: '',
+        relationType: 'ManyToOne',
+        inverseProperty: '',
+        cascadeDelete: false
+      }
+      this.camposOptions = []
+    },
+
+    syncForm(value) {
+      if (!value) {
+        this.reset()
+        return
+      }
+
+      this.form = {
+        sourceEntityId: value.sourceEntityId,
+        targetEntityId: value.targetEntityId,
+        foreignKey: value.foreignKey || '',
+        relationType: value.relationType || 'ManyToOne',
+        inverseProperty: value.inverseProperty || '',
+        cascadeDelete: !!value.cascadeDelete
+      }
+
+      if (value.sourceEntityId) {
+        this.cargarCampos(value.sourceEntityId)
+      }
+    },
+
     async cargarCampos(entityId) {
       if (!this.systemId || !entityId) return
       const { data } = await campoService.getByEntity(this.systemId, entityId)
@@ -229,6 +242,7 @@ export default {
     },
 
     cerrar() {
+      this.reset()
       this.model = false
     }
   }

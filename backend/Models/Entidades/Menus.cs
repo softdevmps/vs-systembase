@@ -7,11 +7,11 @@ public partial class Menus
 {
     public int Id { get; set; }
 
-    public string Titulo { get; set; } = null!;
-
-    public string Icono { get; set; } = null!;
+    public string? Titulo { get; set; }
 
     public string? Ruta { get; set; }
+
+    public string? Icono { get; set; }
 
     public int Orden { get; set; }
 

@@ -26,7 +26,7 @@ export default {
   },
 
   exportarZip(id) {
-    return api.post(`/sistemas/${id}/export?mode=zip`, null, { responseType: 'blob' });
+    return api.post(`/sistemas/${id}/export?mode=zip&source=workspace`, null, { responseType: 'blob' });
   },
 
   exportarWorkspace(id, overwrite = false) {

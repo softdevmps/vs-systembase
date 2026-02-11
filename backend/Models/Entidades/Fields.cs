@@ -9,11 +9,11 @@ public partial class Fields
 
     public int EntityId { get; set; }
 
-    public string Name { get; set; } = null!;
+    public string? Name { get; set; }
 
-    public string ColumnName { get; set; } = null!;
+    public string? ColumnName { get; set; }
 
-    public string DataType { get; set; } = null!;
+    public string? DataType { get; set; }
 
     public bool Required { get; set; }
 

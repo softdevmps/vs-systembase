@@ -9,11 +9,11 @@ public partial class Permissions
 
     public int SystemId { get; set; }
 
-    public string Key { get; set; } = null!;
+    public string? Key { get; set; }
 
     public string? Description { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
 
     public virtual Systems System { get; set; } = null!;
 

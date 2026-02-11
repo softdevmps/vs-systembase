@@ -18,8 +18,6 @@ public partial class SystemBaseContext : DbContext
 
     public virtual DbSet<Entities> Entities { get; set; }
 
-    public virtual DbSet<EntityModules> EntityModules { get; set; }
-
     public virtual DbSet<Fields> Fields { get; set; }
 
     public virtual DbSet<Menus> Menus { get; set; }
@@ -32,9 +30,11 @@ public partial class SystemBaseContext : DbContext
 
     public virtual DbSet<Roles> Roles { get; set; }
 
-    public virtual DbSet<SystemBuilds> SystemBuilds { get; set; }
+    public virtual DbSet<SystemMenuRoles> SystemMenuRoles { get; set; }
 
     public virtual DbSet<SystemMenus> SystemMenus { get; set; }
+
+    public virtual DbSet<SystemBuilds> SystemBuilds { get; set; }
 
     public virtual DbSet<SystemModules> SystemModules { get; set; }
 
@@ -42,25 +42,26 @@ public partial class SystemBaseContext : DbContext
 
     public virtual DbSet<Usuarios> Usuarios { get; set; }
 
+    public virtual DbSet<EntityModules> EntityModules { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=localhost,1433;Database=systemBase;User Id=sa;Password=Password123!;TrustServerCertificate=True;");
+        => optionsBuilder.UseSqlServer("Server=localhost,1433;Database=systemBase;User Id=sa;Password=PukySecure#2026!;TrustServerCertificate=True;");
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Entities>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_Entities");
+            entity.HasKey(e => e.Id).HasName("PK__Entities__3214EC07F9A26605");
 
             entity.ToTable("Entities", "sb");
-
-            entity.HasIndex(e => e.SystemId, "IX_sb_Entities_System");
 
             entity.HasIndex(e => new { e.SystemId, e.Name }, "UX_sb_Entities_System_Name").IsUnique();
 
             entity.HasIndex(e => new { e.SystemId, e.TableName }, "UX_sb_Entities_System_TableName").IsUnique();
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.UpdatedAt);
             entity.Property(e => e.Description).HasMaxLength(500);
             entity.Property(e => e.DisplayName).HasMaxLength(150);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
@@ -74,34 +75,11 @@ public partial class SystemBaseContext : DbContext
                 .HasConstraintName("FK_sb_Entities_System");
         });
 
-        modelBuilder.Entity<EntityModules>(entity =>
-        {
-            entity.HasKey(e => new { e.EntityId, e.ModuleId }).HasName("PK_sb_EntityModules");
-
-            entity.ToTable("EntityModules", "sb");
-
-            entity.HasIndex(e => e.ModuleId, "IX_sb_EntityModules_Module");
-
-            entity.Property(e => e.IsEnabled).HasDefaultValue(true);
-
-            entity.HasOne(d => d.Entity).WithMany(p => p.EntityModules)
-                .HasForeignKey(d => d.EntityId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_sb_EntityModules_Entity");
-
-            entity.HasOne(d => d.Module).WithMany(p => p.EntityModules)
-                .HasForeignKey(d => d.ModuleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_sb_EntityModules_Module");
-        });
-
         modelBuilder.Entity<Fields>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_Fields");
+            entity.HasKey(e => e.Id).HasName("PK__Fields__3214EC072453D8D7");
 
             entity.ToTable("Fields", "sb");
-
-            entity.HasIndex(e => e.EntityId, "IX_sb_Fields_Entity");
 
             entity.HasIndex(e => new { e.EntityId, e.ColumnName }, "UX_sb_Fields_Entity_ColumnName").IsUnique();
 
@@ -109,10 +87,19 @@ public partial class SystemBaseContext : DbContext
 
             entity.Property(e => e.ColumnName).HasMaxLength(128);
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.UpdatedAt);
             entity.Property(e => e.DataType).HasMaxLength(50);
             entity.Property(e => e.DefaultValue).HasMaxLength(200);
             entity.Property(e => e.Name).HasMaxLength(100);
             entity.Property(e => e.SortOrder).HasDefaultValue(1);
+            entity.Property(e => e.Required).HasDefaultValue(false);
+            entity.Property(e => e.MaxLength);
+            entity.Property(e => e.Precision);
+            entity.Property(e => e.Scale);
+            entity.Property(e => e.IsPrimaryKey).HasDefaultValue(false);
+            entity.Property(e => e.IsIdentity).HasDefaultValue(false);
+            entity.Property(e => e.IsUnique).HasDefaultValue(false);
+            entity.Property(e => e.UiConfigJson);
 
             entity.HasOne(d => d.Entity).WithMany(p => p.Fields)
                 .HasForeignKey(d => d.EntityId)
@@ -122,13 +109,7 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Menus>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Menus__3214EC07DD4A0977");
-
-            entity.HasIndex(e => e.Activo, "IX_Menus_Activo");
-
-            entity.HasIndex(e => e.Orden, "IX_Menus_Orden");
-
-            entity.HasIndex(e => e.PadreId, "IX_Menus_PadreId");
+            entity.HasKey(e => e.Id).HasName("PK__Menus__3214EC07F7F592C7");
 
             entity.Property(e => e.Activo).HasDefaultValue(true);
             entity.Property(e => e.Icono)
@@ -148,11 +129,11 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Modules>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_Modules");
+            entity.HasKey(e => e.Id).HasName("PK__Modules__3214EC07A63BA0A5");
 
             entity.ToTable("Modules", "sb");
 
-            entity.HasIndex(e => e.Name, "UX_sb_Modules_Name").IsUnique();
+            entity.HasIndex(e => e.Name, "UQ__Modules__737584F67205A572").IsUnique();
 
             entity.Property(e => e.Description).HasMaxLength(200);
             entity.Property(e => e.Name).HasMaxLength(100);
@@ -161,7 +142,7 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Permissions>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_Permissions");
+            entity.HasKey(e => e.Id).HasName("PK__Permissi__3214EC0742A89361");
 
             entity.ToTable("Permissions", "sb");
 
@@ -179,20 +160,15 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Relations>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_Relations");
+            entity.HasKey(e => e.Id).HasName("PK__Relation__3214EC0789B316C1");
 
             entity.ToTable("Relations", "sb");
-
-            entity.HasIndex(e => e.SourceEntityId, "IX_sb_Relations_SourceEntity");
-
-            entity.HasIndex(e => e.SystemId, "IX_sb_Relations_System");
-
-            entity.HasIndex(e => e.TargetEntityId, "IX_sb_Relations_TargetEntity");
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.ForeignKey).HasMaxLength(128);
             entity.Property(e => e.InverseProperty).HasMaxLength(128);
             entity.Property(e => e.RelationType).HasMaxLength(30);
+            entity.Property(e => e.CascadeDelete).HasDefaultValue(false);
 
             entity.HasOne(d => d.SourceEntity).WithMany(p => p.RelationsSourceEntity)
                 .HasForeignKey(d => d.SourceEntityId)
@@ -212,7 +188,7 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Roles>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Roles__3214EC0772092302");
+            entity.HasKey(e => e.Id).HasName("PK__Roles__3214EC073595AE93");
 
             entity.Property(e => e.Activo).HasDefaultValue(true);
             entity.Property(e => e.Nombre)
@@ -225,14 +201,14 @@ public partial class SystemBaseContext : DbContext
                     r => r.HasOne<Menus>().WithMany()
                         .HasForeignKey("MenuId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__RolMenu__MenuId__5070F446"),
+                        .HasConstraintName("FK__RolMenu__MenuId__6E01572D"),
                     l => l.HasOne<Roles>().WithMany()
                         .HasForeignKey("RolId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK__RolMenu__RolId__4F7CD00D"),
+                        .HasConstraintName("FK__RolMenu__RolId__6D0D32F4"),
                     j =>
                     {
-                        j.HasKey("RolId", "MenuId").HasName("PK__RolMenu__E5BAEFD240AA35FD");
+                        j.HasKey("RolId", "MenuId").HasName("PK__RolMenu__E5BAEFD27D7A5CDD");
                     });
 
             entity.HasMany(d => d.Permission).WithMany(p => p.Role)
@@ -241,45 +217,30 @@ public partial class SystemBaseContext : DbContext
                     r => r.HasOne<Permissions>().WithMany()
                         .HasForeignKey("PermissionId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_sb_RolePermissions_Permission"),
+                        .HasConstraintName("FK__RolePermi__Permi__71D1E811"),
                     l => l.HasOne<Roles>().WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_sb_RolePermissions_Role"),
+                        .HasConstraintName("FK__RolePermi__RoleI__70DDC3D8"),
                     j =>
                     {
-                        j.HasKey("RoleId", "PermissionId").HasName("PK_sb_RolePermissions");
+                        j.HasKey("RoleId", "PermissionId").HasName("PK__RolePerm__6400A1A8E80EA170");
                         j.ToTable("RolePermissions", "sb");
                     });
         });
 
-        modelBuilder.Entity<SystemBuilds>(entity =>
+        modelBuilder.Entity<SystemMenuRoles>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_SystemBuilds");
+            entity.HasKey(e => new { e.SystemMenuId, e.RoleId }).HasName("PK__SystemMe__2E59CDF941182F30");
 
-            entity.ToTable("SystemBuilds", "sb");
-
-            entity.HasIndex(e => e.SystemId, "IX_sb_SystemBuilds_System");
-
-            entity.Property(e => e.StartedAt).HasDefaultValueSql("(sysdatetime())");
-            entity.Property(e => e.Status).HasMaxLength(30);
-            entity.Property(e => e.Version).HasMaxLength(20);
-
-            entity.HasOne(d => d.System).WithMany(p => p.SystemBuilds)
-                .HasForeignKey(d => d.SystemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_sb_SystemBuilds_System");
+            entity.ToTable("SystemMenuRoles", "sb");
         });
 
         modelBuilder.Entity<SystemMenus>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_SystemMenus");
+            entity.HasKey(e => e.Id).HasName("PK__SystemMe__3214EC07DC344DEC");
 
             entity.ToTable("SystemMenus", "sb");
-
-            entity.HasIndex(e => e.ParentId, "IX_sb_SystemMenus_Parent");
-
-            entity.HasIndex(e => e.SystemId, "IX_sb_SystemMenus_System");
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
             entity.Property(e => e.Icon).HasMaxLength(50);
@@ -298,32 +259,62 @@ public partial class SystemBaseContext : DbContext
                 .HasConstraintName("FK_sb_SystemMenus_System");
 
             entity.HasMany(d => d.Role).WithMany(p => p.SystemMenu)
-                .UsingEntity<Dictionary<string, object>>(
-                    "SystemMenuRoles",
-                    r => r.HasOne<Roles>().WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_sb_SystemMenuRoles_Role"),
-                    l => l.HasOne<SystemMenus>().WithMany()
-                        .HasForeignKey("SystemMenuId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_sb_SystemMenuRoles_Menu"),
+                .UsingEntity<SystemMenuRoles>(
+                    r => r.HasOne<Roles>().WithMany().HasForeignKey(e => e.RoleId).HasConstraintName("FK_sb_SystemMenuRoles_Role"),
+                    l => l.HasOne<SystemMenus>().WithMany().HasForeignKey(e => e.SystemMenuId).HasConstraintName("FK_sb_SystemMenuRoles_SystemMenu"),
                     j =>
                     {
-                        j.HasKey("SystemMenuId", "RoleId").HasName("PK_sb_SystemMenuRoles");
+                        j.HasKey(e => new { e.SystemMenuId, e.RoleId }).HasName("PK__SystemMe__2E59CDF941182F30");
                         j.ToTable("SystemMenuRoles", "sb");
                     });
         });
 
+        modelBuilder.Entity<SystemBuilds>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK__SystemBu__3214EC07");
+
+            entity.ToTable("SystemBuilds", "sb");
+
+            entity.Property(e => e.Version).HasMaxLength(20);
+            entity.Property(e => e.Status).HasMaxLength(30);
+            entity.Property(e => e.StartedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.FinishedAt);
+            entity.Property(e => e.Log);
+
+            entity.HasOne(d => d.System).WithMany(p => p.SystemBuilds)
+                .HasForeignKey(d => d.SystemId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_sb_SystemBuilds_System");
+        });
+
+        modelBuilder.Entity<EntityModules>(entity =>
+        {
+            entity.HasKey(e => new { e.EntityId, e.ModuleId }).HasName("PK__EntityMo__7B0D5DC9");
+
+            entity.ToTable("EntityModules", "sb");
+
+            entity.Property(e => e.ConfigJson);
+            entity.Property(e => e.IsEnabled).HasDefaultValue(true);
+
+            entity.HasOne(d => d.Entity).WithMany(p => p.EntityModules)
+                .HasForeignKey(d => d.EntityId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_sb_EntityModules_Entity");
+
+            entity.HasOne(d => d.Module).WithMany(p => p.EntityModules)
+                .HasForeignKey(d => d.ModuleId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_sb_EntityModules_Module");
+        });
+
         modelBuilder.Entity<SystemModules>(entity =>
         {
-            entity.HasKey(e => new { e.SystemId, e.ModuleId }).HasName("PK_sb_SystemModules");
+            entity.HasKey(e => new { e.SystemId, e.ModuleId }).HasName("PK__SystemMo__F123B1F069F4A87C");
 
             entity.ToTable("SystemModules", "sb");
 
-            entity.HasIndex(e => e.ModuleId, "IX_sb_SystemModules_Module");
-
             entity.Property(e => e.IsEnabled).HasDefaultValue(true);
+            entity.Property(e => e.ConfigJson);
 
             entity.HasOne(d => d.Module).WithMany(p => p.SystemModules)
                 .HasForeignKey(d => d.ModuleId)
@@ -338,13 +329,15 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Systems>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK_sb_Systems");
+            entity.HasKey(e => e.Id).HasName("PK__Systems__3214EC07889BECB1");
 
             entity.ToTable("Systems", "sb");
 
-            entity.HasIndex(e => e.Slug, "UX_sb_Systems_Slug").IsUnique();
+            entity.HasIndex(e => e.Slug, "UQ__Systems__BC7B5FB6F600BA1D").IsUnique();
 
             entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.UpdatedAt);
+            entity.Property(e => e.PublishedAt);
             entity.Property(e => e.Description).HasMaxLength(500);
             entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.Name).HasMaxLength(200);
@@ -358,11 +351,11 @@ public partial class SystemBaseContext : DbContext
 
         modelBuilder.Entity<Usuarios>(entity =>
         {
-            entity.HasKey(e => e.Id).HasName("PK__Usuarios__3214EC0708790CE8");
+            entity.HasKey(e => e.Id).HasName("PK__Usuarios__3214EC07677D505A");
 
-            entity.HasIndex(e => e.Username, "UQ__Usuarios__536C85E4130E8900").IsUnique();
+            entity.HasIndex(e => e.Username, "UQ__Usuarios__536C85E43F09255D").IsUnique();
 
-            entity.HasIndex(e => e.Email, "UQ__Usuarios__A9D10534197F2EFB").IsUnique();
+            entity.HasIndex(e => e.Email, "UQ__Usuarios__A9D1053486D218DA").IsUnique();
 
             entity.Property(e => e.Activo).HasDefaultValue(true);
             entity.Property(e => e.Apellido)

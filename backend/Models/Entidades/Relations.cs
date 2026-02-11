@@ -13,7 +13,7 @@ public partial class Relations
 
     public int TargetEntityId { get; set; }
 
-    public string RelationType { get; set; } = null!;
+    public string? RelationType { get; set; }
 
     public string? ForeignKey { get; set; }
 
@@ -21,7 +21,7 @@ public partial class Relations
 
     public bool CascadeDelete { get; set; }
 
-    public DateTime CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
 
     public virtual Entities SourceEntity { get; set; } = null!;
 

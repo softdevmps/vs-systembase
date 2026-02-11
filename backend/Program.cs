@@ -24,6 +24,11 @@ var password = Environment.GetEnvironmentVariable("DB_PASSWORD");
 var connectionString =
     $"Server={server};Database={database};User Id={user};Password={password};TrustServerCertificate=True;";
 
+
+Console.WriteLine("==== CONNECTION STRING ====");
+Console.WriteLine(connectionString);
+Console.WriteLine("===========================");
+
 // ===============================
 // 🗄️ DbContext
 // ===============================
