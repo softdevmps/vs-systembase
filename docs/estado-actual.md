@@ -198,6 +198,8 @@ Comportamiento:
 - Muestra solo sistemas publicados y activos.
 - Entra a `/s/{slug}` desde el item "Entidades".
 - Cuando existe frontend generado, aparece un item **Frontend** bajo el sistema.
+- El item **Frontend** abre una vista embebida (iframe) dentro de SystemBase y
+  ofrece boton para abrir el frontend en una pestania aparte.
 
 ## 8. Relaciones y combos FK
 Cuando una relacion existe:

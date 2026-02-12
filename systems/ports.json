@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-02-11T15:46:00.603293Z",
+  "generatedAt": "2026-02-12T15:33:56.362323Z",
   "basePort": 5032,
   "systems": [
     {
@@ -15,6 +15,13 @@
       "name": "Sistema de inventario",
       "port": 5034,
       "baseUrl": "http://localhost:5034"
+    },
+    {
+      "id": 3,
+      "slug": "mapeo",
+      "name": "Sistema de mapeo",
+      "port": 5035,
+      "baseUrl": "http://localhost:5035"
     }
   ]
 }

@@ -267,7 +267,7 @@ namespace Backend.Negocio.Gestores
                         Id = -300000 - group.Key.SystemId,
                         Titulo = "Frontend",
                         Icono = "mdi-monitor",
-                        Ruta = $"/s/{group.Key.SystemSlug}",
+                        Ruta = $"/frontend/{group.Key.SystemSlug}",
                         Orden = 2
                     });
                 }
