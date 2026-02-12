@@ -21,7 +21,10 @@ Contiene la definicion de sistemas y sus piezas:
 - `sb.Entities`
 - `sb.Fields`
 - `sb.Relations`
+- `sb.SystemModules`
+- `sb.EntityModules`
 - `sb.SystemMenus`
+- `sb.SystemMenuRoles`
 - `sb.SystemBuilds`
 - otros (Modules, Permissions, RolePermissions, etc).
 
@@ -33,6 +36,16 @@ Dentro de ese schema se crean las tablas reales:
 - `sys_inventario.Productos`
 - `sys_inventario.Almacenes`
 - `sys_inventario.Movimientos`
+
+### 3.3 Seed inicial (recuperacion rapida)
+Al iniciar el backend, se ejecuta un seed automatico que asegura lo minimo:
+- Modulos base (`backend`, `frontend`).
+- Rol **Admin**.
+- Usuario **admin/admin** (password hasheado).
+- Menus base (Home + Sistema con sus hijos).
+- Asignacion de menus base al rol Admin.
+
+Esto permite reconstruir la base de datos desde cero sin perder el acceso a la UI.
 
 ## 4. Backend (resumen funcional)
 ### 4.1 Sistemas
@@ -87,6 +100,7 @@ Permite generar un paquete reproducible con SQL + runtime completo:
   - `frontend/`: UI completa (igual a SystemBase).
   - `manifest.json`: definicion del sistema (entidades, campos, relaciones).
   - `README.md`: instrucciones y credenciales.
+  - `env.example`: ejemplo visible de variables (copia de `.env.example`).
 - Copia en disco: `backend/exports/<slug>_v<version>_<timestamp>/`
   - Override: variable `SYSTEMBASE_EXPORT_ROOT`
 - Workspace: carpeta en `systems/<slug>/`
@@ -114,7 +128,8 @@ Se agrego un generador para crear un frontend runtime por sistema:
   - Copia la UI base y elimina vistas administrativas (solo runtime).
   - Router reducido a `Home` + `SistemaRuntime`.
   - `axios.js` apunta al backend del sistema (`http://localhost:5032+systemId/{apiBase}`).
-  - Se genera `src/config/frontend-config.json` con la configuracion guardada en el diseñador.
+- Se genera `src/config/frontend-config.json` con la configuracion guardada en el diseñador.
+- El frontend generado consume el backend del sistema (no el de SystemBase).
 
 ### 5.4 Configuracion visual de backend
 En el diseniador de sistema se agrego una pestania "Backend" para configurar la generacion:
@@ -182,6 +197,7 @@ Comportamiento:
 - Agrupa por sistema.
 - Muestra solo sistemas publicados y activos.
 - Entra a `/s/{slug}` desde el item "Entidades".
+- Cuando existe frontend generado, aparece un item **Frontend** bajo el sistema.
 
 ## 8. Relaciones y combos FK
 Cuando una relacion existe:
@@ -251,9 +267,11 @@ Endpoints:
 1. Crear sistema en `/sistemas`.
 2. Crear entidades y campos en `/sistemas/{id}`.
 3. Crear relaciones.
-4. Publicar.
-5. Ir a `/s/{slug}` y cargar registros.
-6. (Opcional) Exportar desde `/sistemas` con el boton de export (descarga ZIP).
+4. Publicar DB.
+5. (Opcional) Configurar backend y generar backend.
+6. (Opcional) Configurar frontend y generar frontend.
+7. Ir a `/s/{slug}` o al menu **Frontend** y cargar registros.
+8. (Opcional) Exportar desde `/sistemas` (descarga ZIP).
 
 ## 14. Limitaciones actuales
 - No hay migraciones automáticas (solo publish incremental).

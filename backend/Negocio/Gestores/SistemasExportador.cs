@@ -315,6 +315,14 @@ namespace Backend.Negocio.Gestores
                     new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".env", ".ds_store" }
                 );
 
+                // Make env example visible in Finder (macOS hides dotfiles)
+                var hiddenEnvExample = Path.Combine(backendDest, ".env.example");
+                if (File.Exists(hiddenEnvExample))
+                {
+                    var visibleEnvExample = Path.Combine(backendDest, "env.example");
+                    File.Copy(hiddenEnvExample, visibleEnvExample, true);
+                }
+
                 CopyDirectory(
                     frontendSource,
                     frontendDest,

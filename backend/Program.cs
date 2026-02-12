@@ -5,6 +5,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using System.Text;
 using Backend.Data;
+using Backend.Utils;
 
 // ===============================
 // 🔹 Cargar variables de entorno
@@ -108,6 +109,11 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 var app = builder.Build();
+
+// ===============================
+// 🌱 Seed inicial (roles/menus/modulos/admin)
+// ===============================
+DbSeeder.Seed(app.Services, app.Logger);
 
 // ===============================
 // 🔧 Middleware
