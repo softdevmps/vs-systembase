@@ -2844,8 +2844,8 @@ async function reiniciarBackend() {
     restartDialog.status = 'waiting'
     restartDialog.message = 'Esperando que el backend vuelva...'
 
-    const online = await esperarBackendOnline()
-    if (online) {
+    const backendCheck = await esperarBackendOnline({ failFastOnExit: false })
+    if (backendCheck.online) {
       restartDialog.status = 'online'
       restartDialog.message = 'Backend reiniciado.'
       backendHealth.status = 'online'
@@ -2854,8 +2854,11 @@ async function reiniciarBackend() {
         restartDialog.open = false
       }, 1200)
     } else {
-      restartDialog.status = 'timeout'
-      restartDialog.message = 'Timeout esperando el backend.'
+      await cargarBackendLogs(true)
+      restartDialog.status = backendCheck.reason === 'exited' ? 'error' : 'timeout'
+      restartDialog.message = backendCheck.reason === 'exited'
+        ? 'El proceso backend se cerro antes de quedar online. Revisa la consola backend.'
+        : 'Timeout esperando el backend. Revisa la consola backend.'
     }
   } catch (error) {
     restartDialog.status = 'error'
@@ -2878,8 +2881,8 @@ async function iniciarBackend() {
     restartDialog.status = 'waiting'
     restartDialog.message = 'Esperando que el backend este online...'
 
-    const online = await esperarBackendOnline()
-    if (online) {
+    const backendCheck = await esperarBackendOnline({ failFastOnExit: true })
+    if (backendCheck.online) {
       restartDialog.status = 'online'
       restartDialog.message = 'Backend iniciado.'
       backendHealth.status = 'online'
@@ -2888,8 +2891,11 @@ async function iniciarBackend() {
         restartDialog.open = false
       }, 1200)
     } else {
-      restartDialog.status = 'timeout'
-      restartDialog.message = 'Timeout esperando el backend.'
+      await cargarBackendLogs(true)
+      restartDialog.status = backendCheck.reason === 'exited' ? 'error' : 'timeout'
+      restartDialog.message = backendCheck.reason === 'exited'
+        ? 'El proceso backend se cerro antes de quedar online. Revisa la consola backend.'
+        : 'Timeout esperando el backend. Revisa la consola backend.'
     }
   } catch (error) {
     restartDialog.status = 'error'
@@ -2920,19 +2926,52 @@ async function detenerBackend() {
   }
 }
 
-async function esperarBackendOnline() {
-  const maxAttempts = 20
+function inferBackendWaitMessageFromLogs() {
+  const recent = backendLogs.entries.slice(-80).reverse()
+  for (const entry of recent) {
+    const message = String(entry?.message ?? entry?.Message ?? '').toLowerCase()
+    if (!message) continue
+    if (message.includes('now listening on') || message.includes('application started')) {
+      return 'Servidor iniciado, validando disponibilidad...'
+    }
+    if (message.includes('building') || message.includes('compil')) {
+      return 'Compilando backend...'
+    }
+    if (message.includes('restore') || message.includes('restaur')) {
+      return 'Restaurando dependencias...'
+    }
+    if (message.includes('iniciando backend') || message.includes('dotnet watch')) {
+      return 'Iniciando proceso backend...'
+    }
+  }
+  return null
+}
+
+async function esperarBackendOnline({ failFastOnExit = false } = {}) {
+  const maxAttempts = 30
+  const intervalMs = 1500
   for (let i = 0; i < maxAttempts; i += 1) {
+    if (i === 0 || i % 2 === 0) {
+      await cargarBackendLogs()
+      const stageMessage = inferBackendWaitMessageFromLogs()
+      if (restartDialog.status === 'waiting' && stageMessage) {
+        restartDialog.message = stageMessage
+      }
+    }
+
     try {
       const { data } = await sistemaService.pingBackend(systemId)
-      if (data?.online) return true
+      if (data?.online) return { online: true, reason: 'online' }
+      if (failFastOnExit && i >= 3 && data?.running === false) {
+        return { online: false, reason: 'exited' }
+      }
     } catch {
       // ignore
     }
-    await new Promise(resolve => setTimeout(resolve, 800))
+    await new Promise(resolve => setTimeout(resolve, intervalMs))
   }
 
-  return false
+  return { online: false, reason: 'timeout' }
 }
 
 async function iniciarFrontend() {

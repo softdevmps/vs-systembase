@@ -242,14 +242,7 @@ namespace Backend.Controllers
 
             var logBuffer = BackendProcessLogStore.Reset(id);
             logBuffer.Add("info", "Iniciando backend (dotnet watch run)...");
-
-            var restore = RunDotnetRestore(backendPath);
-            if (!restore.Ok)
-            {
-                logBuffer.Add("error", $"dotnet restore fallo: {restore.Error}");
-                return BadRequest(new { message = "dotnet restore fallo. Revisa la consola del backend." });
-            }
-            logBuffer.Add("info", "dotnet restore ok.");
+            logBuffer.Add("info", "Sin restore previo: dotnet watch restaurara paquetes si hace falta.");
 
             var startInfo = new ProcessStartInfo
             {
@@ -330,7 +323,8 @@ namespace Backend.Controllers
                 return Forbid();
 
             var online = await IsBackendOnline(id);
-            return Ok(new { online });
+            var running = IsBackendProcessRunning(id);
+            return Ok(new { online, running });
         }
 
         [HttpGet(Routes.v1.Sistemas.LogsBackend)]
@@ -485,19 +479,32 @@ namespace Backend.Controllers
 
         private async Task<bool> IsBackendOnline(int systemId)
         {
-            try
+            var port = 5032 + systemId;
+            var configuredBasePath = NormalizeApiBase(BackendConfigGestor.ObtenerPorSistema(systemId)?.System?.ApiBase);
+            var candidates = new List<string>
             {
-                var basePath = NormalizeApiBase(BackendConfigGestor.ObtenerPorSistema(systemId)?.System?.ApiBase);
-                var port = 5032 + systemId;
-                var url = $"http://localhost:{port}{basePath}/dev/ping";
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                using var response = await Http.GetAsync(url, cts.Token);
-                return response.IsSuccessStatusCode;
-            }
-            catch
+                $"{configuredBasePath}/dev/ping",
+                "/api/v1/dev/ping",
+                "/dev/ping"
+            };
+
+            foreach (var candidate in candidates.Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                return false;
+                try
+                {
+                    var url = $"http://localhost:{port}{candidate}";
+                    using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    using var response = await Http.GetAsync(url, cts.Token);
+                    if (response.IsSuccessStatusCode)
+                        return true;
+                }
+                catch
+                {
+                    // probamos el siguiente candidato
+                }
             }
+
+            return false;
         }
 
         private static string NormalizeApiBase(string? apiBase)
@@ -510,6 +517,11 @@ namespace Backend.Controllers
         private static int GetFrontendPort(int systemId)
         {
             return 5173 + systemId;
+        }
+
+        private static bool IsBackendProcessRunning(int systemId)
+        {
+            return BackendProcesses.TryGetValue(systemId, out var process) && !process.HasExited;
         }
 
         private async Task<bool> IsFrontendOnline(int systemId)
