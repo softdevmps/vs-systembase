@@ -7,7 +7,7 @@
             <v-icon color="primary" size="26">mdi-vector-square</v-icon>
           </div>
           <div>
-            <h2 class="mb-1">Disenador</h2>
+            <h2 class="mb-1">Diseñador</h2>
             <div class="d-flex align-center flex-wrap ga-2">
               <span class="sb-page-subtitle text-body-2">
                 {{ sistema?.name || 'Sistema' }}
