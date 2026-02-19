@@ -83,9 +83,9 @@
               <div v-for="item in recentSystems" :key="item.Id || item.id" class="recent-item">
                 <div class="recent-dot"></div>
                 <div>
-                  <div class="recent-title">{{ item.Name || item.Slug || 'Sistema' }}</div>
+                  <div class="recent-title">{{ getSystemName(item) }}</div>
                   <div class="recent-meta">
-                    {{ formatDate(item.UpdatedAt || item.CreatedAt) }} · {{ item.Status || 'Sin estado' }}
+                    {{ formatDate(getSystemDate(item)) }} · {{ getSystemStatusLabel(item) }}
                   </div>
                 </div>
               </div>
@@ -108,9 +108,50 @@ const error = ref('')
 const systems = ref([])
 const users = ref([])
 
+function pick(obj, ...keys) {
+  for (const key of keys) {
+    const value = obj?.[key]
+    if (value !== undefined && value !== null && value !== '') return value
+  }
+  return null
+}
+
+function normalizeStatus(status) {
+  const raw = String(status || '').trim().toLowerCase()
+  if (!raw) return ''
+  if (raw === 'draft') return 'Borrador'
+  if (raw === 'published') return 'Publicado'
+  if (raw === 'active') return 'Activo'
+  if (raw === 'inactive') return 'Inactivo'
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+}
+
+function getSystemName(item) {
+  return pick(item, 'name', 'Name', 'slug', 'Slug') || 'Sistema'
+}
+
+function getSystemDate(item) {
+  return pick(item, 'updatedAt', 'UpdatedAt', 'createdAt', 'CreatedAt')
+}
+
+function getSystemStatusLabel(item) {
+  const explicit = normalizeStatus(pick(item, 'status', 'Status'))
+  if (explicit) return explicit
+
+  const isPublished = Boolean(pick(item, 'publishedAt', 'PublishedAt'))
+  if (isPublished) return 'Publicado'
+
+  const isActive = Boolean(pick(item, 'isActive', 'IsActive'))
+  return isActive ? 'Activo' : 'Sin estado'
+}
+
 const totalSystems = computed(() => systems.value.length)
 const activeSystems = computed(() => systems.value.filter(s => s?.IsActive || s?.isActive).length)
-const publishedSystems = computed(() => systems.value.filter(s => s?.PublishedAt || s?.publishedAt).length)
+const publishedSystems = computed(() => systems.value.filter(s => {
+  if (s?.PublishedAt || s?.publishedAt) return true
+  const status = String(s?.Status || s?.status || '').trim().toLowerCase()
+  return status === 'published'
+}).length)
 const totalUsers = computed(() => users.value.length)
 const draftSystems = computed(() => Math.max(totalSystems.value - publishedSystems.value, 0))
 
@@ -141,8 +182,8 @@ function formatDate(value) {
 const recentSystems = computed(() => {
   return [...systems.value]
     .sort((a, b) => {
-      const ta = parseDateValue(a?.UpdatedAt || a?.CreatedAt) || 0
-      const tb = parseDateValue(b?.UpdatedAt || b?.CreatedAt) || 0
+      const ta = parseDateValue(getSystemDate(a)) || 0
+      const tb = parseDateValue(getSystemDate(b)) || 0
       return tb - ta
     })
     .slice(0, 5)
@@ -151,7 +192,7 @@ const recentSystems = computed(() => {
 const lastUpdatedLabel = computed(() => {
   if (!systems.value.length) return '—'
   const times = systems.value
-    .map(s => parseDateValue(s?.UpdatedAt || s?.CreatedAt))
+    .map(s => parseDateValue(getSystemDate(s)))
     .filter(Boolean)
   if (!times.length) return '—'
   return new Date(Math.max(...times)).toLocaleString('es-AR')
