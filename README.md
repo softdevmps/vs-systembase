@@ -210,6 +210,21 @@ Parámetros opcionales:
 - `DISTANCE_TOLERANCE=250` tolerancia de coordenadas en metros
 - `INCLUDE_WITHOUT_COORDS=true` incluye casos sin lat/lng esperados
 
+### Base SQL para aprendizaje de ubicaciones
+
+Se incorporó una base SQL para desacoplar correcciones de ubicación del código:
+
+- `sys_mapeo.LocationNormalizationRules`
+- `sys_mapeo.LocationNormalizationFeedback`
+
+Estas tablas se aseguran automáticamente al iniciar `systems/mapeo/backend` (vía `DbSchemaMigrator`).
+
+Script manual (idempotente):
+
+```bash
+systems/mapeo/backend/sql/001_location_learning.sql
+```
+
 ## Estrategia de ramas
 
 - `main`: fábrica SystemBase (base del generador).

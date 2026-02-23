@@ -16,6 +16,7 @@ namespace Backend.Utils
                 EnsureDecimalPrecision(conn, "sys_mapeo", "Incidentes", "Lng", 9, 6);
                 EnsureDecimalPrecision(conn, "sys_mapeo", "IncidenteUbicacion", "Lat", 9, 6);
                 EnsureDecimalPrecision(conn, "sys_mapeo", "IncidenteUbicacion", "Lng", 9, 6);
+                EnsureLocationLearningTables(conn);
             }
             catch (Exception ex)
             {
@@ -82,6 +83,127 @@ namespace Backend.Utils
             using var alterCmd = new SqlCommand(alterSql, conn);
             alterCmd.ExecuteNonQuery();
             Console.WriteLine($"[DbSchema] Precision actualizada: {schema}.{table}.{column} -> DECIMAL({precision},{scale})");
+        }
+
+        private static void EnsureLocationLearningTables(SqlConnection conn)
+        {
+            const string createRulesSql = @"
+IF OBJECT_ID(N'[sys_mapeo].[LocationNormalizationRules]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [sys_mapeo].[LocationNormalizationRules]
+    (
+        [Id] INT IDENTITY(1,1) NOT NULL
+            CONSTRAINT [PK_sys_mapeo_LocationNormalizationRules] PRIMARY KEY,
+        [FindText] NVARCHAR(200) NOT NULL,
+        [ReplaceText] NVARCHAR(200) NOT NULL,
+        [Scope] NVARCHAR(30) NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_Scope] DEFAULT('location'),
+        [Priority] INT NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_Priority] DEFAULT(100),
+        [IsRegex] BIT NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_IsRegex] DEFAULT(0),
+        [IsActive] BIT NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_IsActive] DEFAULT(1),
+        [Source] NVARCHAR(30) NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_Source] DEFAULT('manual'),
+        [HitCount] INT NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_HitCount] DEFAULT(0),
+        [LastHitAt] DATETIME2 NULL,
+        [CreatedAt] DATETIME2 NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationRules_CreatedAt] DEFAULT(SYSUTCDATETIME()),
+        [UpdatedAt] DATETIME2 NULL
+    );
+END;";
+
+            const string createFeedbackSql = @"
+IF OBJECT_ID(N'[sys_mapeo].[LocationNormalizationFeedback]', N'U') IS NULL
+BEGIN
+    CREATE TABLE [sys_mapeo].[LocationNormalizationFeedback]
+    (
+        [Id] INT IDENTITY(1,1) NOT NULL
+            CONSTRAINT [PK_sys_mapeo_LocationNormalizationFeedback] PRIMARY KEY,
+        [IncidenteId] INT NULL,
+        [RawText] NVARCHAR(MAX) NULL,
+        [WhisperLocation] NVARCHAR(500) NULL,
+        [PredLugarTexto] NVARCHAR(500) NULL,
+        [PredLugarNormalizado] NVARCHAR(800) NULL,
+        [PredLat] DECIMAL(9,6) NULL,
+        [PredLng] DECIMAL(9,6) NULL,
+        [CorrectLugarTexto] NVARCHAR(500) NULL,
+        [CorrectLugarNormalizado] NVARCHAR(800) NULL,
+        [CorrectLat] DECIMAL(9,6) NULL,
+        [CorrectLng] DECIMAL(9,6) NULL,
+        [Verdict] NVARCHAR(20) NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationFeedback_Verdict] DEFAULT('pending'),
+        [Reviewer] NVARCHAR(100) NULL,
+        [Notes] NVARCHAR(1000) NULL,
+        [CreatedAt] DATETIME2 NOT NULL
+            CONSTRAINT [DF_sys_mapeo_LocationNormalizationFeedback_CreatedAt] DEFAULT(SYSUTCDATETIME()),
+        [UpdatedAt] DATETIME2 NULL,
+        CONSTRAINT [CK_sys_mapeo_LocationNormalizationFeedback_Verdict]
+            CHECK ([Verdict] IN ('pending', 'accepted', 'rejected', 'corrected')),
+        CONSTRAINT [FK_sys_mapeo_LocationNormalizationFeedback_IncidenteId]
+            FOREIGN KEY ([IncidenteId]) REFERENCES [sys_mapeo].[Incidentes]([Id]) ON DELETE SET NULL
+    );
+END;";
+
+            const string createRulesIndexesSql = @"
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_sys_mapeo_LocationNormalizationRules_IsActiveScopePriority'
+      AND object_id = OBJECT_ID(N'[sys_mapeo].[LocationNormalizationRules]')
+)
+BEGIN
+    CREATE INDEX [IX_sys_mapeo_LocationNormalizationRules_IsActiveScopePriority]
+        ON [sys_mapeo].[LocationNormalizationRules]([IsActive], [Scope], [Priority]);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'UX_sys_mapeo_LocationNormalizationRules_FindTextScope_Active'
+      AND object_id = OBJECT_ID(N'[sys_mapeo].[LocationNormalizationRules]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [UX_sys_mapeo_LocationNormalizationRules_FindTextScope_Active]
+        ON [sys_mapeo].[LocationNormalizationRules]([FindText], [Scope], [IsActive]);
+END;";
+
+            const string createFeedbackIndexesSql = @"
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_sys_mapeo_LocationNormalizationFeedback_IncidenteId'
+      AND object_id = OBJECT_ID(N'[sys_mapeo].[LocationNormalizationFeedback]')
+)
+BEGIN
+    CREATE INDEX [IX_sys_mapeo_LocationNormalizationFeedback_IncidenteId]
+        ON [sys_mapeo].[LocationNormalizationFeedback]([IncidenteId]);
+END;
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = N'IX_sys_mapeo_LocationNormalizationFeedback_VerdictCreatedAt'
+      AND object_id = OBJECT_ID(N'[sys_mapeo].[LocationNormalizationFeedback]')
+)
+BEGIN
+    CREATE INDEX [IX_sys_mapeo_LocationNormalizationFeedback_VerdictCreatedAt]
+        ON [sys_mapeo].[LocationNormalizationFeedback]([Verdict], [CreatedAt]);
+END;";
+
+            ExecuteSql(conn, createRulesSql, "Tabla asegurada: sys_mapeo.LocationNormalizationRules");
+            ExecuteSql(conn, createFeedbackSql, "Tabla asegurada: sys_mapeo.LocationNormalizationFeedback");
+            ExecuteSql(conn, createRulesIndexesSql, "Indices asegurados: sys_mapeo.LocationNormalizationRules");
+            ExecuteSql(conn, createFeedbackIndexesSql, "Indices asegurados: sys_mapeo.LocationNormalizationFeedback");
+        }
+
+        private static void ExecuteSql(SqlConnection conn, string sql, string logMessage)
+        {
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.ExecuteNonQuery();
+            Console.WriteLine($"[DbSchema] {logMessage}");
         }
     }
 }

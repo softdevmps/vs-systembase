@@ -119,6 +119,18 @@
 - Script de corrida con dataset automatico:
   - `systems/mapeo/backend/eval/run-eval-auto.sh`
 
+## Base SQL para aprendizaje de ubicaciones
+- Se agregaron tablas idempotentes para soportar reglas y feedback sin tocar código:
+  - `sys_mapeo.LocationNormalizationRules`
+  - `sys_mapeo.LocationNormalizationFeedback`
+- Creación automática al iniciar backend:
+  - `systems/mapeo/backend/Utils/DbSchemaMigrator.cs`
+- Script SQL manual:
+  - `systems/mapeo/backend/sql/001_location_learning.sql`
+- Objetivo:
+  - almacenar reemplazos/correcciones frecuentes
+  - guardar evidencia de casos fallidos/corregidos para entrenamiento incremental
+
 ## Config aplicado en mapeo
 - `systems/mapeo/backend/.env` actualizado con transcodificacion, retencion y endpoints locales (Whisper/Nominatim).
 - `WHISPER_STUB_TEXT` vacio para usar transcripcion real via `WHISPER_URL`.
