@@ -186,6 +186,16 @@ namespace Backend.Utils
                 return "";
             var lower = value.ToLowerInvariant();
             var withoutAccents = RemoveDiacritics(lower);
+            withoutAccents = System.Text.RegularExpressions.Regex.Replace(
+                withoutAccents,
+                @"[^\p{L}\p{N}\s]",
+                " "
+            );
+            withoutAccents = System.Text.RegularExpressions.Regex.Replace(
+                withoutAccents,
+                @"\s+",
+                " "
+            );
             return withoutAccents.Trim();
         }
 
