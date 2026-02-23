@@ -123,6 +123,7 @@
 - Se agregaron tablas idempotentes para soportar reglas y feedback sin tocar código:
   - `sys_mapeo.LocationNormalizationRules`
   - `sys_mapeo.LocationNormalizationFeedback`
+- `LocationNormalizer` ya consume reglas activas de `LocationNormalizationRules` (scope `location`) con cache corta.
 - Creación automática al iniciar backend:
   - `systems/mapeo/backend/Utils/DbSchemaMigrator.cs`
 - Script SQL manual:

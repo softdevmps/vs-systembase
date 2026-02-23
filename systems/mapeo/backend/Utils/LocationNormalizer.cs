@@ -392,6 +392,7 @@ namespace Backend.Utils
                         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                 }
             }
+            fixedText = LocationNormalizationRuleStore.ApplyRules(fixedText, "location");
             return fixedText;
         }
 

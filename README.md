@@ -217,6 +217,9 @@ Se incorporó una base SQL para desacoplar correcciones de ubicación del códig
 - `sys_mapeo.LocationNormalizationRules`
 - `sys_mapeo.LocationNormalizationFeedback`
 
+El normalizador de ubicación consume reglas activas de `LocationNormalizationRules`
+(`Scope='location'`) sin reiniciar el backend (cache corta).
+
 Estas tablas se aseguran automáticamente al iniciar `systems/mapeo/backend` (vía `DbSchemaMigrator`).
 
 Script manual (idempotente):
