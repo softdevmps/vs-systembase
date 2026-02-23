@@ -79,11 +79,21 @@ Endpoint esperado por mapeo: `http://localhost:9000/asr`
 
 ```bash
 cd llm-service
+cp .env.example .env
 docker compose up -d
-docker compose exec ollama ollama pull llama3.2:3b
 ```
 
 Endpoint: `http://localhost:11434`
+
+Por defecto se recomienda `qwen2.5:7b` (configurable con `OLLAMA_MODEL`).
+
+Primer setup del modelo:
+
+```bash
+cd llm-service
+docker compose exec ollama ollama pull qwen2.5:7b
+docker compose exec ollama ollama list
+```
 
 #### Nominatim (geocoder)
 
@@ -170,6 +180,35 @@ Instalar `ffmpeg` en el host y verificar que esté disponible en `PATH`.
 - Verificar servicios externos (Whisper/Ollama/Nominatim).
 - Revisar `LugarTexto` y `LugarNormalizado`.
 - Reintentar job manualmente.
+
+### Evaluar calidad (dataset)
+
+Con backend de mapeo levantado:
+
+```bash
+cd systems/mapeo/backend/eval
+bash run-eval.sh
+```
+
+Esto ejecuta `POST /api/v1/dev/eval/batch` con `dataset.sample.json` y devuelve métricas de extracción/geocoding.
+
+### Evaluar calidad (dataset automático)
+
+Con backend de mapeo levantado y datos procesados en BD:
+
+```bash
+cd systems/mapeo/backend/eval
+bash run-eval-auto.sh
+```
+
+El script:
+- arma el dataset desde incidentes reales (`GET /api/v1/dev/eval/dataset/auto`)
+- evalúa en batch contra el pipeline actual (`POST /api/v1/dev/eval/batch`)
+
+Parámetros opcionales:
+- `TAKE=300` cantidad de casos a tomar
+- `DISTANCE_TOLERANCE=250` tolerancia de coordenadas en metros
+- `INCLUDE_WITHOUT_COORDS=true` incluye casos sin lat/lng esperados
 
 ## Estrategia de ramas
 

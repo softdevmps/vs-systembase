@@ -218,6 +218,12 @@ namespace Backend.Services
                         }
                     }
 
+                    if (geocode == null)
+                    {
+                        var candidatesPreview = string.Join(" | ", locationContext.Candidates.Take(6));
+                        Console.WriteLine($"[Geocode] Sin resultado incidente={job.IncidenteId} lugar='{lugarTexto}' candidatos='{candidatesPreview}'");
+                    }
+
                     if (geocode != null)
                     {
                         _repo.InsertarUbicacion(job.IncidenteId, geocode.Lat, geocode.Lng, "high", "nominatim", geocode.DisplayName);

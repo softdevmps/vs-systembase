@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using System.Globalization;
 using Backend.Negocio.Pipeline;
 
 namespace Backend.Utils
@@ -40,7 +41,7 @@ namespace Backend.Utils
                 return null;
 
             var prompt = BuildLocationPrompt(rawText);
-            var payload = BuildPayload(prompt);
+            var payload = BuildPayload(prompt, BuildLocationSchema());
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
@@ -74,7 +75,10 @@ namespace Backend.Utils
             {
                 var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
-                var lugar = root.TryGetProperty("lugar_texto", out var l) ? l.GetString() : null;
+                if (root.ValueKind != JsonValueKind.Object)
+                    return null;
+
+                var lugar = GetNullableString(root, "lugar_texto");
                 if (string.IsNullOrWhiteSpace(lugar))
                     return null;
                 var trimmed = lugar.Trim();
@@ -100,7 +104,7 @@ namespace Backend.Utils
                 return null;
 
             var prompt = BuildLocationPartsPrompt(rawText);
-            var payload = BuildPayload(prompt);
+            var payload = BuildPayload(prompt, BuildLocationPartsSchema());
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
@@ -134,15 +138,18 @@ namespace Backend.Utils
             {
                 var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object)
+                    return null;
+
                 return new LlmLocationParts
                 {
-                    Calle = root.TryGetProperty("calle", out var c) ? c.GetString() : null,
-                    Numero = root.TryGetProperty("numero", out var n) ? n.GetString() : null,
-                    Interseccion = root.TryGetProperty("interseccion", out var i) ? i.GetString() : null,
-                    Barrio = root.TryGetProperty("barrio", out var b) ? b.GetString() : null,
-                    Ciudad = root.TryGetProperty("ciudad", out var ci) ? ci.GetString() : null,
-                    Poi = root.TryGetProperty("poi", out var p) ? p.GetString() : null,
-                    Confianza = root.TryGetProperty("confianza", out var conf) && conf.TryGetDecimal(out var confValue) ? confValue : null,
+                    Calle = GetNullableString(root, "calle"),
+                    Numero = GetNullableString(root, "numero"),
+                    Interseccion = GetNullableString(root, "interseccion"),
+                    Barrio = GetNullableString(root, "barrio"),
+                    Ciudad = GetNullableString(root, "ciudad"),
+                    Poi = GetNullableString(root, "poi"),
+                    Confianza = GetNullableDecimal(root, "confianza"),
                     RawJson = json
                 };
             }
@@ -196,7 +203,7 @@ namespace Backend.Utils
                 return null;
 
             var prompt = BuildPrompt(rawText, catalogo);
-            var payload = BuildPayload(prompt);
+            var payload = BuildPayload(prompt, BuildIncidentSchema());
 
             using var request = new HttpRequestMessage(HttpMethod.Post, url)
             {
@@ -230,14 +237,17 @@ namespace Backend.Utils
             {
                 var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
+                if (root.ValueKind != JsonValueKind.Object)
+                    return null;
+
                 return new LlmExtractResult
                 {
-                    Fecha = root.TryGetProperty("fecha", out var f) ? f.GetString() : null,
-                    Hora = root.TryGetProperty("hora", out var h) ? h.GetString() : null,
-                    LugarTexto = root.TryGetProperty("lugar_texto", out var l) ? l.GetString() : null,
-                    Descripcion = root.TryGetProperty("descripcion", out var d) ? d.GetString() : null,
-                    TipoCodigo = root.TryGetProperty("tipo_codigo", out var t) ? t.GetString() : null,
-                    Confianza = root.TryGetProperty("confianza", out var c) && c.TryGetDecimal(out var conf) ? conf : null,
+                    Fecha = GetNullableString(root, "fecha"),
+                    Hora = GetNullableString(root, "hora"),
+                    LugarTexto = GetNullableString(root, "lugar_texto"),
+                    Descripcion = GetNullableString(root, "descripcion"),
+                    TipoCodigo = GetNullableString(root, "tipo_codigo"),
+                    Confianza = GetNullableDecimal(root, "confianza"),
                     RawJson = json
                 };
             }
@@ -321,9 +331,15 @@ Texto:
 """;
         }
 
-        private static string BuildPayload(string prompt)
+        private static string BuildPayload(string prompt, object? jsonSchema = null)
         {
-            var format = string.IsNullOrWhiteSpace(AppConfig.LLM_FORMAT) ? null : AppConfig.LLM_FORMAT;
+            object? format = null;
+            if (AppConfig.LLM_JSON_SCHEMA_ENABLED && jsonSchema != null)
+                format = jsonSchema;
+            else if (!string.IsNullOrWhiteSpace(AppConfig.LLM_FORMAT))
+                format = AppConfig.LLM_FORMAT;
+
+            var temperature = (double)AppConfig.LLM_TEMPERATURE;
             if (string.Equals(AppConfig.LLM_MODE, "chat", StringComparison.OrdinalIgnoreCase))
             {
                 return JsonSerializer.Serialize(new
@@ -331,7 +347,7 @@ Texto:
                     model = AppConfig.LLM_MODEL,
                     stream = false,
                     format,
-                    options = new { temperature = 0.1 },
+                    options = new { temperature },
                     messages = new[]
                     {
                         new { role = "system", content = "Responde solo con JSON valido y completo." },
@@ -346,8 +362,98 @@ Texto:
                 prompt,
                 stream = false,
                 format,
-                options = new { temperature = 0.1 }
+                options = new { temperature }
             });
+        }
+
+        private static object BuildIncidentSchema()
+        {
+            return new
+            {
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "fecha", "hora", "lugar_texto", "descripcion", "tipo_codigo", "confianza" },
+                properties = new Dictionary<string, object>
+                {
+                    ["fecha"] = NullableStringPattern(@"^\d{4}-\d{2}-\d{2}$"),
+                    ["hora"] = NullableStringPattern(@"^\d{2}:\d{2}$"),
+                    ["lugar_texto"] = NullableString(),
+                    ["descripcion"] = NullableString(),
+                    ["tipo_codigo"] = NullableString(),
+                    ["confianza"] = NullableNumber()
+                }
+            };
+        }
+
+        private static object BuildLocationSchema()
+        {
+            return new
+            {
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "lugar_texto" },
+                properties = new Dictionary<string, object>
+                {
+                    ["lugar_texto"] = NullableString()
+                }
+            };
+        }
+
+        private static object BuildLocationPartsSchema()
+        {
+            return new
+            {
+                type = "object",
+                additionalProperties = false,
+                required = new[] { "calle", "numero", "interseccion", "barrio", "ciudad", "poi", "confianza" },
+                properties = new Dictionary<string, object>
+                {
+                    ["calle"] = NullableString(),
+                    ["numero"] = NullableString(),
+                    ["interseccion"] = NullableString(),
+                    ["barrio"] = NullableString(),
+                    ["ciudad"] = NullableString(),
+                    ["poi"] = NullableString(),
+                    ["confianza"] = NullableNumber()
+                }
+            };
+        }
+
+        private static object NullableString()
+        {
+            return new
+            {
+                anyOf = new object[]
+                {
+                    new { type = "string" },
+                    new { type = "null" }
+                }
+            };
+        }
+
+        private static object NullableStringPattern(string pattern)
+        {
+            return new
+            {
+                anyOf = new object[]
+                {
+                    new { type = "string", pattern },
+                    new { type = "null" }
+                }
+            };
+        }
+
+        private static object NullableNumber()
+        {
+            return new
+            {
+                anyOf = new object[]
+                {
+                    new { type = "number" },
+                    new { type = "string", pattern = @"^\d+(\.\d+)?$" },
+                    new { type = "null" }
+                }
+            };
         }
 
         private static string NormalizeField(string? value)
@@ -363,6 +469,42 @@ Texto:
             if (string.IsNullOrWhiteSpace(value)) return "";
             var digits = new string(value.Where(char.IsDigit).ToArray());
             return digits;
+        }
+
+        private static string? GetNullableString(JsonElement root, string propertyName)
+        {
+            if (!root.TryGetProperty(propertyName, out var value))
+                return null;
+
+            if (value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined)
+                return null;
+
+            var text = value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : value.ToString();
+
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var trimmed = text.Trim();
+            return trimmed.Equals("null", StringComparison.OrdinalIgnoreCase) ? null : trimmed;
+        }
+
+        private static decimal? GetNullableDecimal(JsonElement root, string propertyName)
+        {
+            if (!root.TryGetProperty(propertyName, out var value))
+                return null;
+
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var numeric))
+                return numeric;
+
+            if (value.ValueKind == JsonValueKind.String &&
+                decimal.TryParse(value.GetString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var asString))
+            {
+                return asString;
+            }
+
+            return null;
         }
 
         private static string ExtractContent(string body)

@@ -1,0 +1,37 @@
+{
+  "DistanceToleranceMeters": 250,
+  "Cases": [
+    {
+      "Id": "VELEZ-650",
+      "Text": "Hoy 13 de febrero de 2026 a las 21:15 en Avenida Velez Sarsfield 650, barrio Guemes, hubo un arrebato en moto.",
+      "ExpectedLugarContains": "avenida velez sarsfield 650",
+      "ExpectedFecha": "2026-02-13",
+      "ExpectedHora": "21:15",
+      "ExpectedLat": -31.422848,
+      "ExpectedLng": -64.189951
+    },
+    {
+      "Id": "SANJUAN-123",
+      "Text": "A las 19:30 en Boulevard San Juan 123, barrio Guemes, dos hombres en moto le quitaron el celular a una mujer.",
+      "ExpectedLugarContains": "boulevard san juan",
+      "ExpectedHora": "19:30",
+      "ExpectedLat": -31.418156,
+      "ExpectedLng": -64.196004
+    },
+    {
+      "Id": "PLAZA-ESPANA",
+      "Text": "En Plaza Espana, barrio Nueva Cordoba, se reporto hurto de mochila sin violencia.",
+      "ExpectedLugarContains": "plaza espana",
+      "ExpectedLat": -31.428564,
+      "ExpectedLng": -64.184875
+    },
+    {
+      "Id": "COLON-1250",
+      "Text": "Hoy a las 22:05 en Avenida Colon 1250, barrio Centro, hubo un arrebato.",
+      "ExpectedLugarContains": "avenida colon",
+      "ExpectedHora": "22:05",
+      "ExpectedLat": -31.412667,
+      "ExpectedLng": -64.186431
+    }
+  ]
+}

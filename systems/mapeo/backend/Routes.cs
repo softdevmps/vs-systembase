@@ -14,6 +14,9 @@ namespace Backend
             {
                 public const string Restart = "api/v1/dev/restart";
                 public const string Ping = "api/v1/dev/ping";
+                public const string EvalIncident = "api/v1/dev/eval/incident";
+                public const string EvalBatch = "api/v1/dev/eval/batch";
+                public const string EvalDatasetAuto = "api/v1/dev/eval/dataset/auto";
             }
 
             public static class Incidentes

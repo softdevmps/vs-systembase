@@ -1,4 +1,4 @@
-# Estado actual - Sistema Mapeo (13/02/2026)
+# Estado actual - Sistema Mapeo (22/02/2026)
 
 ## Alcance actual
 - Backend y frontend completos para el sistema `mapeo` (runtime).
@@ -35,7 +35,22 @@
 - **Nominatim mejorado**:
   - `addressdetails=1` y ranking por `house_number` cuando existe.
   - Búsqueda estructurada `street=numero + calle` + `city=Cordoba` si hay número.
+  - Fallback por calle sin número cuando no hay match exacto de altura.
+  - Fallback por intersección aproximada (punto medio entre trazas de ambas calles).
   - `GEOCODER_DEFAULT_SUFFIX` agregado automáticamente.
+
+## Estado de calidad (último corte)
+- Corrida de control reciente (`TAKE=7`, `includeWithoutCoords=true`):
+  - `type`: 100%
+  - `location`: 85.71%
+  - `date`: 100%
+  - `hour`: 85.71%
+  - `coords`: 100% en casos con coordenadas esperadas
+  - `avgDurationMs`: ~7.1s
+- Mejora aplicada para casos recientes:
+  - normalización adicional de variantes (`alverdi`, `fuerza area`, `rondeo`)
+  - parser de dirección tolerante a comas antes de `al <número>`
+  - búsqueda de respaldo por calle+barrio+ciudad
 
 ## Storage y borrado
 - Archivos se guardan en `AUDIO_STORAGE_ROOT` (default `storage/audio`) con subcarpetas por fecha.
@@ -81,11 +96,28 @@
 - `WHISPER_LOCATION_STOP_WORDS=hubo,ocurrio,se produjo,...`
 - `LLM_ENABLED=true|false`
 - `LLM_URL=http://localhost:11434/api/chat`
-- `LLM_MODEL=llama3.2:3b`
+- `LLM_MODEL=qwen2.5:7b`
 - `LLM_MODE=chat`
+- `LLM_JSON_SCHEMA_ENABLED=true`
+- `LLM_TEMPERATURE=0`
 - `GEOCODER_DEFAULT_SUFFIX=Cordoba, Argentina`
 - `GEOCODER_COUNTRY_CODES=ar`
 - `GEOCODER_LANGUAGE=es`
+
+## Evaluacion automatica (calidad)
+- Endpoint de evaluacion por caso:
+  - `POST /api/v1/dev/eval/incident`
+- Endpoint de evaluacion batch:
+  - `POST /api/v1/dev/eval/batch`
+- Endpoint para generar dataset automatico desde incidentes procesados:
+  - `GET /api/v1/dev/eval/dataset/auto`
+- Solo disponible en `Development` y desde loopback (localhost).
+- Dataset de ejemplo:
+  - `systems/mapeo/backend/eval/dataset.sample.json`
+- Script de corrida:
+  - `systems/mapeo/backend/eval/run-eval.sh`
+- Script de corrida con dataset automatico:
+  - `systems/mapeo/backend/eval/run-eval-auto.sh`
 
 ## Config aplicado en mapeo
 - `systems/mapeo/backend/.env` actualizado con transcodificacion, retencion y endpoints locales (Whisper/Nominatim).

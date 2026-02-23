@@ -42,14 +42,80 @@ namespace Backend.Utils
                 ["belsarfil"] = "velez sarsfield",
                 ["esbelzarfil"] = "velez sarsfield",
                 ["esbelzarfield"] = "velez sarsfield",
+                ["bolivar san juan"] = "boulevard san juan",
+                ["la esquina de"] = "esquina de",
+                ["aavenida"] = "avenida",
+                ["venida"] = "avenida",
                 ["avenilla"] = "avenida",
                 ["avanilla"] = "avenida",
+                ["urigoyen"] = "yrigoyen",
+                ["hirigoyen"] = "yrigoyen",
                 ["huemes"] = "guemes",
                 ["uemes"] = "guemes",
                 ["wemes"] = "guemes",
                 ["nueva corda"] = "nueva cordoba",
-                ["espana"] = "espana"
+                ["hipolitohirigoyen"] = "hipolito yrigoyen",
+                ["polityrigoyen"] = "hipolito yrigoyen",
+                ["politoyrigoyen"] = "hipolito yrigoyen",
+                ["chacauco"] = "chacabuco",
+                ["chacabulco"] = "chacabuco",
+                ["chocabuco"] = "chacabuco",
+                ["chacabucoo"] = "chacabuco",
+                ["oulevard"] = "boulevard",
+                ["boulevar"] = "boulevard",
+                ["navegania"] = "avenida sabattini",
+                ["madeo"] = "amadeo",
+                ["sabatine"] = "sabattini",
+                ["general pas"] = "general paz",
+                ["sabatini"] = "sabattini",
+                ["nuevaas"] = "nueva",
+                ["espana"] = "espana",
+                ["alverdi"] = "alberdi",
+                ["fuerza area"] = "fuerza aerea",
+                ["rondeo"] = "rondeau"
             };
+
+        private static readonly string[] KnownBarrios =
+        {
+            "nueva cordoba",
+            "general paz",
+            "alto alberdi",
+            "cofico",
+            "arguello",
+            "guemes",
+            "centro",
+            "alberdi",
+            "pueyrredon",
+            "jardin",
+            "observatorio"
+        };
+
+        private static readonly string[] KnownStreetNames =
+        {
+            "velez sarsfield",
+            "boulevard san juan",
+            "hipolito yrigoyen",
+            "duarte quiros",
+            "general paz",
+            "chacabuco",
+            "colon",
+            "san martin",
+            "9 de julio",
+            "ambrosio olmos",
+            "dean funes",
+            "santa rosa",
+            "pueyrredon",
+            "lugones",
+            "arturo m bas",
+            "maipu",
+            "caseros",
+            "crisol",
+            "sabattini",
+            "amadeo sabattini",
+            "fuerza aerea",
+            "rondeau",
+            "juan b justo"
+        };
 
         private static readonly string[] StreetTypes =
         {
@@ -283,9 +349,30 @@ namespace Backend.Utils
             var withoutAccents = RemoveDiacritics(lower);
             var cleaned = Regex.Replace(withoutAccents, @"[^\p{L}\p{N}\s,\.]", " ");
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+            cleaned = ExpandGluedTokens(cleaned);
             cleaned = ApplyReplacements(cleaned);
+            cleaned = ExpandGluedTokens(cleaned);
             cleaned = NormalizeImplicitIntersection(cleaned);
+            cleaned = Regex.Replace(cleaned, @"\b(y|e)\s+\1\b", "$1",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             return cleaned;
+        }
+
+        private static string ExpandGluedTokens(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+            var updated = text;
+            updated = Regex.Replace(updated, @"(?<=\d)(?=[a-z])", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"(?<=[a-z])(?=\d)", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"\b(\d{1,5})\s*(barrio)\b", "$1 barrio",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"\b(avenida|boulevard|bulevar|calle|pasaje)([a-z])", "$1 $2",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"\s+", " ").Trim();
+            return updated;
         }
 
         private static string ApplyReplacements(string text)
@@ -310,12 +397,27 @@ namespace Backend.Utils
 
         private static string? ExtractBarrio(string text)
         {
-            var match = Regex.Match(text, @"\bbarrio\s+([a-z0-9\s]{3,60})",
+            var match = Regex.Match(text, @"\bbarrio\s*([a-z0-9\s]{3,60})",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (!match.Success) return null;
-            var value = match.Groups[1].Value;
-            value = CutAtDelimiters(value);
-            return value;
+            if (match.Success)
+            {
+                var value = match.Groups[1].Value;
+                value = Regex.Replace(value,
+                    @"\b(hubo|ocurrio|ocurrió|robo|hurto|arrebato|autores?|huyeron|escaparon|heridos?|a\s+las)\b.*$",
+                    " ",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                value = Regex.Replace(value, @"\s+", " ").Trim().Trim(',', '.', ';', ':');
+                return CanonicalizeBarrioName(value);
+            }
+
+            foreach (var barrio in KnownBarrios.OrderByDescending(x => x.Length))
+            {
+                if (Regex.IsMatch(text, $@"\b{Regex.Escape(barrio)}\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    return barrio;
+            }
+
+            return null;
         }
 
         private static string? ExtractPoi(string text)
@@ -336,16 +438,19 @@ namespace Backend.Utils
         private static (string? calle1, string? calle2) ExtractIntersection(string text, string? barrio)
         {
             var streetTypeGroup = string.Join("|", StreetTypes.Select(Regex.Escape));
-            var pattern = $@"\b(?:esquina\s+de\s+|entre\s+)?(?:(?<t1>{streetTypeGroup})\s+)?(?<n1>[a-z0-9\s]{{3,60}}?)\s+(?:y|e|&)\s+(?:(?<t2>{streetTypeGroup})\s+)?(?<n2>[a-z0-9\s]{{3,60}})";
+            var pattern = $@"\b(?:la\s+)?(?:esquina\s+de\s+|entre\s+)?(?:(?<t1>{streetTypeGroup})\s+)?(?<n1>[a-z0-9\s]{{3,60}}?)\s+(?:y|e|&|con)\s+(?:(?<t2>{streetTypeGroup})\s+)?(?<n2>[a-z0-9\s]{{3,60}}?)(?=\s*(?:,|\bbarrio\b|\bhubo\b|\brobo\b|\barrebato\b|\bhuy|\bno\b|\bherid|\bautor|\ba las\b|$))";
             var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (!match.Success) return (null, null);
 
             var t1 = NormalizeStreetType(match.Groups["t1"].Value);
             var t2 = NormalizeStreetType(match.Groups["t2"].Value);
-            var n1 = CutAtDelimiters(match.Groups["n1"].Value);
-            var n2 = CutAtDelimiters(match.Groups["n2"].Value);
+            var n1 = CanonicalizeStreetName(CleanStreetName(CutAtDelimiters(match.Groups["n1"].Value)));
+            var n2 = CanonicalizeStreetName(CleanStreetName(CutAtDelimiters(match.Groups["n2"].Value)));
 
             if (string.IsNullOrWhiteSpace(n1) || string.IsNullOrWhiteSpace(n2))
+                return (null, null);
+
+            if (ContainsDateOrTemporalNoise(n1) || ContainsDateOrTemporalNoise(n2))
                 return (null, null);
 
             if (IsBarrioLike(n1, barrio) || IsBarrioLike(n2, barrio))
@@ -363,6 +468,29 @@ namespace Backend.Utils
             var calle1 = string.IsNullOrWhiteSpace(t1) ? n1 : $"{t1} {n1}";
             var calle2 = string.IsNullOrWhiteSpace(t2) ? n2 : $"{t2} {n2}";
             return (calle1.Trim(), calle2.Trim());
+        }
+
+        private static bool ContainsDateOrTemporalNoise(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return Regex.IsMatch(value,
+                @"\b(hoy|ayer|anteayer|fecha|hora|siendo|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre|20\d{2})\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        }
+
+        private static string CleanStreetName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return value;
+
+            var cleaned = Regex.Replace(value, @"\b(?:y|e|con)\s*$", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"^(?:y|e|de|la|el)\s+", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
+            return cleaned;
         }
 
         private static bool IsBarrioLike(string? value, string? barrio)
@@ -454,6 +582,76 @@ namespace Backend.Utils
             };
         }
 
+        public static string CanonicalizeStreetName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return value;
+
+            var cleaned = Regex.Replace(value, @"\s+", " ").Trim();
+            var normalized = AppConfig.NormalizeKey(cleaned);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return cleaned;
+
+            foreach (var known in KnownStreetNames)
+            {
+                var knownNorm = AppConfig.NormalizeKey(known);
+                if (normalized.Equals(knownNorm, StringComparison.OrdinalIgnoreCase))
+                    return known;
+            }
+
+            // match "hipolitohirigoyen" -> "hipolito yrigoyen" and similar glued names
+            var compact = normalized.Replace(" ", "");
+            var bestCompact = KnownStreetNames
+                .Select(k => new { Value = k, Key = AppConfig.NormalizeKey(k).Replace(" ", "") })
+                .Select(x => new
+                {
+                    x.Value,
+                    Distance = LevenshteinDistance(compact, x.Key),
+                    Ratio = SimilarityRatio(compact, x.Key)
+                })
+                .OrderBy(x => x.Ratio)
+                .ThenBy(x => x.Distance)
+                .FirstOrDefault();
+
+            if (bestCompact != null && bestCompact.Distance <= 4 && bestCompact.Ratio <= 0.34m)
+                return bestCompact.Value;
+
+            return cleaned;
+        }
+
+        private static string CanonicalizeBarrioName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return value;
+
+            var cleaned = Regex.Replace(value, @"\s+", " ").Trim();
+            var normalized = AppConfig.NormalizeKey(cleaned);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return cleaned;
+
+            foreach (var known in KnownBarrios)
+            {
+                var knownNorm = AppConfig.NormalizeKey(known);
+                if (normalized.Equals(knownNorm, StringComparison.OrdinalIgnoreCase))
+                    return known;
+            }
+
+            var best = KnownBarrios
+                .Select(k => new
+                {
+                    Value = k,
+                    Distance = LevenshteinDistance(normalized, AppConfig.NormalizeKey(k)),
+                    Ratio = SimilarityRatio(normalized, AppConfig.NormalizeKey(k))
+                })
+                .OrderBy(x => x.Ratio)
+                .ThenBy(x => x.Distance)
+                .FirstOrDefault();
+
+            if (best != null && best.Distance <= 3 && best.Ratio <= 0.32m)
+                return best.Value;
+
+            return cleaned;
+        }
+
         private static bool HasStreetType(string? value)
         {
             if (string.IsNullOrWhiteSpace(value)) return false;
@@ -468,7 +666,27 @@ namespace Backend.Utils
         private static string CutAtDelimiters(string value)
         {
             var trimmed = value.Trim();
-            var tokens = new[] { ",", " cordoba", " córdoba", " capital", " provincia" };
+            var tokens = new[]
+            {
+                ",",
+                " cordoba",
+                " córdoba",
+                " capital",
+                " provincia",
+                " hubo",
+                " robo",
+                " robaron",
+                " arrebato",
+                " huyeron",
+                " no se",
+                " no hubo",
+                " heridos",
+                " autores",
+                " sustra",
+                " danaron",
+                " dañaron",
+                " a las"
+            };
             foreach (var token in tokens)
             {
                 var idx = trimmed.IndexOf(token, StringComparison.OrdinalIgnoreCase);
@@ -478,6 +696,8 @@ namespace Backend.Utils
                     break;
                 }
             }
+            trimmed = Regex.Replace(trimmed, @"\b(y|e|con)\s*$", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             trimmed = Regex.Replace(trimmed, @"\s+", " ").Trim();
             return trimmed;
         }
@@ -512,6 +732,40 @@ namespace Backend.Utils
                     sb.Append(ch);
             }
             return sb.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        private static int LevenshteinDistance(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a)) return b.Length;
+            if (string.IsNullOrEmpty(b)) return a.Length;
+
+            var n = a.Length;
+            var m = b.Length;
+            var d = new int[n + 1, m + 1];
+
+            for (var i = 0; i <= n; i++) d[i, 0] = i;
+            for (var j = 0; j <= m; j++) d[0, j] = j;
+
+            for (var i = 1; i <= n; i++)
+            {
+                for (var j = 1; j <= m; j++)
+                {
+                    var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    d[i, j] = Math.Min(
+                        Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                        d[i - 1, j - 1] + cost
+                    );
+                }
+            }
+
+            return d[n, m];
+        }
+
+        private static decimal SimilarityRatio(string a, string b)
+        {
+            var max = Math.Max(a.Length, b.Length);
+            if (max == 0) return 0m;
+            return (decimal)LevenshteinDistance(a, b) / max;
         }
 
         private static decimal Clamp(decimal value, decimal min, decimal max)

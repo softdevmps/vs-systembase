@@ -115,7 +115,13 @@ namespace Backend.Negocio.Pipeline
             if (!string.IsNullOrWhiteSpace(llm.LugarTexto))
             {
                 var cleanedLugar = StripLocationNoise(llm.LugarTexto);
-                lugar = !string.IsNullOrWhiteSpace(cleanedLugar) ? cleanedLugar : llm.LugarTexto;
+                var llmLugar = !string.IsNullOrWhiteSpace(cleanedLugar) ? cleanedLugar : llm.LugarTexto;
+                var currentScore = ScoreLocationCandidate(lugar);
+                var llmScore = ScoreLocationCandidate(llmLugar);
+
+                // Preferimos el LLM solo si realmente mejora la calidad de la ubicacion.
+                if (llmScore >= currentScore || string.IsNullOrWhiteSpace(lugar))
+                    lugar = llmLugar;
             }
             var descripcion = !string.IsNullOrWhiteSpace(llm.Descripcion) ? llm.Descripcion : baseExtract.Descripcion;
 
@@ -313,21 +319,67 @@ namespace Backend.Negocio.Pipeline
 
         private static string? TryExtractLocation(string text)
         {
+            var addressWithNumber = TryExtractAddressWithNumber(text);
             var labeled = TryExtractLabeledLocation(text);
             var preposition = TryExtractPrepositionLocation(text);
+            var candidates = new[] { addressWithNumber, labeled, preposition }
+                .Where(c => !string.IsNullOrWhiteSpace(c))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            if (!string.IsNullOrWhiteSpace(labeled) && !string.IsNullOrWhiteSpace(preposition))
+            if (candidates.Count == 0)
+                return null;
+
+            return candidates
+                .OrderByDescending(ScoreLocationCandidate)
+                .ThenByDescending(c => c!.Length)
+                .FirstOrDefault();
+        }
+
+        private static string? TryExtractAddressWithNumber(string text)
+        {
+            const string monthPattern = "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre";
+            var match = Regex.Match(
+                text,
+                $@"\b(?:en|de|sobre|frente a|cerca de|altura de|a la altura de)\s+(?<loc>(?!(?:{monthPattern}|hoy|siendo|las)\b)[\p{{L}}0-9\s\.\-]{{3,80}}?\s+(?:al|nro\.?|numero)\s*\d{{1,5}}(?:\s*(?:,|de)?\s*barrio\s+[\p{{L}}0-9\s]{{3,40}})?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            if (!match.Success)
             {
-                return preposition.Length >= labeled.Length ? preposition : labeled;
+                match = Regex.Match(
+                    text,
+                    @"\b(?<loc>(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\s+[\p{L}0-9\s\.\-]{3,90}\s+\d{1,5}(?:\s*,?\s*barrio\s+[\p{L}0-9\s]{3,60})?)",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
             }
 
-            if (!string.IsNullOrWhiteSpace(labeled))
-                return labeled;
+            if (!match.Success) return null;
+            var candidate = TrimAtStopWords(match.Groups["loc"].Value);
+            return IsLikelyAddressWithNumber(candidate) ? candidate : null;
+        }
 
-            if (!string.IsNullOrWhiteSpace(preposition))
-                return preposition;
+        private static bool IsLikelyAddressWithNumber(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
 
-            return null;
+            var normalized = Normalize(value);
+            if (!Regex.IsMatch(normalized, @"\b(?:al|nro\.?|numero)\s*\d{1,5}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                && !Regex.IsMatch(normalized, @"\b(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\b.*\b\d{1,5}\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                return false;
+            }
+
+            if (Regex.IsMatch(normalized, @"\b(hoy|siendo|fecha|hora)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return false;
+
+            if (Regex.IsMatch(normalized, @"\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return false;
+
+            return true;
         }
 
         private static string? TryExtractPrepositionLocation(string text)
@@ -338,7 +390,16 @@ namespace Backend.Negocio.Pipeline
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
             );
             if (!match.Success) return null;
-            return TrimAtStopWords(match.Groups[2].Value);
+            var candidate = TrimAtStopWords(match.Groups[2].Value);
+            if (string.IsNullOrWhiteSpace(candidate))
+                return null;
+
+            var normalized = Normalize(candidate);
+            if (Regex.IsMatch(normalized, @"^(moto|en moto|auto|camion|camión)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return null;
+
+            return candidate;
         }
 
         private static string? TryExtractLabeledLocation(string text)
@@ -385,6 +446,7 @@ namespace Backend.Negocio.Pipeline
             var lower = text.ToLowerInvariant();
             var withoutAccents = RemoveDiacritics(lower);
             var compact = Regex.Replace(withoutAccents, @"\s+", " ").Trim();
+            compact = InsertMissingSeparators(compact);
             return FixCommonMishears(compact);
         }
 
@@ -434,6 +496,7 @@ namespace Backend.Negocio.Pipeline
                     : $@"\b{Regex.Escape(key)}\b";
                 cleaned = Regex.Replace(cleaned, pattern, _ => value, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             }
+            cleaned = InsertMissingSeparators(cleaned);
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             return cleaned;
         }
@@ -474,13 +537,86 @@ namespace Backend.Negocio.Pipeline
             cleaned = Regex.Replace(cleaned, @"\bsin especificar\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\bsin precisar\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\bnull\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\ben moto\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\bmoto\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\s*:\s*$", " ");
             cleaned = Regex.Replace(cleaned, @"\s*:\s*null\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\bciudad\b(?!\s+de\b)", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\b(hubo|ocurrio|ocurrió|se produjo|se reporto|se reportó|arrebato|robo|hurto)\b.*$",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\b(autores?|huyeron|escaparon|le quitaron|le robaron|sustrajeron|sustra)\b.*$",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\bno\s+(hubo|se reportan|se registran)\b.*$",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\b(y|e)\s+\1\b", "$1",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\b(y|e|con)\s*$", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"^\s*(y|e|con)\b", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = InsertMissingSeparators(cleaned);
             cleaned = Regex.Replace(cleaned, @"\s*,\s*", ", ");
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             cleaned = cleaned.Trim(',', '.', ';', ':');
             return cleaned;
+        }
+
+        private static int ScoreLocationCandidate(string? location)
+        {
+            if (string.IsNullOrWhiteSpace(location))
+                return -10;
+
+            var score = 0;
+            var normalized = Normalize(location);
+
+            if (Regex.IsMatch(normalized, @"\b\d{1,5}\b", RegexOptions.CultureInvariant))
+                score += 2;
+
+            if (Regex.IsMatch(normalized, @"\b(avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score += 2;
+
+            if (Regex.IsMatch(normalized, @"\b(y|e|con)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score += 1;
+
+            if (Regex.IsMatch(normalized, @"\bbarrio\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score += 1;
+
+            if (Regex.IsMatch(normalized, @"\b(hubo|robo|hurto|arrebato|huyeron|escaparon|autores?|heridos)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score -= 4;
+
+            if (Regex.IsMatch(normalized, @"\b(hoy|siendo|fecha|hora)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score -= 3;
+
+            if (Regex.IsMatch(normalized, @"\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score -= 3;
+
+            if (normalized.Length > 120)
+                score -= 3;
+
+            return score;
+        }
+
+        private static string InsertMissingSeparators(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return text;
+            var updated = text;
+            updated = Regex.Replace(updated, @"(?<=\d)(?=[\p{L}])", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"(?<=[\p{L}])(?=\d)", " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"\b(\d{1,5})\s*(barrio)\b", "$1, barrio",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"\b(avenida|boulevard|bulevar|calle|pasaje)([\p{L}])", "$1 $2",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            updated = Regex.Replace(updated, @"\s+", " ").Trim();
+            return updated;
         }
 
         private static DateTime? TryParseIsoDate(string? value)

@@ -21,7 +21,15 @@ namespace Backend.Utils
                 ["av."] = "avenida",
                 ["nueva corda"] = "nueva cordoba",
                 ["varido"] = "barrio",
-                ["mocho y arroja"] = "mochila roja"
+                ["mocho y arroja"] = "mochila roja",
+                ["navegania"] = "avenida",
+                ["sabatini"] = "sabattini",
+                ["yrigollen"] = "yrigoyen",
+                ["chacabulco"] = "chacabuco",
+                ["chacauco"] = "chacabuco",
+                ["alverdi"] = "alberdi",
+                ["fuerza area"] = "fuerza aerea",
+                ["rondeo"] = "rondeau"
             };
 
         private static readonly IReadOnlyList<string> DefaultLocationLabels = new[]
@@ -51,6 +59,13 @@ namespace Backend.Utils
             "ocurrio",
             "se produjo",
             "se reporto",
+            "arrebato",
+            "robo",
+            "hurto",
+            "huyeron",
+            "escaparon",
+            "autores",
+            "heridos",
             "a las",
             "hora",
             "fecha",
@@ -142,10 +157,19 @@ namespace Backend.Utils
         public static bool LLM_ENABLED =>
             bool.TryParse(Environment.GetEnvironmentVariable("LLM_ENABLED"), out var enabled) && enabled;
         public static string LLM_URL => Environment.GetEnvironmentVariable("LLM_URL") ?? "";
-        public static string LLM_MODEL => Environment.GetEnvironmentVariable("LLM_MODEL") ?? "llama3.2:3b";
+        public static string LLM_MODEL => Environment.GetEnvironmentVariable("LLM_MODEL") ?? "qwen2.5:7b";
         public static string LLM_MODE => Environment.GetEnvironmentVariable("LLM_MODE") ?? "generate";
         public static string LLM_API_KEY => Environment.GetEnvironmentVariable("LLM_API_KEY") ?? "";
         public static string LLM_FORMAT => Environment.GetEnvironmentVariable("LLM_FORMAT") ?? "";
+        public static bool LLM_JSON_SCHEMA_ENABLED =>
+            !bool.TryParse(Environment.GetEnvironmentVariable("LLM_JSON_SCHEMA_ENABLED"), out var enabled) || enabled;
+        public static decimal LLM_TEMPERATURE =>
+            decimal.TryParse(Environment.GetEnvironmentVariable("LLM_TEMPERATURE"),
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var temp)
+                ? temp
+                : 0.0m;
         public static int LLM_TIMEOUT_SECONDS =>
             int.TryParse(Environment.GetEnvironmentVariable("LLM_TIMEOUT_SECONDS"), out var seconds)
                 ? seconds

@@ -29,6 +29,20 @@ namespace Backend.Negocio.Pipeline
         public string? Hash { get; init; }
     }
 
+    public sealed class EvalDatasetSeedItem
+    {
+        public int IncidenteId { get; init; }
+        public string? RawText { get; init; }
+        public DateTime? FechaHora { get; init; }
+        public string? LugarTexto { get; init; }
+        public string? LugarNormalizado { get; init; }
+        public int? TipoHechoId { get; init; }
+        public decimal? Lat { get; init; }
+        public decimal? Lng { get; init; }
+        public string? Descripcion { get; init; }
+        public DateTime? CreatedAt { get; init; }
+    }
+
     public sealed class IncidentePipelineRepository
     {
         public (int IncidenteId, int AudioId, int JobId) CrearIncidenteConAudio(
@@ -347,6 +361,52 @@ WHERE [Id] = @Id;";
             cmd.Parameters.AddWithValue("@Hash", hash);
             cmd.Parameters.AddWithValue("@Id", audioId);
             cmd.ExecuteNonQuery();
+        }
+
+        public List<EvalDatasetSeedItem> ObtenerDatasetAuto(int take)
+        {
+            using var conn = Db.Open();
+            const string sql = @"
+SELECT TOP (@Take)
+    i.[Id],
+    i.[FechaHora],
+    i.[LugarTexto],
+    i.[LugarNormalizado],
+    i.[TipoHechoId],
+    i.[Lat],
+    i.[Lng],
+    i.[Descripcion],
+    i.[CreatedAt],
+    (
+        SELECT TOP 1 e.[RawText]
+        FROM [sys_mapeo].[IncidenteExtraccion] e
+        WHERE e.[IncidenteId] = i.[Id]
+        ORDER BY e.[Id] DESC
+    ) AS [RawText]
+FROM [sys_mapeo].[Incidentes] i
+WHERE ISNULL(i.[Estado], '') = 'procesado'
+ORDER BY i.[Id] DESC;";
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@Take", take);
+            using var reader = cmd.ExecuteReader();
+            var list = new List<EvalDatasetSeedItem>();
+            while (reader.Read())
+            {
+                list.Add(new EvalDatasetSeedItem
+                {
+                    IncidenteId = Convert.ToInt32(reader["Id"]),
+                    RawText = reader["RawText"] == DBNull.Value ? null : reader["RawText"].ToString(),
+                    FechaHora = reader["FechaHora"] == DBNull.Value ? null : Convert.ToDateTime(reader["FechaHora"]),
+                    LugarTexto = reader["LugarTexto"] == DBNull.Value ? null : reader["LugarTexto"].ToString(),
+                    LugarNormalizado = reader["LugarNormalizado"] == DBNull.Value ? null : reader["LugarNormalizado"].ToString(),
+                    TipoHechoId = reader["TipoHechoId"] == DBNull.Value ? null : Convert.ToInt32(reader["TipoHechoId"]),
+                    Lat = reader["Lat"] == DBNull.Value ? null : Convert.ToDecimal(reader["Lat"]),
+                    Lng = reader["Lng"] == DBNull.Value ? null : Convert.ToDecimal(reader["Lng"]),
+                    Descripcion = reader["Descripcion"] == DBNull.Value ? null : reader["Descripcion"].ToString(),
+                    CreatedAt = reader["CreatedAt"] == DBNull.Value ? null : Convert.ToDateTime(reader["CreatedAt"])
+                });
+            }
+            return list;
         }
     }
 }
