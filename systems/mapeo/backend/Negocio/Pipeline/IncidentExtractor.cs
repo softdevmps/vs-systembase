@@ -118,10 +118,38 @@ namespace Backend.Negocio.Pipeline
                 var llmLugar = !string.IsNullOrWhiteSpace(cleanedLugar) ? cleanedLugar : llm.LugarTexto;
                 var currentScore = ScoreLocationCandidate(lugar);
                 var llmScore = ScoreLocationCandidate(llmLugar);
+                var currentNorm = Normalize(lugar ?? "");
+                var llmNorm = Normalize(llmLugar ?? "");
+                var currentHasNumber = Regex.IsMatch(currentNorm, @"\b\d{1,5}\b", RegexOptions.CultureInvariant);
+                var llmHasNumber = Regex.IsMatch(llmNorm, @"\b\d{1,5}\b", RegexOptions.CultureInvariant);
+                var currentHasAddress = Regex.IsMatch(currentNorm,
+                    @"\b(avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\b.*\b\d{1,5}\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                var llmHasAddress = Regex.IsMatch(llmNorm,
+                    @"\b(avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\b.*\b\d{1,5}\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                var llmLooksPoi = Regex.IsMatch(llmNorm, @"\b(plaza|parque|hospital|terminal|banco|comisaria)\b",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
                 // Preferimos el LLM solo si realmente mejora la calidad de la ubicacion.
-                if (llmScore >= currentScore || string.IsNullOrWhiteSpace(lugar))
+                if (string.IsNullOrWhiteSpace(lugar))
+                {
                     lugar = llmLugar;
+                }
+                else if (currentHasAddress && !llmHasAddress)
+                {
+                    // Si ya tenemos direccion con altura, no degradamos a POI/interseccion.
+                }
+                else if (currentHasNumber && !llmHasNumber)
+                {
+                }
+                else if (currentHasAddress && llmLooksPoi)
+                {
+                }
+                else if (llmScore >= currentScore + 1)
+                {
+                    lugar = llmLugar;
+                }
             }
             var descripcion = !string.IsNullOrWhiteSpace(llm.Descripcion) ? llm.Descripcion : baseExtract.Descripcion;
 
@@ -272,49 +300,92 @@ namespace Backend.Negocio.Pipeline
 
         private static TimeSpan? TryParseTime(string text)
         {
-            var match = Regex.Match(text, @"\b(?:a las|hora)\s*(\d{1,2})\s*([:\.\s])\s*(\d{2})\b", RegexOptions.IgnoreCase);
-            if (!match.Success)
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var withMinutes = Regex.Match(
+                text,
+                @"\b(?:a\s+las?|hora|siendo\s+las?)\s*(?<h>\d{1,2})\s*[:\.]\s*(?<m>\d{1,2})\s*(?:hs|h)?\s*(?<mer>a\.?\s*m\.?|p\.?\s*m\.?|am|pm|de\s+la\s+manana|de\s+la\s+tarde|de\s+la\s+noche|de\s+la\s+madrugada)?\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            if (withMinutes.Success)
             {
-                match = Regex.Match(text, @"\b(?:a las|hora)\s*(\d{1,2})\s*(?:hs|h)\b", RegexOptions.IgnoreCase);
-                if (!match.Success)
-                {
-                    match = Regex.Match(text, @"\b(?:a las|hora)\s*(\d{3,4})\b", RegexOptions.IgnoreCase);
-                    if (match.Success)
-                    {
-                        var raw = match.Groups[1].Value;
-                        if (raw.Length == 3)
-                        {
-                            var h = int.Parse(raw.Substring(0, 1));
-                            var m = int.Parse(raw.Substring(1, 2));
-                            if (h > 23 || m > 59) return null;
-                            return new TimeSpan(h, m, 0);
-                        }
-                        if (raw.Length == 4)
-                        {
-                            var h = int.Parse(raw.Substring(0, 2));
-                            var m = int.Parse(raw.Substring(2, 2));
-                            if (h > 23 || m > 59) return null;
-                            return new TimeSpan(h, m, 0);
-                        }
-                    }
-
-                    match = Regex.Match(text, @"\b(\d{1,2})[:\.](\d{2})\b");
-                    if (!match.Success) return null;
-                    var fallbackHour = int.Parse(match.Groups[1].Value);
-                    var fallbackMinute = int.Parse(match.Groups[2].Value);
-                    if (fallbackHour > 23 || fallbackMinute > 59) return null;
-                    return new TimeSpan(fallbackHour, fallbackMinute, 0);
-                }
-
-                var onlyHour = int.Parse(match.Groups[1].Value);
-                if (onlyHour > 23) return null;
-                return new TimeSpan(onlyHour, 0, 0);
+                var hour = int.Parse(withMinutes.Groups["h"].Value);
+                var minute = int.Parse(withMinutes.Groups["m"].Value);
+                var meridiem = ResolveMeridiemHint(text, withMinutes.Index, withMinutes.Length, withMinutes.Groups["mer"].Value);
+                return BuildTime(hour, minute, meridiem);
             }
 
-            var hour = int.Parse(match.Groups[1].Value);
-            var minute = int.Parse(match.Groups[3].Value);
-            if (hour > 23 || minute > 59) return null;
-            return new TimeSpan(hour, minute, 0);
+            var hourAndWordMinutes = Regex.Match(
+                text,
+                @"\b(?:a\s+las?|hora|siendo\s+las?)\s*(?<h>\d{1,2})\s+y\s+(?<mw>cuarto|media|quince|treinta|veinte|veinticinco|\d{1,2})\s*(?<mer>a\.?\s*m\.?|p\.?\s*m\.?|am|pm|de\s+la\s+manana|de\s+la\s+tarde|de\s+la\s+noche|de\s+la\s+madrugada)?\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            if (hourAndWordMinutes.Success)
+            {
+                var hour = int.Parse(hourAndWordMinutes.Groups["h"].Value);
+                var minuteToken = hourAndWordMinutes.Groups["mw"].Value.Trim().ToLowerInvariant();
+                var minute = minuteToken switch
+                {
+                    "cuarto" => 15,
+                    "media" => 30,
+                    "quince" => 15,
+                    "treinta" => 30,
+                    "veinte" => 20,
+                    "veinticinco" => 25,
+                    _ => int.TryParse(minuteToken, out var parsedMinute) ? parsedMinute : -1
+                };
+
+                var meridiem = ResolveMeridiemHint(text, hourAndWordMinutes.Index, hourAndWordMinutes.Length, hourAndWordMinutes.Groups["mer"].Value);
+                return BuildTime(hour, minute, meridiem);
+            }
+
+            var onlyHour = Regex.Match(
+                text,
+                @"\b(?:a\s+las?|hora|siendo\s+las?)\s*(?<h>\d{1,2})\s*(?:hs|h|horas?)?\s*(?<mer>a\.?\s*m\.?|p\.?\s*m\.?|am|pm|de\s+la\s+manana|de\s+la\s+tarde|de\s+la\s+noche|de\s+la\s+madrugada)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            if (onlyHour.Success)
+            {
+                var hour = int.Parse(onlyHour.Groups["h"].Value);
+                var meridiem = ResolveMeridiemHint(text, onlyHour.Index, onlyHour.Length, onlyHour.Groups["mer"].Value);
+                return BuildTime(hour, 0, meridiem);
+            }
+
+            var compact = Regex.Match(text, @"\b(?:a\s+las?|hora)\s*(?<raw>\d{3,4})\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (compact.Success)
+            {
+                var raw = compact.Groups["raw"].Value;
+                if (raw.Length == 3)
+                {
+                    var h = int.Parse(raw[..1]);
+                    var m = int.Parse(raw.Substring(1, 2));
+                    var meridiem = ResolveMeridiemHint(text, compact.Index, compact.Length, null);
+                    return BuildTime(h, m, meridiem);
+                }
+                if (raw.Length == 4)
+                {
+                    var h = int.Parse(raw[..2]);
+                    var m = int.Parse(raw.Substring(2, 2));
+                    var meridiem = ResolveMeridiemHint(text, compact.Index, compact.Length, null);
+                    return BuildTime(h, m, meridiem);
+                }
+            }
+
+            var fallback = Regex.Match(
+                text,
+                @"\b(?<h>\d{1,2})[:\.](?<m>\d{1,2})\s*(?<mer>a\.?\s*m\.?|p\.?\s*m\.?|am|pm|de\s+la\s+manana|de\s+la\s+tarde|de\s+la\s+noche|de\s+la\s+madrugada)?\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            if (fallback.Success)
+            {
+                var fallbackHour = int.Parse(fallback.Groups["h"].Value);
+                var fallbackMinute = int.Parse(fallback.Groups["m"].Value);
+                var meridiem = ResolveMeridiemHint(text, fallback.Index, fallback.Length, fallback.Groups["mer"].Value);
+                return BuildTime(fallbackHour, fallbackMinute, meridiem);
+            }
+
+            return null;
         }
 
         private static string? TryExtractLocation(string text)
@@ -341,7 +412,7 @@ namespace Backend.Negocio.Pipeline
             const string monthPattern = "enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre";
             var match = Regex.Match(
                 text,
-                $@"\b(?:en|de|sobre|frente a|cerca de|altura de|a la altura de)\s+(?<loc>(?!(?:{monthPattern}|hoy|siendo|las)\b)[\p{{L}}0-9\s\.\-]{{3,80}}?\s+(?:al|nro\.?|numero)\s*\d{{1,5}}(?:\s*(?:,|de)?\s*barrio\s+[\p{{L}}0-9\s]{{3,40}})?)",
+                $@"\b(?:en|de|sobre|frente a|cerca de|altura de|a la altura de)\s+(?<loc>(?!(?:{monthPattern}|hoy|siendo|las)\b)[\p{{L}}0-9\s\.\-]{{3,80}}?\s+(?:al|en|nro\.?|numero)\s*\d{{1,5}}(?:\s*(?:,|de)?\s*barrio\s+[\p{{L}}0-9\s]{{3,40}})?)",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
             );
             if (!match.Success)
@@ -349,6 +420,14 @@ namespace Backend.Negocio.Pipeline
                 match = Regex.Match(
                     text,
                     @"\b(?<loc>(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\s+[\p{L}0-9\s\.\-]{3,90}\s+\d{1,5}(?:\s*,?\s*barrio\s+[\p{L}0-9\s]{3,60})?)",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                );
+            }
+            if (!match.Success)
+            {
+                match = Regex.Match(
+                    text,
+                    @"\b(?<loc>(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\s+[\p{L}0-9\s\.\-]{3,90}\s+(?:en|al)\s+\d{1,5}(?:\s*,?\s*barrio\s+[\p{L}0-9\s]{3,60})?)",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
                 );
             }
@@ -368,7 +447,8 @@ namespace Backend.Negocio.Pipeline
                 && !Regex.IsMatch(normalized, @"\b(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\b.*\b\d{1,5}\b",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
             {
-                return false;
+                if (!Regex.IsMatch(normalized, @"\ben\s+\d{1,5}\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    return false;
             }
 
             if (Regex.IsMatch(normalized, @"\b(hoy|siendo|fecha|hora)\b",
@@ -510,6 +590,10 @@ namespace Backend.Negocio.Pipeline
             cleaned = Regex.Replace(cleaned, @"\bhora\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\bhoy\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\b(lugar|ubicacion|ubicación)\b", " ", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned,
+                @"\b(hacia|rumbo\s+a|direccion\s+a|direccion\s+al|dirección\s+a|dirección\s+al)\b.*$",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\b(a\s+las?|a\s+la)\s+\d{1,2}\s*(y\s*(cuarto|media|quince|treinta))?\b", " ",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\b\d{1,2}\s+y\s*(cuarto|media|quince|treinta)\b", " ",
@@ -523,11 +607,11 @@ namespace Backend.Negocio.Pipeline
                 "",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned,
-                @"\b\d{1,2}\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+de\s+\d{2,4}\b",
+                @"\b\d{1,2}\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+de(?:l)?\s+\d{2,4}\b",
                 " ",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned,
-                @"\by\s+\d{1,2}\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+de\s+\d{2,4}\b",
+                @"\by\s+\d{1,2}\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\s+de(?:l)?\s+\d{2,4}\b",
                 " ",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\([^)]*\)", " ");
@@ -553,9 +637,9 @@ namespace Backend.Negocio.Pipeline
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\b(y|e)\s+\1\b", "$1",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            cleaned = Regex.Replace(cleaned, @"\b(y|e|con)\s*$", " ",
+            cleaned = Regex.Replace(cleaned, @"\b(y|e|con|en)\s*$", " ",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            cleaned = Regex.Replace(cleaned, @"^\s*(y|e|con)\b", " ",
+            cleaned = Regex.Replace(cleaned, @"^\s*(y|e|con|en)\b", " ",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = InsertMissingSeparators(cleaned);
             cleaned = Regex.Replace(cleaned, @"\s*,\s*", ", ");
@@ -592,6 +676,10 @@ namespace Backend.Negocio.Pipeline
             if (Regex.IsMatch(normalized, @"\b(hoy|siendo|fecha|hora)\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
                 score -= 3;
+
+            if (Regex.IsMatch(normalized, @"\b(hacia|rumbo|direccion|dirección)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                score -= 2;
 
             if (Regex.IsMatch(normalized, @"\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
@@ -633,24 +721,80 @@ namespace Backend.Negocio.Pipeline
         {
             if (string.IsNullOrWhiteSpace(value)) return null;
             var trimmed = value.Trim();
-            if (TimeSpan.TryParse(trimmed, out var ts))
+            if (TimeSpan.TryParse(trimmed, CultureInfo.InvariantCulture, out var ts))
                 return ts;
+
+            var spoken = TryParseTime($"a las {trimmed}");
+            if (spoken.HasValue)
+                return spoken;
 
             var digits = Regex.Replace(trimmed, @"\D", "");
             if (digits.Length == 3)
             {
                 var h = int.Parse(digits.Substring(0, 1));
                 var m = int.Parse(digits.Substring(1, 2));
-                if (h <= 23 && m <= 59) return new TimeSpan(h, m, 0);
+                var built = BuildTime(h, m, trimmed);
+                if (built.HasValue) return built;
             }
             if (digits.Length == 4)
             {
                 var h = int.Parse(digits.Substring(0, 2));
                 var m = int.Parse(digits.Substring(2, 2));
-                if (h <= 23 && m <= 59) return new TimeSpan(h, m, 0);
+                var built = BuildTime(h, m, trimmed);
+                if (built.HasValue) return built;
             }
 
             return null;
+        }
+
+        private static string ResolveMeridiemHint(string text, int index, int length, string? inlineHint)
+        {
+            if (!string.IsNullOrWhiteSpace(inlineHint))
+                return inlineHint;
+
+            var start = Math.Max(0, index - 12);
+            var end = Math.Min(text.Length, index + length + 24);
+            var window = text[start..end];
+            return window;
+        }
+
+        private static TimeSpan? BuildTime(int hour, int minute, string? meridiemHint)
+        {
+            if (hour < 0 || hour > 23 || minute < 0 || minute > 59)
+                return null;
+
+            var adjustedHour = AdjustHourByMeridiem(hour, meridiemHint);
+            if (adjustedHour < 0 || adjustedHour > 23)
+                return null;
+
+            return new TimeSpan(adjustedHour, minute, 0);
+        }
+
+        private static int AdjustHourByMeridiem(int hour, string? hint)
+        {
+            if (string.IsNullOrWhiteSpace(hint))
+                return hour;
+
+            var normalized = hint.ToLowerInvariant();
+            normalized = RemoveDiacritics(normalized);
+
+            var isPm = Regex.IsMatch(
+                normalized,
+                @"\b(pm|p\.m|de la tarde|de la noche)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            var isAm = Regex.IsMatch(
+                normalized,
+                @"\b(am|a\.m|de la manana|de la madrugada)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+
+            if (isPm && hour < 12)
+                return hour + 12;
+            if (isAm && hour == 12)
+                return 0;
+
+            return hour;
         }
     }
 }

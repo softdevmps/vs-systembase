@@ -29,7 +29,12 @@ namespace Backend.Utils
                 ["chacauco"] = "chacabuco",
                 ["alverdi"] = "alberdi",
                 ["fuerza area"] = "fuerza aerea",
-                ["rondeo"] = "rondeau"
+                ["rondeo"] = "rondeau",
+                ["aveania"] = "avenida",
+                ["avenia"] = "avenida",
+                ["rodriguez pena"] = "rodriguez peña",
+                ["ridriguez pena"] = "rodriguez peña",
+                ["roodriguez pena"] = "rodriguez peña"
             };
 
         private static readonly IReadOnlyList<string> DefaultLocationLabels = new[]
@@ -179,6 +184,18 @@ namespace Backend.Utils
         public static string GEOCODER_DEFAULT_SUFFIX => Environment.GetEnvironmentVariable("GEOCODER_DEFAULT_SUFFIX") ?? "";
         public static string GEOCODER_COUNTRY_CODES => Environment.GetEnvironmentVariable("GEOCODER_COUNTRY_CODES") ?? "";
         public static string GEOCODER_LANGUAGE => Environment.GetEnvironmentVariable("GEOCODER_LANGUAGE") ?? "";
+        public static bool LOCAL_GEOCODER_ENABLED =>
+            !bool.TryParse(Environment.GetEnvironmentVariable("LOCAL_GEOCODER_ENABLED"), out var enabled) || enabled;
+        public static string LOCAL_GEOCODER_CSV_PATH =>
+            Environment.GetEnvironmentVariable("LOCAL_GEOCODER_CSV_PATH") ?? "../cordoba-dataset/out/direcciones_mapeo.csv";
+        public static int LOCAL_GEOCODER_MAX_NUMBER_DELTA =>
+            int.TryParse(Environment.GetEnvironmentVariable("LOCAL_GEOCODER_MAX_NUMBER_DELTA"), out var numberDelta)
+                ? numberDelta
+                : 1300;
+        public static int LOCAL_GEOCODER_MAX_INTERSECTION_DISTANCE_METERS =>
+            int.TryParse(Environment.GetEnvironmentVariable("LOCAL_GEOCODER_MAX_INTERSECTION_DISTANCE_METERS"), out var interDist)
+                ? interDist
+                : 450;
 
         public static string NormalizeKey(string value)
         {

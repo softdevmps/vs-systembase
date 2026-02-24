@@ -354,7 +354,7 @@ export default {
     },
 
     async persistSave() {
-      const payload = { ...this.form }
+      const payload = this.normalizePayload({ ...this.form })
       const pkName = this.pkField?.columnName || this.pkField?.name
       if (this.isDuplicate && pkName) {
         delete payload[pkName]
@@ -372,9 +372,97 @@ export default {
         this.$emit('guardado')
         this.cerrar()
       } catch (error) {
-        const message = error?.response?.data?.message || error?.message || 'Error al guardar.'
+        const message = this.extractErrorMessage(error)
         window.alert(message)
       }
+    },
+
+    normalizePayload(raw) {
+      const payload = { ...raw }
+      const fields = Array.isArray(this.fields) ? this.fields : []
+      const byName = new Map(
+        fields.map(f => [String(f.columnName || f.name || '').toLowerCase(), f])
+      )
+
+      Object.keys(payload).forEach((key) => {
+        const field = byName.get(String(key).toLowerCase())
+        const value = payload[key]
+        payload[key] = this.normalizeFieldValue(field, value)
+      })
+
+      return payload
+    },
+
+    normalizeFieldValue(field, value) {
+      if (value === '' || value === undefined) return null
+      if (value === null) return null
+
+      const type = field ? this.resolveInputType(field) : 'text'
+
+      if (type === 'number') {
+        if (typeof value === 'number') return Number.isFinite(value) ? value : null
+        const normalized = String(value).trim().replace(',', '.')
+        if (!normalized) return null
+        const num = Number(normalized)
+        if (Number.isFinite(num)) return num
+        throw new Error(`Valor numerico invalido en "${field?.label || field?.name || field?.columnName || 'campo'}"`)
+      }
+
+      if (type === 'date' || type === 'datetime') {
+        return this.normalizeDateValue(String(value))
+      }
+
+      return value
+    },
+
+    normalizeDateValue(input) {
+      const value = String(input || '').trim()
+      if (!value) return null
+
+      // yyyy-MM-dd or yyyy-MM-ddTHH:mm[:ss] (already compatible)
+      if (/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(?::\d{2})?)?$/.test(value)) {
+        return value.replace(' ', 'T')
+      }
+
+      // dd/MM/yyyy[, ]HH:mm[:ss]
+      const m = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[,\s]+(\d{1,2})(?::(\d{1,2}))?(?::(\d{1,2}))?)?$/)
+      if (m) {
+        const dd = m[1].padStart(2, '0')
+        const mm = m[2].padStart(2, '0')
+        const yyyy = m[3]
+        const hh = (m[4] || '00').padStart(2, '0')
+        const min = (m[5] || '00').padStart(2, '0')
+        const ss = (m[6] || '00').padStart(2, '0')
+        return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`
+      }
+
+      const parsed = new Date(value)
+      if (!Number.isNaN(parsed.getTime())) {
+        const yyyy = parsed.getFullYear()
+        const mm = String(parsed.getMonth() + 1).padStart(2, '0')
+        const dd = String(parsed.getDate()).padStart(2, '0')
+        const hh = String(parsed.getHours()).padStart(2, '0')
+        const min = String(parsed.getMinutes()).padStart(2, '0')
+        const ss = String(parsed.getSeconds()).padStart(2, '0')
+        return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`
+      }
+
+      return value
+    },
+
+    extractErrorMessage(error) {
+      const responseData = error?.response?.data
+      if (typeof responseData === 'string' && responseData.trim()) return responseData
+      if (responseData?.message) return responseData.message
+      if (responseData?.title && responseData?.errors) {
+        const details = Object.values(responseData.errors)
+          .flat()
+          .filter(Boolean)
+          .join(' | ')
+        return details ? `${responseData.title}: ${details}` : responseData.title
+      }
+      if (responseData?.title) return responseData.title
+      return error?.message || 'Error al guardar.'
     }
   }
 }

@@ -77,6 +77,11 @@ namespace Backend
                 public const string Reintentar = "api/v1/incidente-jobs/{id}/retry";
             }
 
+            public static class Observabilidad
+            {
+                public const string LocationLearning = "api/v1/observabilidad/location-learning";
+            }
+
         }
     }
 }

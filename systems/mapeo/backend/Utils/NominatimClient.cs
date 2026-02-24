@@ -13,6 +13,16 @@ namespace Backend.Utils
 
     public static class NominatimClient
     {
+        private static readonly HashSet<string> GenericGeoTokens =
+            new(StringComparer.OrdinalIgnoreCase)
+            {
+                "avenida", "boulevard", "bulevar", "calle", "pasaje", "ruta", "diagonal",
+                "barrio", "cordoba", "argentina", "capital", "municipio", "departamento", "pedania",
+                "interseccion", "aproximada", "esquina", "de", "del", "la", "el", "los", "las", "y", "e",
+                "nueva", "alberdi", "guemes", "centro", "general", "paz", "alto", "platanos", "arguello",
+                "hospital", "clinicas", "plaza", "parque"
+            };
+
         public static async Task<GeocodeResult?> GeocodeAsync(string? query, HttpClient httpClient, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(query))
@@ -23,6 +33,10 @@ namespace Backend.Utils
                 return null;
 
             var queryText = query.Trim();
+            var localResult = CalleDatasetGeocoder.Geocode(queryText);
+            if (localResult != null)
+                return localResult;
+
             var structured = await TryStructuredGeocodeAsync(queryText, httpClient, ct, null);
             if (structured != null)
                 return structured;
@@ -78,6 +92,10 @@ namespace Backend.Utils
                 return null;
 
             var queryText = query.Trim();
+            var localResult = CalleDatasetGeocoder.Geocode(queryText, tokens);
+            if (localResult != null)
+                return localResult;
+
             var structured = await TryStructuredGeocodeAsync(queryText, httpClient, ct, tokens);
             if (structured != null)
                 return structured;
@@ -145,7 +163,9 @@ namespace Backend.Utils
                 return null;
 
             // Si las dos trazas estan demasiado lejos, no forzamos coordenada.
-            if (bestDist > 2000m)
+            // Con barrio declarado podemos permitir un poco mas de tolerancia.
+            var maxAllowedDist = string.IsNullOrWhiteSpace(barrio) ? 450m : 900m;
+            if (bestDist > maxAllowedDist)
                 return null;
 
             var lat = Math.Round((bestA.Lat + bestB.Lat) / 2m, 7);
@@ -194,6 +214,8 @@ namespace Backend.Utils
                 return new List<GeocodeResult>();
 
             var list = new List<GeocodeResult>();
+            var preferred = new List<GeocodeResult>();
+            var barrioNorm = NormalizeToken(barrio ?? "");
             foreach (var item in doc.RootElement.EnumerateArray())
             {
                 if (!item.TryGetProperty("lat", out var latProp) || !item.TryGetProperty("lon", out var lonProp))
@@ -212,13 +234,36 @@ namespace Backend.Utils
                     continue;
                 }
 
-                list.Add(new GeocodeResult
+                var result = new GeocodeResult
                 {
                     Lat = lat,
                     Lng = lng,
                     DisplayName = item.TryGetProperty("display_name", out var nameProp) ? nameProp.GetString() : null
-                });
+                };
+
+                list.Add(result);
+
+                if (!string.IsNullOrWhiteSpace(barrioNorm))
+                {
+                    var suburb = GetAddressField(item, "suburb")
+                                 ?? GetAddressField(item, "neighbourhood")
+                                 ?? GetAddressField(item, "city_district");
+                    var suburbNorm = NormalizeToken(suburb ?? "");
+                    var displayNorm = NormalizeToken(result.DisplayName ?? "");
+                    var hasBarrioMatch =
+                        (!string.IsNullOrWhiteSpace(suburbNorm) &&
+                         (suburbNorm.Equals(barrioNorm, StringComparison.OrdinalIgnoreCase) ||
+                          suburbNorm.Contains(barrioNorm) ||
+                          barrioNorm.Contains(suburbNorm)))
+                        || displayNorm.Contains(barrioNorm);
+
+                    if (hasBarrioMatch)
+                        preferred.Add(result);
+                }
             }
+
+            if (preferred.Count > 0)
+                return preferred;
 
             return list;
         }
@@ -306,6 +351,8 @@ namespace Backend.Utils
             var finalQuery = queryText.Trim();
             var requiredNumber = ExtractHouseNumber(finalQuery);
             var requiredBarrio = ExtractBarrioFromQuery(finalQuery);
+            var streetFromQuery = ExtractStreetSignalFromQuery(finalQuery);
+            var requiredStreetTokens = BuildStreetTokens(streetFromQuery, requiredBarrio);
             var suffix = AppConfig.GEOCODER_DEFAULT_SUFFIX;
             if (!string.IsNullOrWhiteSpace(suffix))
             {
@@ -343,7 +390,7 @@ namespace Backend.Utils
                 .Select(c => new
                 {
                     Candidate = c,
-                    Score = ScoreCandidate(c, requiredTokens, requiredNumber, requiredBarrio)
+                    Score = ScoreCandidate(c, requiredTokens, requiredNumber, requiredBarrio, requiredStreetTokens)
                 })
                 .OrderByDescending(c => c.Score)
                 .ToList();
@@ -351,7 +398,40 @@ namespace Backend.Utils
             if (scored.Count == 0)
                 return null;
 
-            item = scored[0].Candidate;
+            var minScore = !string.IsNullOrWhiteSpace(requiredNumber) ? 1 : -2;
+            if (scored[0].Score < minScore)
+            {
+                if (!string.IsNullOrWhiteSpace(requiredNumber))
+                {
+                    // Fallback: si no hay match de altura, intentamos quedarnos con la calle/barrio
+                    // para no perder totalmente coordenadas.
+                    var relaxedTokens = requiredTokens?
+                        .Where(t => !Regex.IsMatch(t, @"^\d{1,5}$", RegexOptions.CultureInvariant))
+                        .ToList();
+
+                    var relaxed = candidates
+                        .Select(c => new
+                        {
+                            Candidate = c,
+                            Score = ScoreCandidate(c, relaxedTokens, null, requiredBarrio, requiredStreetTokens)
+                        })
+                        .OrderByDescending(c => c.Score)
+                        .ToList();
+
+                    if (relaxed.Count == 0 || relaxed[0].Score < 0)
+                        return null;
+
+                    item = relaxed[0].Candidate;
+                }
+                else
+                {
+                    return null;
+                }
+            }
+            else
+            {
+                item = scored[0].Candidate;
+            }
 
             if (!item.TryGetProperty("lat", out var latProp) || !item.TryGetProperty("lon", out var lonProp))
                 return null;
@@ -388,6 +468,7 @@ namespace Backend.Utils
             var requiredBarrio = ExtractBarrioFromQuery(queryText);
             var city = ExtractDefaultCity();
             var streetParam = $"{number} {street}".Trim();
+            var requiredStreetTokens = BuildStreetTokens(street, requiredBarrio);
 
             var url = $"{baseUrl}?format=json&addressdetails=1&limit=5&street={Uri.EscapeDataString(streetParam)}";
             if (!string.IsNullOrWhiteSpace(city))
@@ -414,12 +495,15 @@ namespace Backend.Utils
                 .Select(c => new
                 {
                     Candidate = c,
-                    Score = ScoreCandidate(c, requiredTokens, number, requiredBarrio)
+                    Score = ScoreCandidate(c, requiredTokens, number, requiredBarrio, requiredStreetTokens)
                 })
                 .OrderByDescending(c => c.Score)
                 .ToList();
 
             if (scored.Count == 0)
+                return null;
+
+            if (scored[0].Score < 1)
                 return null;
 
             var item = scored[0].Candidate;
@@ -472,7 +556,8 @@ namespace Backend.Utils
             JsonElement candidate,
             IReadOnlyList<string>? requiredTokens,
             string? requiredNumber,
-            string? requiredBarrio)
+            string? requiredBarrio,
+            IReadOnlyList<string>? requiredStreetTokens)
         {
             var score = 0;
             var display = "";
@@ -485,6 +570,14 @@ namespace Backend.Utils
 
             if (requiredTokens != null && requiredTokens.Count > 0)
                 score += requiredTokens.Count(token => display.Contains(token));
+
+            if (requiredStreetTokens != null && requiredStreetTokens.Count > 0)
+            {
+                var streetTokenHits = requiredStreetTokens.Count(token => display.Contains(token));
+                score += streetTokenHits * 2;
+                if (streetTokenHits == 0)
+                    return int.MinValue / 2;
+            }
 
             if (!string.IsNullOrWhiteSpace(requiredNumber))
             {
@@ -499,7 +592,8 @@ namespace Backend.Utils
                     else if (diff <= 50) score += 4;
                     else if (diff <= 150) score += 2;
                     else if (diff <= 300) score += 1;
-                    else score -= 2;
+                    else if (diff <= 450) score -= 2;
+                    else return int.MinValue / 2;
                 }
                 else if (!string.IsNullOrWhiteSpace(display) && display.Contains(requiredNumber))
                 {
@@ -507,6 +601,8 @@ namespace Backend.Utils
                 }
                 else
                 {
+                    if (requiredStreetTokens != null && requiredStreetTokens.Count > 0)
+                        return int.MinValue / 2;
                     score -= 3;
                 }
             }
@@ -539,6 +635,55 @@ namespace Backend.Utils
             }
 
             return score;
+        }
+
+        private static string? ExtractStreetSignalFromQuery(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return null;
+
+            var (street, _) = ExtractStreetAndNumber(query);
+            if (!string.IsNullOrWhiteSpace(street))
+                return street;
+
+            var match = Regex.Match(
+                query,
+                @"\b(?<street>(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\s+[\p{L}0-9\s\.]{3,90})(?=\s*(?:,|\bbarrio\b|\bhubo\b|\brobo\b|\barrebato\b|\bhurto\b|$))",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+            if (!match.Success)
+                return null;
+
+            var candidate = CleanStreetFragment(match.Groups["street"].Value);
+            return NormalizeStreetForQuery(candidate);
+        }
+
+        private static IReadOnlyList<string> BuildStreetTokens(string? street, string? requiredBarrio)
+        {
+            if (string.IsNullOrWhiteSpace(street))
+                return Array.Empty<string>();
+
+            var barrioTokens = string.IsNullOrWhiteSpace(requiredBarrio)
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : AppConfig.NormalizeKey(requiredBarrio)
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            var baseTokens = AppConfig.NormalizeKey(street)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(token => token.Length >= 4)
+                .Where(token => !Regex.IsMatch(token, @"\d", RegexOptions.CultureInvariant))
+                .Where(token => !GenericGeoTokens.Contains(token))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var withoutBarrio = baseTokens
+                .Where(token => !barrioTokens.Contains(token))
+                .ToList();
+
+            // Si la calle comparte tokens con el barrio ("Don Bosco"), no los eliminamos todos
+            // para evitar perder la señal principal de la via.
+            return withoutBarrio.Count > 0 ? withoutBarrio : baseTokens;
         }
 
         private static int? ParseFirstNumber(string? value)
@@ -579,6 +724,15 @@ namespace Backend.Utils
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (!match.Success) return null;
             var barrio = match.Groups[1].Value;
+            barrio = Regex.Replace(barrio,
+                @"\b(hubo|ocurrio|ocurrió|robo|hurto|arrebato|autores?|huyeron|escaparon|heridos?|a\s+las|cordoba|córdoba|argentina)\b.*$",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            barrio = Regex.Replace(barrio,
+                @"\b(en|de|del|la|el)\s*$",
+                " ",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            barrio = Regex.Replace(barrio, @"\s+", " ").Trim().Trim(',', '.', ';', ':');
             var normalized = NormalizeToken(barrio);
             return string.IsNullOrWhiteSpace(normalized) ? null : normalized;
         }
@@ -602,7 +756,7 @@ namespace Backend.Utils
             var match = Regex.Match(cleaned, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (match.Success)
             {
-                var street = match.Groups["street"].Value.Trim();
+                var street = CleanStreetFragment(match.Groups["street"].Value);
                 var number = match.Groups["num"].Value.Trim();
                 street = NormalizeStreetForQuery(street);
                 return (street, number);
@@ -612,7 +766,7 @@ namespace Backend.Utils
             match = Regex.Match(cleaned, altPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (match.Success)
             {
-                var street = match.Groups["street"].Value.Trim();
+                var street = CleanStreetFragment(match.Groups["street"].Value);
                 var number = match.Groups["num"].Value.Trim();
                 street = NormalizeStreetForQuery(street);
                 return (street, number);
@@ -622,7 +776,7 @@ namespace Backend.Utils
             match = Regex.Match(cleaned, directPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             if (match.Success)
             {
-                var street = match.Groups["street"].Value.Trim();
+                var street = CleanStreetFragment(match.Groups["street"].Value);
                 var number = match.Groups["num"].Value.Trim();
                 if (!Regex.IsMatch(street, @"\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)\b",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
@@ -633,6 +787,20 @@ namespace Backend.Utils
             }
 
             return (null, null);
+        }
+
+        private static string CleanStreetFragment(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "";
+
+            var street = Regex.Replace(value, @"\s+", " ").Trim();
+            street = Regex.Replace(street, @"\b(?:en|al|nro\.?|numero)\s*$", "",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            street = Regex.Replace(street, @"\b(?:altura|a la altura de)\s*$", "",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            street = street.Trim().Trim(',', '.', ';', ':');
+            return street;
         }
 
         private static string? ExtractDefaultCity()
@@ -676,6 +844,8 @@ namespace Backend.Utils
                 return null;
 
             var normalized = Regex.Replace(barrio, @"\s+", " ").Trim().ToLowerInvariant();
+            normalized = Regex.Replace(normalized, @"\b(en|de|del|la|el)\s*$", "",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant).Trim();
             if (normalized == "nueva")
                 return "nueva cordoba";
             if (normalized == "general")

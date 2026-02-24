@@ -69,6 +69,7 @@ namespace Backend.Negocio.Gestores
         public static (bool Ok, string? Error) Editar(int id, IncidentesUpdateRequest request)
         {
             using var conn = Db.Open();
+            var anterior = ObtenerPorId(id);
             if (string.IsNullOrWhiteSpace(request.Lugartexto)) return (false, "Campo requerido: LugarTexto");
             if (request.Lugartexto != null && request.Lugartexto.Length > 255) return (false, "MaxLength excedido: LugarTexto");
             if (request.Lugarnormalizado != null && request.Lugarnormalizado.Length > 255) return (false, "MaxLength excedido: LugarNormalizado");
@@ -90,6 +91,38 @@ namespace Backend.Negocio.Gestores
             cmd.Parameters.AddWithValue("@id", id);
 
             var rows = cmd.ExecuteNonQuery();
+            if (rows > 0)
+            {
+                var lugarTextoAntes = anterior?.Lugartexto?.Trim();
+                var lugarTextoAhora = request.Lugartexto?.Trim();
+                var lugarTextoCambio = !string.Equals(lugarTextoAntes, lugarTextoAhora, StringComparison.OrdinalIgnoreCase);
+                var tieneCorreccionUbicacion =
+                    lugarTextoCambio ||
+                    !string.IsNullOrWhiteSpace(request.Lugarnormalizado) ||
+                    (request.Lat.HasValue && request.Lng.HasValue);
+
+                if (tieneCorreccionUbicacion)
+                {
+                    LocationLearningService.ResolvePendingFeedback(
+                        id,
+                        request.Lugartexto,
+                        request.Lugarnormalizado,
+                        request.Lat,
+                        request.Lng,
+                        "manual-ui"
+                    );
+
+                    if (lugarTextoCambio &&
+                        !string.IsNullOrWhiteSpace(lugarTextoAntes) &&
+                        !string.IsNullOrWhiteSpace(lugarTextoAhora))
+                    {
+                        LocationLearningService.LearnFromSuccessfulGeocode(lugarTextoAntes, lugarTextoAhora);
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(request.Lugarnormalizado))
+                        LocationLearningService.LearnFromSuccessfulGeocode(request.Lugartexto, request.Lugarnormalizado);
+                }
+            }
             return rows > 0 ? (true, null) : (false, "No encontrado");
         }
 

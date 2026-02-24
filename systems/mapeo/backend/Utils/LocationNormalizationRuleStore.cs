@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Linq;
 using Backend.Data;
 using Microsoft.Data.SqlClient;
 
@@ -58,7 +59,21 @@ namespace Backend.Utils
                     var value = (rule.ReplaceText ?? "").Trim();
                     if (key.Contains(' '))
                     {
-                        result = result.Replace(key, value, StringComparison.OrdinalIgnoreCase);
+                        var tokens = key.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                        if (tokens.Length > 1)
+                        {
+                            var pattern = $@"\b{string.Join(@"[\s,\.]+", tokens.Select(Regex.Escape))}\b";
+                            result = Regex.Replace(
+                                result,
+                                pattern,
+                                value,
+                                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+                            );
+                        }
+                        else
+                        {
+                            result = result.Replace(key, value, StringComparison.OrdinalIgnoreCase);
+                        }
                     }
                     else
                     {
@@ -73,6 +88,15 @@ namespace Backend.Utils
             }
 
             return result;
+        }
+
+        public static void InvalidateCache()
+        {
+            lock (Sync)
+            {
+                _cache = Array.Empty<LocationNormalizationRule>();
+                _lastLoadUtc = DateTime.MinValue;
+            }
         }
 
         private static IReadOnlyList<LocationNormalizationRule> GetRules(string scope)

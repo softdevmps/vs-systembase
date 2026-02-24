@@ -12,6 +12,7 @@ Monorepo con dos líneas principales:
 - `frontend-runtime/`: plantilla runtime base que usa el generador.
 - `systems/mapeo/backend/`: backend del sistema de mapeo.
 - `systems/mapeo/frontend/`: frontend del sistema de mapeo.
+- `systems/mapeo/cordoba-dataset/`: generador de dataset local de calles/direcciones.
 - `whisper-service/`: docker compose de Whisper ASR.
 - `llm-service/`: docker compose de Ollama.
 - `geocoder-service/`: docker compose de Nominatim (OSM local).
@@ -116,6 +117,25 @@ docker logs -f geocoder-nominatim
 
 El primer import puede demorar varios minutos.
 
+### 1.5) Dataset local de calles (opcional pero recomendado)
+
+El backend de mapeo puede geocodificar primero con un CSV local de calles+alturas
+(más consistente para Córdoba) y usar Nominatim como fallback.
+
+```bash
+cd systems/mapeo/cordoba-dataset
+python3 -m pip install -r requirements.txt
+python3 -m src.main
+python3 -m src.prepare_mapeo_csv --input out/direcciones_enriquecidas.csv --output out/direcciones_mapeo.csv
+```
+
+Variables backend asociadas:
+
+- `LOCAL_GEOCODER_ENABLED=true`
+- `LOCAL_GEOCODER_CSV_PATH=../cordoba-dataset/out/direcciones_mapeo.csv`
+- `LOCAL_GEOCODER_MAX_NUMBER_DELTA=1300`
+- `LOCAL_GEOCODER_MAX_INTERSECTION_DISTANCE_METERS=450`
+
 ### 2) Backend mapeo
 
 ```bash
@@ -156,6 +176,7 @@ npm run dev -- --port 5176
 - Pipeline async: transcripción -> extracción -> geocodificación
 - Visualización de incidentes en tabla + mapa
 - Retry manual de jobs fallidos
+- Panel `Metricas IA` con observabilidad de aprendizaje y acciones directas (`Ver`, `Editar`, `Retry`)
 
 ## Troubleshooting
 
@@ -180,6 +201,7 @@ Instalar `ffmpeg` en el host y verificar que esté disponible en `PATH`.
 - Verificar servicios externos (Whisper/Ollama/Nominatim).
 - Revisar `LugarTexto` y `LugarNormalizado`.
 - Reintentar job manualmente.
+- Revisar panel `Metricas IA` (`SIN COORDS`) y usar `Editar` + `Retry` en el incidente.
 
 ### Evaluar calidad (dataset)
 
@@ -228,6 +250,21 @@ Script manual (idempotente):
 systems/mapeo/backend/sql/001_location_learning.sql
 ```
 
+### Observabilidad del aprendizaje (API)
+
+Con backend de mapeo levantado:
+
+```bash
+GET /api/v1/observabilidad/location-learning?take=8
+```
+
+Devuelve:
+- métricas de incidentes con/sin coords,
+- estado de jobs,
+- feedback pendiente/corregido,
+- reglas activas manuales/automáticas,
+- listas operativas para revisión.
+
 ## Estrategia de ramas
 
 - `main`: fábrica SystemBase (base del generador).
@@ -243,3 +280,4 @@ Recomendado:
 - `docs/estado-actual.md`
 - `docs/estado-mapeo.md`
 - `systems/ports.json`
+- `systems/mapeo/cordoba-dataset/README.md`

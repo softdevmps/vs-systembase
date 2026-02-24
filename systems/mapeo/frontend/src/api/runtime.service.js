@@ -44,5 +44,9 @@ export default {
     const safeToken = token ? encodeURIComponent(token) : ''
     const qs = safeToken ? `?token=${safeToken}` : ''
     return `${base}/incidente-audio/${id}/stream${qs}`
+  },
+
+  getLocationLearningMetrics(take = 8) {
+    return api.get(`/observabilidad/location-learning?take=${take}`)
   }
 }

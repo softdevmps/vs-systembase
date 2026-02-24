@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Linq;
+using System.Text.RegularExpressions;
 using Backend.Negocio.Pipeline;
 using Backend.Utils;
 
@@ -141,13 +143,33 @@ namespace Backend.Services
                     GeocodeResult? geocode = null;
                     var extractedLocation = IncidentExtractor.NormalizeLocationForGeocode(extract.LugarTexto) ?? extract.LugarTexto;
                     var locationContext = LocationNormalizer.Build(whisper.Text, extractedLocation, null);
+                    if (!HasStrongLocation(locationContext))
+                    {
+                        var rawContext = LocationNormalizer.Build(whisper.Text, whisper.Text, null);
+                        if (HasStrongLocation(rawContext))
+                            locationContext = rawContext;
+                    }
+                    if (!HasStrongLocation(locationContext))
+                    {
+                        var forcedIntersection = TryExtractIntersectionHint(whisper.Text)
+                            ?? TryExtractIntersectionHint(extract.Descripcion);
+                        if (!string.IsNullOrWhiteSpace(forcedIntersection))
+                        {
+                            var forcedContext = LocationNormalizer.Build(whisper.Text, forcedIntersection, forcedIntersection);
+                            if (HasStrongLocation(forcedContext))
+                                locationContext = forcedContext;
+                        }
+                    }
                     var lugarTexto = locationContext.DisplayText ?? extractedLocation ?? "Pendiente";
 
                     try
                     {
                         foreach (var candidate in locationContext.Candidates)
                         {
-                            geocode = await NominatimClient.GeocodeAsync(candidate, _httpClient, jobToken);
+                            var requiredTokens = BuildRequiredLocationTokens(locationContext, candidate);
+                            geocode = requiredTokens.Count > 0
+                                ? await NominatimClient.GeocodeWithRequiredTokensAsync(candidate, requiredTokens, _httpClient, jobToken)
+                                : await NominatimClient.GeocodeAsync(candidate, _httpClient, jobToken);
                             if (geocode != null)
                                 break;
                         }
@@ -181,15 +203,21 @@ namespace Backend.Services
                                 var llmContext = LocationNormalizer.Build(whisper.Text, normalizedParts, normalizedParts);
                                 foreach (var candidate in llmContext.Candidates)
                                 {
-                                    geocode = await NominatimClient.GeocodeAsync(candidate, _httpClient, jobToken);
+                                    var requiredTokens = BuildRequiredLocationTokens(llmContext, candidate);
+                                    geocode = requiredTokens.Count > 0
+                                        ? await NominatimClient.GeocodeWithRequiredTokensAsync(candidate, requiredTokens, _httpClient, jobToken)
+                                        : await NominatimClient.GeocodeAsync(candidate, _httpClient, jobToken);
                                     if (geocode != null)
                                     {
                                         locationContext = llmContext;
                                         break;
                                     }
                                 }
-                                if (!string.IsNullOrWhiteSpace(llmContext.DisplayText))
+                                if (!string.IsNullOrWhiteSpace(llmContext.DisplayText) &&
+                                    ShouldReplaceLugarTexto(locationContext, llmContext, geocode))
+                                {
                                     lugarTexto = llmContext.DisplayText!;
+                                }
                             }
 
                             if (geocode == null)
@@ -200,15 +228,21 @@ namespace Backend.Services
                                     var llmContext = LocationNormalizer.Build(whisper.Text, normalizedLocation, normalizedLocation);
                                     foreach (var candidate in llmContext.Candidates)
                                     {
-                                        geocode = await NominatimClient.GeocodeAsync(candidate, _httpClient, jobToken);
+                                        var requiredTokens = BuildRequiredLocationTokens(llmContext, candidate);
+                                        geocode = requiredTokens.Count > 0
+                                            ? await NominatimClient.GeocodeWithRequiredTokensAsync(candidate, requiredTokens, _httpClient, jobToken)
+                                            : await NominatimClient.GeocodeAsync(candidate, _httpClient, jobToken);
                                         if (geocode != null)
                                         {
                                             locationContext = llmContext;
                                             break;
                                         }
                                     }
-                                    if (!string.IsNullOrWhiteSpace(llmContext.DisplayText))
+                                    if (!string.IsNullOrWhiteSpace(llmContext.DisplayText) &&
+                                        ShouldReplaceLugarTexto(locationContext, llmContext, geocode))
+                                    {
                                         lugarTexto = llmContext.DisplayText!;
+                                    }
                                 }
                             }
                         }
@@ -222,6 +256,11 @@ namespace Backend.Services
                     {
                         var candidatesPreview = string.Join(" | ", locationContext.Candidates.Take(6));
                         Console.WriteLine($"[Geocode] Sin resultado incidente={job.IncidenteId} lugar='{lugarTexto}' candidatos='{candidatesPreview}'");
+                    }
+                    else if (!IsReliableGeocode(locationContext, geocode))
+                    {
+                        Console.WriteLine($"[Geocode] Resultado descartado por baja coherencia incidente={job.IncidenteId} lugar='{lugarTexto}' display='{geocode.DisplayName}'");
+                        geocode = null;
                     }
 
                     if (geocode != null)
@@ -241,6 +280,30 @@ namespace Backend.Services
 
                     var finalConfidence = LocationNormalizer.ScoreConfidence(extract.Confidence, locationContext, geocode);
                     var cleanedLugarTexto = IncidentExtractor.CleanLocationText(lugarTexto) ?? lugarTexto;
+
+                    if (geocode == null)
+                    {
+                        LocationLearningService.RecordPredictionFailure(
+                            job.IncidenteId,
+                            whisper.Text,
+                            extract.LugarTexto,
+                            cleanedLugarTexto,
+                            null,
+                            null,
+                            null
+                        );
+                    }
+                    else
+                    {
+                        LocationLearningService.ResolvePendingFeedback(
+                            job.IncidenteId,
+                            cleanedLugarTexto,
+                            geocode.DisplayName,
+                            geocode.Lat,
+                            geocode.Lng
+                        );
+                        LocationLearningService.LearnFromSuccessfulGeocode(cleanedLugarTexto, geocode.DisplayName);
+                    }
 
                     _repo.ActualizarIncidente(
                         job.IncidenteId,
@@ -276,6 +339,177 @@ namespace Backend.Services
                     }
                 }
             }
+        }
+
+        private static IReadOnlyList<string> BuildRequiredLocationTokens(LocationParseResult context, string candidate)
+        {
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            void AddTokens(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    return;
+
+                var normalized = AppConfig.NormalizeKey(value);
+                if (string.IsNullOrWhiteSpace(normalized))
+                    return;
+
+                foreach (var token in normalized.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (token.Length < 4)
+                        continue;
+                    if (token == "barrio" || token == "cordoba" || token == "argentina")
+                        continue;
+                    set.Add(token);
+                }
+            }
+
+            AddTokens(context.Signals.Barrio);
+            AddTokens(context.Signals.AddressWithNumber);
+            AddTokens(context.Signals.Calle1Core);
+            AddTokens(context.Signals.Calle2Core);
+
+            var number = ExtractFirstNumber(candidate);
+            if (!string.IsNullOrWhiteSpace(number))
+                set.Add(number);
+
+            return set.ToList();
+        }
+
+        private static string? ExtractFirstNumber(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var match = System.Text.RegularExpressions.Regex.Match(value, @"\d{1,5}");
+            return match.Success ? match.Value : null;
+        }
+
+        private static bool IsReliableGeocode(LocationParseResult context, GeocodeResult geocode)
+        {
+            var display = AppConfig.NormalizeKey(geocode.DisplayName ?? "");
+            if (string.IsNullOrWhiteSpace(display))
+                return false;
+
+            var requiredStreetTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void AddStreetTokens(string? value)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    return;
+                foreach (var token in AppConfig.NormalizeKey(value).Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (token.Length < 4)
+                        continue;
+                    if (token == "avenida" || token == "boulevard" || token == "bulevar" || token == "calle" ||
+                        token == "pasaje" || token == "ruta" || token == "diagonal" || token == "barrio" ||
+                        token == "cordoba" || token == "argentina")
+                        continue;
+                    if (Regex.IsMatch(token, @"\d", RegexOptions.CultureInvariant))
+                        continue;
+                    requiredStreetTokens.Add(token);
+                }
+            }
+
+            AddStreetTokens(context.Signals.AddressWithNumber);
+            AddStreetTokens(context.Signals.Calle1Core);
+            AddStreetTokens(context.Signals.Calle2Core);
+            if (requiredStreetTokens.Count == 0)
+                AddStreetTokens(context.DisplayText);
+
+            if (requiredStreetTokens.Count > 0)
+            {
+                var hits = requiredStreetTokens.Count(token => display.Contains(token));
+                if (hits == 0)
+                    return false;
+            }
+
+            var expectedNumber = ExtractFirstNumber(context.Signals.AddressWithNumber ?? context.DisplayText);
+            var candidateNumber = ExtractFirstStreetNumber(geocode.DisplayName);
+            if (!string.IsNullOrWhiteSpace(expectedNumber) &&
+                !string.IsNullOrWhiteSpace(candidateNumber) &&
+                int.TryParse(expectedNumber, out var exp) &&
+                int.TryParse(candidateNumber, out var got))
+            {
+                if (Math.Abs(exp - got) > 450)
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static string? ExtractFirstStreetNumber(string? displayName)
+        {
+            if (string.IsNullOrWhiteSpace(displayName))
+                return null;
+
+            // Tomamos solo el primer tramo (antes de la primera coma):
+            // evita confundir codigo postal (X5000) con altura de calle.
+            var firstSegment = displayName.Split(',', 2, StringSplitOptions.TrimEntries)[0];
+            return ExtractFirstNumber(firstSegment);
+        }
+
+        private static bool HasStrongLocation(LocationParseResult context)
+        {
+            return !string.IsNullOrWhiteSpace(context.Signals.AddressWithNumber) || context.Signals.HasIntersection;
+        }
+
+        private static string? TryExtractIntersectionHint(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var normalized = AppConfig.NormalizeKey(text);
+            if (string.IsNullOrWhiteSpace(normalized))
+                return null;
+
+            var inter = Regex.Match(
+                normalized,
+                @"\b(?:la\s+)?esquina\s+de\s+(?<s1>(?:avenida|boulevard|bulevar|calle)\s+[a-z0-9\s]{2,60}?)\s+(?:y|e|con|&)\s+(?<s2>[a-z0-9\s]{2,60}?)(?=\s*(?:,|\bbarrio\b|\bfrente\b|\bhubo\b|\brobo\b|\barrebato\b|\bhurto\b|\bhuy|\ba\s+las\b|$))",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            if (!inter.Success)
+                return null;
+
+            var s1 = inter.Groups["s1"].Value.Trim();
+            var s2 = inter.Groups["s2"].Value.Trim();
+            if (string.IsNullOrWhiteSpace(s1) || string.IsNullOrWhiteSpace(s2))
+                return null;
+
+            var barrioMatch = Regex.Match(
+                normalized,
+                @"\bbarrio\s+(?<b>[a-z0-9\s]{3,40})(?=\s*(?:,|\bfrente\b|\bhubo\b|\brobo\b|\barrebato\b|\bhurto\b|\bhuy|\ba\s+las\b|$))",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+            var barrio = barrioMatch.Success ? barrioMatch.Groups["b"].Value.Trim() : null;
+
+            return string.IsNullOrWhiteSpace(barrio)
+                ? $"{s1} y {s2}"
+                : $"{s1} y {s2}, barrio {barrio}";
+        }
+
+        private static bool ShouldReplaceLugarTexto(
+            LocationParseResult current,
+            LocationParseResult candidate,
+            GeocodeResult? candidateGeocode)
+        {
+            // Si el candidato logro geocode valido, usamos su display.
+            if (candidateGeocode != null)
+                return true;
+
+            // Si ya tenemos calle+altura o interseccion, no degradamos a POI.
+            var currentStrong = !string.IsNullOrWhiteSpace(current.Signals.AddressWithNumber) || current.Signals.HasIntersection;
+            var candidateStrong = !string.IsNullOrWhiteSpace(candidate.Signals.AddressWithNumber) || candidate.Signals.HasIntersection;
+            if (currentStrong && !candidateStrong)
+                return false;
+
+            // Si el actual no tiene ubicacion fuerte y el candidato si, mejoramos.
+            if (!currentStrong && candidateStrong)
+                return true;
+
+            if (string.IsNullOrWhiteSpace(current.DisplayText))
+                return true;
+
+            return false;
         }
 
     }

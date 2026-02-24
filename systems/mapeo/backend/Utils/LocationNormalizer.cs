@@ -9,6 +9,7 @@ namespace Backend.Utils
     {
         public string? Barrio { get; init; }
         public string? Poi { get; init; }
+        public string? AddressWithNumber { get; init; }
         public string? Calle1 { get; init; }
         public string? Calle2 { get; init; }
         public string? Calle1Core { get; init; }
@@ -61,6 +62,8 @@ namespace Backend.Utils
                 ["chacabulco"] = "chacabuco",
                 ["chocabuco"] = "chacabuco",
                 ["chacabucoo"] = "chacabuco",
+                ["bulevar ilia"] = "boulevard arturo illia",
+                ["boulevard ilia"] = "boulevard arturo illia",
                 ["oulevard"] = "boulevard",
                 ["boulevar"] = "boulevard",
                 ["navegania"] = "avenida sabattini",
@@ -72,7 +75,13 @@ namespace Backend.Utils
                 ["espana"] = "espana",
                 ["alverdi"] = "alberdi",
                 ["fuerza area"] = "fuerza aerea",
-                ["rondeo"] = "rondeau"
+                ["rondeo"] = "rondeau",
+                ["aveania"] = "avenida",
+                ["avenia"] = "avenida",
+                ["roodriguez"] = "rodriguez",
+                ["ridriguez"] = "rodriguez",
+                ["rodrigues"] = "rodriguez",
+                ["rodriguez pena"] = "rodriguez peña"
             };
 
         private static readonly string[] KnownBarrios =
@@ -85,6 +94,9 @@ namespace Backend.Utils
             "guemes",
             "centro",
             "alberdi",
+            "don bosco",
+            "cerro de las rosas",
+            "los platanos",
             "pueyrredon",
             "jardin",
             "observatorio"
@@ -94,6 +106,11 @@ namespace Backend.Utils
         {
             "velez sarsfield",
             "boulevard san juan",
+            "boulevard ilia",
+            "bulevar ilia",
+            "ilia",
+            "arturo illia",
+            "boulevard arturo illia",
             "hipolito yrigoyen",
             "duarte quiros",
             "general paz",
@@ -114,7 +131,11 @@ namespace Backend.Utils
             "amadeo sabattini",
             "fuerza aerea",
             "rondeau",
-            "juan b justo"
+            "juan b justo",
+            "rodriguez peña",
+            "don bosco",
+            "rafael nuñez",
+            "sagrada familia"
         };
 
         private static readonly string[] StreetTypes =
@@ -156,6 +177,7 @@ namespace Backend.Utils
 
             var barrio = ExtractBarrio(normalizedSearch);
             var poi = ExtractPoi(normalizedSearch);
+            var addressWithNumber = ExtractAddressWithNumber(normalizedSearch);
             var searchForIntersection = RemoveBarrioPhrase(normalizedSearch);
             var (calle1, calle2) = ExtractIntersection(searchForIntersection, barrio);
             var calle1Core = StripStreetType(calle1 ?? "");
@@ -165,6 +187,7 @@ namespace Backend.Utils
             {
                 Barrio = barrio,
                 Poi = poi,
+                AddressWithNumber = addressWithNumber,
                 Calle1 = calle1,
                 Calle2 = calle2,
                 Calle1Core = string.IsNullOrWhiteSpace(calle1Core) ? null : calle1Core,
@@ -190,6 +213,7 @@ namespace Backend.Utils
             if (geocode != null)
                 score = Math.Max(score, 0.78m);
 
+            if (!string.IsNullOrWhiteSpace(location.Signals.AddressWithNumber)) score += 0.1m;
             if (location.Signals.HasIntersection) score += 0.12m;
             if (!string.IsNullOrWhiteSpace(location.Signals.Poi)) score += 0.08m;
             if (!string.IsNullOrWhiteSpace(location.Signals.Barrio)) score += 0.05m;
@@ -237,6 +261,16 @@ namespace Backend.Utils
                 if (cleaned.Length == 0) return;
                 if (seen.Add(cleaned))
                     candidates.Add(cleaned);
+            }
+
+            if (!string.IsNullOrWhiteSpace(signals.AddressWithNumber))
+            {
+                if (!string.IsNullOrWhiteSpace(signals.Barrio) &&
+                    !signals.AddressWithNumber.Contains("barrio", StringComparison.OrdinalIgnoreCase))
+                {
+                    Add($"{signals.AddressWithNumber}, barrio {signals.Barrio}");
+                }
+                Add(signals.AddressWithNumber);
             }
 
             if (signals.HasIntersection)
@@ -328,7 +362,16 @@ namespace Backend.Utils
         private static string BuildDisplayText(string normalizedSeed, LocationSignals signals)
         {
             string baseText = normalizedSeed;
-            if (signals.HasIntersection)
+            if (!string.IsNullOrWhiteSpace(signals.AddressWithNumber))
+            {
+                baseText = signals.AddressWithNumber!;
+                if (!string.IsNullOrWhiteSpace(signals.Barrio) &&
+                    !baseText.Contains("barrio", StringComparison.OrdinalIgnoreCase))
+                {
+                    baseText = $"{baseText}, barrio {signals.Barrio}";
+                }
+            }
+            else if (signals.HasIntersection)
             {
                 baseText = $"{signals.Calle1} y {signals.Calle2}".Trim();
                 if (!string.IsNullOrWhiteSpace(signals.Barrio))
@@ -354,6 +397,8 @@ namespace Backend.Utils
             cleaned = ExpandGluedTokens(cleaned);
             cleaned = NormalizeImplicitIntersection(cleaned);
             cleaned = Regex.Replace(cleaned, @"\b(y|e)\s+\1\b", "$1",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            cleaned = Regex.Replace(cleaned, @"\b(y|e|con|en)\s*$", " ",
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
             cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
             return cleaned;
@@ -407,6 +452,10 @@ namespace Backend.Utils
                     @"\b(hubo|ocurrio|ocurrió|robo|hurto|arrebato|autores?|huyeron|escaparon|heridos?|a\s+las)\b.*$",
                     " ",
                     RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+                value = Regex.Replace(value,
+                    @"\b(en|de|del|la|el)\s*$",
+                    " ",
+                    RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
                 value = Regex.Replace(value, @"\s+", " ").Trim().Trim(',', '.', ';', ':');
                 return CanonicalizeBarrioName(value);
             }
@@ -436,39 +485,94 @@ namespace Backend.Utils
             return null;
         }
 
+        private static string? ExtractAddressWithNumber(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            var match = Regex.Match(
+                text,
+                @"\b(?<street>(?:avenida|boulevard|bulevar|calle|pasaje|ruta|diagonal)\s+[a-z0-9\s\.]{2,90}?)\s+(?:al|en|nro\.?|numero)?\s*(?<num>\d{1,5})\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+
+            if (!match.Success)
+                return null;
+
+            var street = CutAtDelimiters(match.Groups["street"].Value);
+            var number = match.Groups["num"].Value.Trim();
+            if (string.IsNullOrWhiteSpace(street) || string.IsNullOrWhiteSpace(number))
+                return null;
+
+            street = CleanStreetName(street);
+            street = CanonicalizeStreetName(street);
+
+            if (ContainsDateOrTemporalNoise(street))
+                return null;
+
+            return $"{street} {number}".Trim();
+        }
+
         private static (string? calle1, string? calle2) ExtractIntersection(string text, string? barrio)
         {
             var streetTypeGroup = string.Join("|", StreetTypes.Select(Regex.Escape));
+            var cuePattern = $@"\b(?:esquina\s+de|entre)\s+(?:(?<t1>{streetTypeGroup})\s+)?(?<n1>[a-z0-9\s]{{3,60}}?)\s+(?:y|e|&|con)\s+(?:(?<t2>{streetTypeGroup})\s+)?(?<n2>[a-z0-9\s]{{3,60}}?)(?=\s*(?:,|\bbarrio\b|\bfrente\b|\bhubo\b|\brobo\b|\barrebato\b|\bhurto\b|\bhuy|\bno\b|\bherid|\bautor|\ba las\b|$))";
+            var cueResult = TryIntersectionMatches(text, cuePattern, barrio);
+            if (!string.IsNullOrWhiteSpace(cueResult.calle1) && !string.IsNullOrWhiteSpace(cueResult.calle2))
+                return cueResult;
+
             var pattern = $@"\b(?:la\s+)?(?:esquina\s+de\s+|entre\s+)?(?:(?<t1>{streetTypeGroup})\s+)?(?<n1>[a-z0-9\s]{{3,60}}?)\s+(?:y|e|&|con)\s+(?:(?<t2>{streetTypeGroup})\s+)?(?<n2>[a-z0-9\s]{{3,60}}?)(?=\s*(?:,|\bbarrio\b|\bhubo\b|\brobo\b|\barrebato\b|\bhuy|\bno\b|\bherid|\bautor|\ba las\b|$))";
-            var match = Regex.Match(text, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-            if (!match.Success) return (null, null);
+            return TryIntersectionMatches(text, pattern, barrio);
+        }
 
-            var t1 = NormalizeStreetType(match.Groups["t1"].Value);
-            var t2 = NormalizeStreetType(match.Groups["t2"].Value);
-            var n1 = CanonicalizeStreetName(CleanStreetName(CutAtDelimiters(match.Groups["n1"].Value)));
-            var n2 = CanonicalizeStreetName(CleanStreetName(CutAtDelimiters(match.Groups["n2"].Value)));
-
-            if (string.IsNullOrWhiteSpace(n1) || string.IsNullOrWhiteSpace(n2))
-                return (null, null);
-
-            if (ContainsDateOrTemporalNoise(n1) || ContainsDateOrTemporalNoise(n2))
-                return (null, null);
-
-            if (IsBarrioLike(n1, barrio) || IsBarrioLike(n2, barrio))
-                return (null, null);
-
-            if (string.IsNullOrWhiteSpace(t1) && string.IsNullOrWhiteSpace(t2))
+        private static (string? calle1, string? calle2) TryIntersectionMatches(string text, string pattern, string? barrio)
+        {
+            var regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var match = regex.Match(text);
+            while (match.Success)
             {
-                var numericStreetPattern = @"\b\d{1,2}\s+de\s+[a-z]{3,20}\b";
-                var hasNumericStreet = Regex.IsMatch(n1, numericStreetPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
-                    || Regex.IsMatch(n2, numericStreetPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-                if (!hasNumericStreet)
-                    return (null, null);
+                var t1 = NormalizeStreetType(match.Groups["t1"].Value);
+                var t2 = NormalizeStreetType(match.Groups["t2"].Value);
+                var n1 = CanonicalizeStreetName(CleanStreetName(CutAtDelimiters(match.Groups["n1"].Value)));
+                var n2 = CanonicalizeStreetName(CleanStreetName(CutAtDelimiters(match.Groups["n2"].Value)));
+
+                if (!string.IsNullOrWhiteSpace(n1) &&
+                    !string.IsNullOrWhiteSpace(n2) &&
+                    !ContainsDateOrTemporalNoise(n1) &&
+                    !ContainsDateOrTemporalNoise(n2) &&
+                    !IsBarrioLike(n1, barrio) &&
+                    !IsBarrioLike(n2, barrio) &&
+                    HasIntersectionStreetSignal(t1, t2, n1, n2))
+                {
+                    var calle1 = string.IsNullOrWhiteSpace(t1) ? n1 : $"{t1} {n1}";
+                    var calle2 = string.IsNullOrWhiteSpace(t2) ? n2 : $"{t2} {n2}";
+                    return (calle1.Trim(), calle2.Trim());
+                }
+
+                match = match.NextMatch();
             }
 
-            var calle1 = string.IsNullOrWhiteSpace(t1) ? n1 : $"{t1} {n1}";
-            var calle2 = string.IsNullOrWhiteSpace(t2) ? n2 : $"{t2} {n2}";
-            return (calle1.Trim(), calle2.Trim());
+            return (null, null);
+        }
+
+        private static bool HasIntersectionStreetSignal(string? t1, string? t2, string n1, string n2)
+        {
+            if (!string.IsNullOrWhiteSpace(t1) || !string.IsNullOrWhiteSpace(t2))
+                return true;
+
+            var numericStreetPattern = @"\b\d{1,2}\s+de\s+[a-z]{3,20}\b";
+            var hasNumericStreet = Regex.IsMatch(n1, numericStreetPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)
+                || Regex.IsMatch(n2, numericStreetPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (hasNumericStreet)
+                return true;
+
+            var n1Core = AppConfig.NormalizeKey(StripStreetType(n1));
+            var n2Core = AppConfig.NormalizeKey(StripStreetType(n2));
+            if (string.IsNullOrWhiteSpace(n1Core) || string.IsNullOrWhiteSpace(n2Core))
+                return false;
+
+            var known = new HashSet<string>(KnownStreetNames.Select(AppConfig.NormalizeKey), StringComparer.OrdinalIgnoreCase);
+            return known.Contains(n1Core) && known.Contains(n2Core);
         }
 
         private static bool ContainsDateOrTemporalNoise(string value)

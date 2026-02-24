@@ -1,4 +1,4 @@
-# Estado actual - Sistema Mapeo (22/02/2026)
+# Estado actual - Sistema Mapeo (24/02/2026)
 
 ## Alcance actual
 - Backend y frontend completos para el sistema `mapeo` (runtime).
@@ -11,6 +11,9 @@
 - Swagger habilita upload multipart (filtro de file upload).
 - UI runtime incluye grabación y envío de audio desde navegador (vista Incidentes).
 - Extracción LLM on‑prem (Ollama) + normalización de ubicación.
+- Observabilidad operativa en runtime (`Metricas IA`) con acciones directas (`Ver`, `Editar`, `Retry`).
+- Geocoder local por dataset de calles de Córdoba (prioridad antes de Nominatim).
+- Aprendizaje incremental automático desde correcciones y casos exitosos.
 
 ## Pipeline de audio
 1. `POST /api/v1/incidentes/audio` (multipart `audio`) crea `Incidente`, `IncidenteAudio` y `IncidenteJobs`.
@@ -18,8 +21,8 @@
    - Transcribe (Whisper local si existe, stub si no).
    - Extrae hechos/fecha/lugar/categoría (reglas + LLM on‑prem).
    - Limpia ruido de ubicación (fecha/hora/lugar).
-   - Geocodifica con Nominatim local (prioriza número de puerta).
-   - Guarda extracción + ubicación.
+  - Geocodifica con dataset local de calles (si aplica) y fallback a Nominatim.
+  - Guarda extracción + ubicación.
 3. Reintento manual:
    - `POST /api/v1/incidente-jobs/{id}/retry`
 4. Timeouts:
@@ -32,6 +35,11 @@
 - **Detección de intersecciones y POIs** (plaza, parque, banco, etc.).
 - **Barrio**: no se usa como calle para evitar falsos cruces.
 - **LLM Location Parts** (calle/numero/interseccion/barrio/ciudad/poi) como fallback.
+- **Geocoder local por CSV** (`CalleDatasetGeocoder`):
+  - lookup por `calle + altura` e interpolación de coordenadas por tramo.
+  - fallback por intersección aproximada.
+  - añade `barrio` al `DisplayName` para mejorar validación por tokens requeridos.
+  - matching tolerante a typos leves en tokens de barrio/calle.
 - **Nominatim mejorado**:
   - `addressdetails=1` y ranking por `house_number` cuando existe.
   - Búsqueda estructurada `street=numero + calle` + `city=Cordoba` si hay número.
@@ -40,17 +48,19 @@
   - `GEOCODER_DEFAULT_SUFFIX` agregado automáticamente.
 
 ## Estado de calidad (último corte)
-- Corrida de control reciente (`TAKE=7`, `includeWithoutCoords=true`):
+- Corrida de control reciente (`TAKE=10`, `includeWithoutCoords=true`):
   - `type`: 100%
-  - `location`: 85.71%
-  - `date`: 100%
-  - `hour`: 85.71%
-  - `coords`: 100% en casos con coordenadas esperadas
-  - `avgDurationMs`: ~7.1s
-- Mejora aplicada para casos recientes:
-  - normalización adicional de variantes (`alverdi`, `fuerza area`, `rondeo`)
-  - parser de dirección tolerante a comas antes de `al <número>`
-  - búsqueda de respaldo por calle+barrio+ciudad
+  - `location`: 90%
+  - `date`: 90%
+  - `hour`: 90%
+  - `coords`: 100% sobre casos evaluables con coordenadas (`9/9`)
+  - `predictionsWithCoords`: 10/10
+  - `avgDurationMs`: ~5.1s
+- Mejoras aplicadas en esta iteración:
+  - normalización adicional de variantes (`rodriguez peña`, `rafael nuñez`, `don bosco`, `ilia`).
+  - parser de dirección más tolerante a ruido del ASR.
+  - geocoder local por dataset de Córdoba antes de Nominatim.
+  - fallback y validación con tokens requeridos menos rígida.
 
 ## Storage y borrado
 - Archivos se guardan en `AUDIO_STORAGE_ROOT` (default `storage/audio`) con subcarpetas por fecha.
@@ -119,6 +129,15 @@
 - Script de corrida con dataset automatico:
   - `systems/mapeo/backend/eval/run-eval-auto.sh`
 
+## Observabilidad operativa (runtime)
+- Endpoint backend:
+  - `GET /api/v1/observabilidad/location-learning?take=8`
+- Panel frontend (`Metricas IA`) incluye:
+  - contadores (`pendientes`, `sin coords`, `corregidos`, jobs, reglas activas).
+  - listado operativo por incidente.
+  - acciones directas: `Ver`, `Editar`, `Retry`.
+  - estado visual de retry en curso/terminado.
+
 ## Base SQL para aprendizaje de ubicaciones
 - Se agregaron tablas idempotentes para soportar reglas y feedback sin tocar código:
   - `sys_mapeo.LocationNormalizationRules`
@@ -131,6 +150,20 @@
 - Objetivo:
   - almacenar reemplazos/correcciones frecuentes
   - guardar evidencia de casos fallidos/corregidos para entrenamiento incremental
+  - promover reglas `auto-feedback` sin editar código
+
+## Dataset local de calles (Córdoba)
+- Carpeta: `systems/mapeo/cordoba-dataset/`
+- Pipeline Python para generar CSV de calles y alturas:
+  - `python3 -m src.main`
+  - `python3 -m src.prepare_mapeo_csv --input out/direcciones_enriquecidas.csv --output out/direcciones_mapeo.csv`
+- CSV operativo usado por backend:
+  - `systems/mapeo/cordoba-dataset/out/direcciones_mapeo.csv`
+- Variables:
+  - `LOCAL_GEOCODER_ENABLED=true`
+  - `LOCAL_GEOCODER_CSV_PATH=../cordoba-dataset/out/direcciones_mapeo.csv`
+  - `LOCAL_GEOCODER_MAX_NUMBER_DELTA=1300`
+  - `LOCAL_GEOCODER_MAX_INTERSECTION_DISTANCE_METERS=450`
 
 ## Config aplicado en mapeo
 - `systems/mapeo/backend/.env` actualizado con transcodificacion, retencion y endpoints locales (Whisper/Nominatim).
@@ -189,5 +222,5 @@ curl "http://localhost:8080/search?q=avenida+colon+1200+cordoba&format=json"
 
 ## Pendiente
 - Adapter cloud (S3/MinIO) real.
-- Mejoras de extracción con modelo dedicado.
-- Dashboard del sistema y mapa de calor.
+- Mejorar exactitud de coordenadas en intersecciones ambiguas (ajuste por barrio/POI y validación cruzada).
+- Vista de métricas históricas (tendencia por día/semana y precisión por etapa).

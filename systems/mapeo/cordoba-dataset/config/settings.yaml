@@ -1,0 +1,6 @@
+area_name: "Córdoba"
+area_scope: "city"
+overpass_url: "https://overpass-api.de/api/interpreter"
+timeout_sec: 180
+retries: 3
+out_dir: "out"

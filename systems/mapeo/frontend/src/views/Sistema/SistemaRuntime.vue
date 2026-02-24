@@ -60,6 +60,150 @@
             </div>
           </v-card-text>
         </v-card>
+
+        <v-card v-if="showIncidentMap" elevation="2" class="card side-card summary-card mt-4">
+          <v-card-title class="d-flex align-center">
+            <v-icon class="mr-2" color="primary">mdi-robot-outline</v-icon>
+            <span class="text-h6">Metricas IA</span>
+            <v-spacer />
+            <v-btn
+              icon
+              size="small"
+              variant="text"
+              :loading="learningMetricsLoading"
+              @click="cargarLocationLearningMetrics()"
+            >
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <v-progress-linear
+              v-if="learningMetricsLoading"
+              indeterminate
+              color="primary"
+              height="4"
+              class="mb-3"
+            />
+
+            <v-alert
+              v-if="learningMetricsError"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="mb-3"
+            >
+              {{ learningMetricsError }}
+            </v-alert>
+
+            <div v-if="learningSummaryItems.length" class="summary-grid">
+              <div v-for="item in learningSummaryItems" :key="item.label" class="summary-item">
+                <div class="summary-icon">
+                  <v-icon :color="item.color || 'primary'" size="18">{{ item.icon }}</v-icon>
+                </div>
+                <div>
+                  <div class="summary-label">{{ item.label }}</div>
+                  <div class="summary-value">{{ item.value }}</div>
+                </div>
+              </div>
+            </div>
+
+            <v-divider class="my-3" />
+
+            <div class="summary-label mb-2">Revision operativa</div>
+            <div class="learning-tabs mb-2">
+              <v-btn
+                size="x-small"
+                variant="tonal"
+                :color="learningTab === 'pending' ? 'primary' : 'default'"
+                @click="learningTab = 'pending'"
+              >
+                Pendientes
+              </v-btn>
+              <v-btn
+                size="x-small"
+                variant="tonal"
+                :color="learningTab === 'nocoords' ? 'primary' : 'default'"
+                @click="learningTab = 'nocoords'"
+              >
+                Sin coords
+              </v-btn>
+              <v-btn
+                size="x-small"
+                variant="tonal"
+                :color="learningTab === 'corrected' ? 'primary' : 'default'"
+                @click="learningTab = 'corrected'"
+              >
+                Corregidos
+              </v-btn>
+            </div>
+
+            <div v-if="activeLearningItems.length" class="learning-list">
+              <div v-for="item in activeLearningItems.slice(0, 6)" :key="item.id || item.Id" class="learning-row">
+                <div class="learning-row-main">
+                  <div class="learning-id">
+                    #{{ item.incidenteId || item.IncidenteId || item.id || item.Id }}
+                    <span v-if="item.estado || item.Estado">· {{ item.estado || item.Estado }}</span>
+                  </div>
+                  <div class="learning-text">{{ item.predLugarTexto || item.PredLugarTexto || 'Sin texto' }}</div>
+                  <div
+                    v-if="(item.correctLugarTexto || item.CorrectLugarTexto) && learningTab !== 'pending'"
+                    class="learning-corrected"
+                  >
+                    {{ item.correctLugarTexto || item.CorrectLugarTexto }}
+                  </div>
+                  <div
+                    v-if="isLearningRetrying(item.incidenteId || item.IncidenteId)"
+                    class="learning-retry-state"
+                  >
+                    Reintentando... {{ learningRetryStatusLabel(item.incidenteId || item.IncidenteId) }}
+                  </div>
+                  <v-progress-linear
+                    v-if="isLearningRetrying(item.incidenteId || item.IncidenteId)"
+                    indeterminate
+                    color="orange"
+                    height="3"
+                    class="mt-1"
+                  />
+                </div>
+                <div class="learning-actions">
+                  <v-btn
+                    v-if="item.incidenteId || item.IncidenteId"
+                    size="x-small"
+                    variant="text"
+                    color="primary"
+                    @click="focusIncident(item.incidenteId || item.IncidenteId)"
+                  >
+                    Ver
+                  </v-btn>
+                  <v-btn
+                    v-if="item.incidenteId || item.IncidenteId"
+                    size="x-small"
+                    variant="text"
+                    color="indigo"
+                    @click="editIncidentFromLearning(item)"
+                  >
+                    Editar
+                  </v-btn>
+                  <v-btn
+                    v-if="item.incidenteId || item.IncidenteId"
+                    size="x-small"
+                    variant="text"
+                    color="orange"
+                    :loading="isLearningRetrying(item.incidenteId || item.IncidenteId)"
+                    :disabled="isLearningRetrying(item.incidenteId || item.IncidenteId)"
+                    @click="retryIncidentFromLearning(item)"
+                  >
+                    Retry
+                  </v-btn>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-caption text-medium-emphasis">
+              Sin pendientes.
+            </div>
+          </v-card-text>
+        </v-card>
       </v-col>
 
       <v-col cols="12" md="9">
@@ -539,6 +683,11 @@ const audioPlayMime = ref('')
 const audioPlayItem = ref(null)
 const retryingIds = ref({})
 const mapRecord = ref(null)
+const learningMetrics = ref(null)
+const learningMetricsLoading = ref(false)
+const learningMetricsError = ref('')
+const learningTab = ref('pending')
+const learningRetryingByIncidente = ref({})
 const autoRefreshIntervalMs = computed(() => config.value?.system?.autoRefreshIntervalMs || 3000)
 const autoRefreshAlways = computed(() => config.value?.system?.autoRefreshAlways === true)
 const hasActiveProcessing = computed(() => {
@@ -556,6 +705,7 @@ const autoRefreshEnabled = computed(() => {
   if (autoRefreshAlways.value) return true
   if (audioProcessing.value) return true
   if (Object.keys(retryingIds.value).length > 0) return true
+  if (Object.keys(learningRetryingByIncidente.value).length > 0) return true
   return hasActiveProcessing.value
 })
 let autoRefreshTimer = null
@@ -728,6 +878,93 @@ const summaryItems = computed(() => {
 
   return items
 })
+
+const learningSummaryItems = computed(() => {
+  const m = learningMetrics.value
+  if (!m) return []
+  const incidentesTotal = metricValue(m, 'incidentesTotal')
+  const conCoords = metricValue(m, 'conCoords')
+  const sinCoords = metricValue(m, 'sinCoords')
+  const feedbackPending = metricValue(m, 'feedbackPending')
+  const rulesAuto = metricValue(m, 'rulesAuto')
+  const rulesActive = metricValue(m, 'rulesActive')
+  const jobsError = metricValue(m, 'jobsError')
+  const pctCoords = incidentesTotal > 0
+    ? `${Math.round((conCoords / incidentesTotal) * 100)}%`
+    : '0%'
+
+  return [
+    {
+      label: 'Con coords',
+      value: `${conCoords}/${incidentesTotal}`,
+      icon: 'mdi-map-marker-check-outline',
+      color: 'green'
+    },
+    {
+      label: 'Sin coords',
+      value: sinCoords,
+      icon: 'mdi-map-marker-off-outline',
+      color: sinCoords > 0 ? 'orange' : 'green'
+    },
+    {
+      label: 'Feedback pendiente',
+      value: feedbackPending,
+      icon: 'mdi-message-alert-outline',
+      color: feedbackPending > 0 ? 'orange' : 'green'
+    },
+    {
+      label: 'Reglas auto',
+      value: `${rulesAuto}/${rulesActive}`,
+      icon: 'mdi-auto-fix',
+      color: 'primary'
+    },
+    {
+      label: 'Jobs error',
+      value: jobsError,
+      icon: 'mdi-alert-circle-outline',
+      color: jobsError > 0 ? 'red' : 'green'
+    },
+    {
+      label: '% coords',
+      value: pctCoords,
+      icon: 'mdi-percent-outline',
+      color: 'primary'
+    }
+  ]
+})
+
+const learningPendingItems = computed(() => {
+  const m = learningMetrics.value
+  if (!m) return []
+  return m.pendingItems || m.PendingItems || []
+})
+
+const learningNoCoordsItems = computed(() => {
+  const m = learningMetrics.value
+  if (!m) return []
+  return m.noCoordsItems || m.NoCoordsItems || []
+})
+
+const learningRecentItems = computed(() => {
+  const m = learningMetrics.value
+  if (!m) return []
+  return m.recentCorrections || m.RecentCorrections || []
+})
+
+const activeLearningItems = computed(() => {
+  if (learningTab.value === 'nocoords') return learningNoCoordsItems.value
+  if (learningTab.value === 'corrected') return learningRecentItems.value
+  return learningPendingItems.value
+})
+
+function metricValue(obj, camelKey, fallback = 0) {
+  if (!obj) return fallback
+  const pascalKey = camelKey.charAt(0).toUpperCase() + camelKey.slice(1)
+  const value = obj[camelKey] ?? obj[pascalKey]
+  if (value === undefined || value === null) return fallback
+  const num = Number(value)
+  return Number.isFinite(num) ? num : fallback
+}
 
 const summaryMeta = computed(() => {
   const list = registros.value || []
@@ -937,6 +1174,7 @@ async function cargarDatos(options = {}) {
     const items = Array.isArray(data) ? data : (data?.items || [])
     registros.value = items.map(item => normalizeRecord(item))
     if (isIncidentesView.value) {
+      await cargarLocationLearningMetrics({ silent: true })
       const currentId = mapRecord.value ? getRecordId(mapRecord.value) : null
       if (currentId != null) {
         const stillThere = registros.value.find(r => String(getRecordId(r)) === String(currentId))
@@ -947,6 +1185,9 @@ async function cargarDatos(options = {}) {
       }
       const withCoords = registros.value.find(r => hasCoords(r))
       mapRecord.value = withCoords || registros.value[0] || null
+    } else {
+      learningMetrics.value = null
+      learningMetricsError.value = ''
     }
   } catch (err) {
     if (!silent) {
@@ -956,6 +1197,182 @@ async function cargarDatos(options = {}) {
     if (!silent) {
       loading.value = false
     }
+  }
+}
+
+async function cargarLocationLearningMetrics(options = {}) {
+  if (!isIncidentesView.value) {
+    learningMetrics.value = null
+    learningMetricsError.value = ''
+    return
+  }
+
+  const silent = options.silent === true
+  if (!silent) learningMetricsLoading.value = true
+
+  try {
+    const { data } = await runtimeApi.getLocationLearningMetrics(10)
+    learningMetrics.value = data || null
+    learningMetricsError.value = ''
+  } catch (err) {
+    if (!silent) {
+      const status = err?.response?.status
+      const detail = err?.response?.data?.detail || err?.response?.data?.title || err?.message
+      learningMetricsError.value = status
+        ? `No se pudieron cargar metricas de aprendizaje (${status}). ${detail || ''}`.trim()
+        : 'No se pudieron cargar metricas de aprendizaje.'
+    }
+  } finally {
+    if (!silent) learningMetricsLoading.value = false
+  }
+}
+
+function focusIncident(incidenteId) {
+  if (incidenteId == null) return
+  const match = registros.value.find(r => String(getRecordId(r)) === String(incidenteId))
+  if (match) {
+    mapRecord.value = match
+    showToast(`Incidente ${incidenteId} seleccionado.`, 'blue')
+    return
+  }
+  showToast(`Incidente ${incidenteId} no esta en la pagina actual.`, 'orange')
+}
+
+function getLearningRetryState(incidenteId) {
+  if (incidenteId == null) return null
+  return learningRetryingByIncidente.value[String(incidenteId)] || null
+}
+
+function isLearningRetrying(incidenteId) {
+  return Boolean(getLearningRetryState(incidenteId))
+}
+
+function learningRetryStatusLabel(incidenteId) {
+  const state = getLearningRetryState(incidenteId)
+  if (!state) return ''
+  const status = (state.status || '').toString().toLowerCase()
+  if (!status) return ''
+  if (status === 'retry') return '(en cola)'
+  if (status === 'pending') return '(pendiente)'
+  if (status === 'processing' || status === 'running') return '(procesando)'
+  if (status === 'queued') return '(encolado)'
+  return `(${status})`
+}
+
+async function editIncidentFromLearning(item) {
+  const incidenteId = item?.incidenteId ?? item?.IncidenteId
+  if (incidenteId == null) return
+
+  let record = registros.value.find(r => String(getRecordId(r)) === String(incidenteId))
+  if (!record) {
+    try {
+      const { data } = await runtimeApi.get('incidentes', incidenteId)
+      record = normalizeRecord(data)
+    } catch {
+      showToast(`No se pudo cargar incidente ${incidenteId}.`, 'red')
+      return
+    }
+  }
+
+  if (!record) {
+    showToast(`Incidente ${incidenteId} no encontrado.`, 'orange')
+    return
+  }
+
+  editarRegistro(record)
+}
+
+async function retryIncidentFromLearning(item) {
+  const incidenteId = item?.incidenteId ?? item?.IncidenteId
+  if (incidenteId == null) return
+
+  const key = String(incidenteId)
+  learningRetryingByIncidente.value = {
+    ...learningRetryingByIncidente.value,
+    [key]: { status: 'retry', startedAt: Date.now(), jobId: null }
+  }
+
+  try {
+    const { data } = await runtimeApi.list('incidente-jobs')
+    const jobs = (Array.isArray(data) ? data : []).map(normalizeJob).filter(Boolean)
+    const target = jobs
+      .filter(j => String(j?.incidenteId ?? '') === key)
+      .sort((a, b) => {
+        const ta = new Date(a?.updateAt ?? a?.createdAt ?? 0).getTime()
+        const tb = new Date(b?.updateAt ?? b?.createdAt ?? 0).getTime()
+        return tb - ta
+      })[0]
+
+    const jobId = target?.Id ?? target?.id
+    if (!jobId) {
+      showToast(`No hay job para incidente ${incidenteId}.`, 'orange')
+      const next = { ...learningRetryingByIncidente.value }
+      delete next[key]
+      learningRetryingByIncidente.value = next
+      return
+    }
+
+    learningRetryingByIncidente.value = {
+      ...learningRetryingByIncidente.value,
+      [key]: { status: 'retry', startedAt: Date.now(), jobId }
+    }
+
+    await runtimeApi.retryIncidenteJob(jobId)
+    showToast(`Retry enviado para incidente ${incidenteId}.`, 'orange')
+    await cargarDatos({ silent: true })
+    await cargarLocationLearningMetrics({ silent: true })
+    await refreshLearningRetryStates()
+    startAutoRefresh()
+  } catch (err) {
+    showToast(`No se pudo reintentar incidente ${incidenteId}.`, 'red')
+  }
+}
+
+async function refreshLearningRetryStates() {
+  const keys = Object.keys(learningRetryingByIncidente.value)
+  if (keys.length === 0) return
+
+  try {
+    const { data } = await runtimeApi.list('incidente-jobs')
+    const jobs = (Array.isArray(data) ? data : []).map(normalizeJob)
+    const next = { ...learningRetryingByIncidente.value }
+
+    for (const incidenteKey of keys) {
+      const related = jobs
+        .filter(j => String(j?.incidenteId ?? j?.incidenteid ?? j?.IncidenteId ?? j?.Incidenteid ?? '') === incidenteKey)
+        .sort((a, b) => {
+          const ta = new Date(a?.updateAt ?? a?.UpdateAt ?? a?.createdAt ?? a?.CreatedAt ?? 0).getTime()
+          const tb = new Date(b?.updateAt ?? b?.UpdateAt ?? b?.createdAt ?? b?.CreatedAt ?? 0).getTime()
+          return tb - ta
+        })
+
+      const latest = related[0]
+      if (!latest) {
+        const elapsed = Date.now() - (next[incidenteKey]?.startedAt || Date.now())
+        if (elapsed > 120000) delete next[incidenteKey]
+        continue
+      }
+
+      const status = (latest.status || '').toString().toLowerCase()
+      next[incidenteKey] = {
+        ...(next[incidenteKey] || {}),
+        status,
+        jobId: latest.id,
+        startedAt: next[incidenteKey]?.startedAt || Date.now()
+      }
+
+      if (status === 'done') {
+        delete next[incidenteKey]
+        showToast(`Retry finalizado para incidente ${incidenteKey}.`, 'green')
+      } else if (status === 'error') {
+        delete next[incidenteKey]
+        showToast(`Retry con error para incidente ${incidenteKey}.`, 'red')
+      }
+    }
+
+    learningRetryingByIncidente.value = next
+  } catch {
+    // dejamos que el auto-refresh vuelva a intentar
   }
 }
 
@@ -1418,10 +1835,13 @@ function normalizeJob(job) {
   }
   return {
     id: pick('id'),
+    incidenteId: pick('incidenteId', 'incidenteid'),
     status: pick('status'),
     step: pick('step'),
     lastError: pick('lastError', 'lasterror'),
-    attempts: pick('attempts')
+    attempts: pick('attempts'),
+    createdAt: pick('createdAt', 'createdat'),
+    updateAt: pick('updateAt', 'updateat')
   }
 }
 
@@ -1452,6 +1872,7 @@ function startAutoRefresh() {
     autoRefreshInFlight = true
     try {
       await cargarDatos({ silent: true })
+      await refreshLearningRetryStates()
     } finally {
       autoRefreshInFlight = false
     }
@@ -1614,6 +2035,73 @@ onBeforeUnmount(() => {
 
 .summary-meta-label {
   font-weight: 600;
+}
+
+.learning-list {
+  display: grid;
+  gap: 8px;
+}
+
+.learning-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.learning-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 10px;
+  padding: 8px;
+  background: color-mix(in srgb, var(--sb-surface) 92%, var(--sb-primary-soft));
+}
+
+.learning-row-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.learning-id {
+  font-size: 0.72rem;
+  color: var(--sb-muted);
+  margin-bottom: 2px;
+}
+
+.learning-text {
+  font-size: 0.86rem;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.learning-corrected {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--sb-muted);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.learning-retry-state {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #b45309;
+  font-weight: 600;
+}
+
+.learning-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
 }
 
 .table :deep(th) {
