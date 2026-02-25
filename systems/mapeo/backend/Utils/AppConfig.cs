@@ -196,6 +196,10 @@ namespace Backend.Utils
             int.TryParse(Environment.GetEnvironmentVariable("LOCAL_GEOCODER_MAX_INTERSECTION_DISTANCE_METERS"), out var interDist)
                 ? interDist
                 : 450;
+        public static int GEOCODER_GATE_MAX_NUMBER_DELTA =>
+            int.TryParse(Environment.GetEnvironmentVariable("GEOCODER_GATE_MAX_NUMBER_DELTA"), out var gateNumberDelta)
+                ? gateNumberDelta
+                : 450;
 
         public static string NormalizeKey(string value)
         {

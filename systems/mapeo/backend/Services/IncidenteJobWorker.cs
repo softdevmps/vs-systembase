@@ -141,6 +141,7 @@ namespace Backend.Services
                     }
 
                     GeocodeResult? geocode = null;
+                    string? geocodeFailureReason = null;
                     var extractedLocation = IncidentExtractor.NormalizeLocationForGeocode(extract.LugarTexto) ?? extract.LugarTexto;
                     var locationContext = LocationNormalizer.Build(whisper.Text, extractedLocation, null);
                     if (!HasStrongLocation(locationContext))
@@ -256,11 +257,17 @@ namespace Backend.Services
                     {
                         var candidatesPreview = string.Join(" | ", locationContext.Candidates.Take(6));
                         Console.WriteLine($"[Geocode] Sin resultado incidente={job.IncidenteId} lugar='{lugarTexto}' candidatos='{candidatesPreview}'");
+                        geocodeFailureReason = "geocode_no_result";
                     }
-                    else if (!IsReliableGeocode(locationContext, geocode))
+                    else
                     {
-                        Console.WriteLine($"[Geocode] Resultado descartado por baja coherencia incidente={job.IncidenteId} lugar='{lugarTexto}' display='{geocode.DisplayName}'");
-                        geocode = null;
+                        var gate = EvaluateGeocodeGate(locationContext, geocode);
+                        if (!gate.Ok)
+                        {
+                            Console.WriteLine($"[Geocode] Resultado descartado por gate incidente={job.IncidenteId} motivo='{gate.Reason}' lugar='{lugarTexto}' display='{geocode.DisplayName}'");
+                            geocodeFailureReason = $"geocode_gate:{gate.Reason}";
+                            geocode = null;
+                        }
                     }
 
                     if (geocode != null)
@@ -290,7 +297,8 @@ namespace Backend.Services
                             cleanedLugarTexto,
                             null,
                             null,
-                            null
+                            null,
+                            geocodeFailureReason
                         );
                     }
                     else
@@ -385,11 +393,11 @@ namespace Backend.Services
             return match.Success ? match.Value : null;
         }
 
-        private static bool IsReliableGeocode(LocationParseResult context, GeocodeResult geocode)
+        private static (bool Ok, string Reason) EvaluateGeocodeGate(LocationParseResult context, GeocodeResult geocode)
         {
             var display = AppConfig.NormalizeKey(geocode.DisplayName ?? "");
             if (string.IsNullOrWhiteSpace(display))
-                return false;
+                return (false, "display_vacio");
 
             var requiredStreetTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             void AddStreetTokens(string? value)
@@ -419,8 +427,9 @@ namespace Backend.Services
             if (requiredStreetTokens.Count > 0)
             {
                 var hits = requiredStreetTokens.Count(token => display.Contains(token));
-                if (hits == 0)
-                    return false;
+                var minHits = requiredStreetTokens.Count >= 2 ? 2 : 1;
+                if (hits < minHits)
+                    return (false, $"street_tokens {hits}/{requiredStreetTokens.Count}");
             }
 
             var expectedNumber = ExtractFirstNumber(context.Signals.AddressWithNumber ?? context.DisplayText);
@@ -430,11 +439,22 @@ namespace Backend.Services
                 int.TryParse(expectedNumber, out var exp) &&
                 int.TryParse(candidateNumber, out var got))
             {
-                if (Math.Abs(exp - got) > 450)
-                    return false;
+                var delta = Math.Abs(exp - got);
+                if (delta > AppConfig.GEOCODER_GATE_MAX_NUMBER_DELTA)
+                    return (false, $"number_delta {delta}>{AppConfig.GEOCODER_GATE_MAX_NUMBER_DELTA}");
             }
 
-            return true;
+            var expectedBarrio = AppConfig.NormalizeKey(context.Signals.Barrio ?? "");
+            if (!string.IsNullOrWhiteSpace(expectedBarrio))
+            {
+                var displayContext = LocationNormalizer.Build(geocode.DisplayName, geocode.DisplayName, geocode.DisplayName);
+                var gotBarrio = AppConfig.NormalizeKey(displayContext.Signals.Barrio ?? "");
+
+                if (!string.IsNullOrWhiteSpace(gotBarrio) && !BarrioLooksCompatible(expectedBarrio, gotBarrio))
+                    return (false, $"barrio_mismatch '{expectedBarrio}' vs '{gotBarrio}'");
+            }
+
+            return (true, "ok");
         }
 
         private static string? ExtractFirstStreetNumber(string? displayName)
@@ -451,6 +471,49 @@ namespace Backend.Services
         private static bool HasStrongLocation(LocationParseResult context)
         {
             return !string.IsNullOrWhiteSpace(context.Signals.AddressWithNumber) || context.Signals.HasIntersection;
+        }
+
+        private static bool BarrioLooksCompatible(string expectedBarrio, string gotBarrio)
+        {
+            if (string.IsNullOrWhiteSpace(expectedBarrio) || string.IsNullOrWhiteSpace(gotBarrio))
+                return true;
+
+            if (expectedBarrio.Equals(gotBarrio, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (expectedBarrio.Contains(gotBarrio, StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (gotBarrio.Contains(expectedBarrio, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var distance = Levenshtein(expectedBarrio, gotBarrio);
+            var maxDistance = Math.Max(1, Math.Min(3, expectedBarrio.Length / 5));
+            return distance <= maxDistance;
+        }
+
+        private static int Levenshtein(string a, string b)
+        {
+            if (string.IsNullOrEmpty(a))
+                return b?.Length ?? 0;
+            if (string.IsNullOrEmpty(b))
+                return a.Length;
+
+            var d = new int[a.Length + 1, b.Length + 1];
+            for (var i = 0; i <= a.Length; i++) d[i, 0] = i;
+            for (var j = 0; j <= b.Length; j++) d[0, j] = j;
+
+            for (var i = 1; i <= a.Length; i++)
+            {
+                for (var j = 1; j <= b.Length; j++)
+                {
+                    var cost = a[i - 1] == b[j - 1] ? 0 : 1;
+                    d[i, j] = Math.Min(
+                        Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                        d[i - 1, j - 1] + cost
+                    );
+                }
+            }
+
+            return d[a.Length, b.Length];
         }
 
         private static string? TryExtractIntersectionHint(string? text)

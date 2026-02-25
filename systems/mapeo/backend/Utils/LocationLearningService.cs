@@ -29,13 +29,20 @@ namespace Backend.Utils
             string? predLugarTexto,
             string? predLugarNormalizado,
             decimal? predLat,
-            decimal? predLng)
+            decimal? predLng,
+            string? notes = null)
         {
             if (incidenteId <= 0)
                 return;
 
             try
             {
+                var safeNotes = string.IsNullOrWhiteSpace(notes)
+                    ? "geocode_failed"
+                    : notes!.Trim();
+                if (safeNotes.Length > 500)
+                    safeNotes = safeNotes.Substring(0, 500);
+
                 using var conn = Db.Open();
                 using var cmd = new SqlCommand(@"
 IF NOT EXISTS
@@ -57,7 +64,7 @@ BEGIN
     (
         @IncidenteId, @RawText, @WhisperLocation,
         @PredLugarTexto, @PredLugarNormalizado, @PredLat, @PredLng,
-        'pending', 'geocode_failed', SYSUTCDATETIME()
+        'pending', @Notes, SYSUTCDATETIME()
     );
 END;", conn);
 
@@ -68,6 +75,7 @@ END;", conn);
                 cmd.Parameters.AddWithValue("@PredLugarNormalizado", (object?)predLugarNormalizado ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@PredLat", predLat ?? (object)DBNull.Value);
                 cmd.Parameters.AddWithValue("@PredLng", predLng ?? (object)DBNull.Value);
+                cmd.Parameters.AddWithValue("@Notes", safeNotes);
                 cmd.ExecuteNonQuery();
             }
             catch (Exception ex)

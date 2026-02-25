@@ -80,6 +80,7 @@ namespace Backend
             public static class Observabilidad
             {
                 public const string LocationLearning = "api/v1/observabilidad/location-learning";
+                public const string LocationLearningCorrectRetry = "api/v1/observabilidad/location-learning/correct-retry";
             }
 
         }

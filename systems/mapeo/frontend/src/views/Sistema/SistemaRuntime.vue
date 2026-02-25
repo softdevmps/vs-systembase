@@ -153,6 +153,12 @@
                     {{ item.correctLugarTexto || item.CorrectLugarTexto }}
                   </div>
                   <div
+                    v-if="learningTab === 'nocoords' && learningGateReason(item)"
+                    class="learning-gate-reason"
+                  >
+                    Motivo: {{ learningGateReason(item) }}
+                  </div>
+                  <div
                     v-if="isLearningRetrying(item.incidenteId || item.IncidenteId)"
                     class="learning-retry-state"
                   >
@@ -184,6 +190,15 @@
                     @click="editIncidentFromLearning(item)"
                   >
                     Editar
+                  </v-btn>
+                  <v-btn
+                    v-if="item.incidenteId || item.IncidenteId"
+                    size="x-small"
+                    variant="text"
+                    color="teal"
+                    @click="openCorrectRetryFromLearning(item)"
+                  >
+                    Corregir
                   </v-btn>
                   <v-btn
                     v-if="item.incidenteId || item.IncidenteId"
@@ -483,6 +498,70 @@
       @guardado="cargarDatos"
     />
 
+    <v-dialog v-model="learningCorrectDialog" max-width="620">
+      <v-card class="sb-dialog">
+        <v-card-title class="sb-dialog-title">
+          <div class="sb-dialog-icon">
+            <v-icon color="teal">mdi-map-search-outline</v-icon>
+          </div>
+          <div>
+            <div class="sb-dialog-title-text">Corregir y reintentar</div>
+            <div class="sb-dialog-subtitle">Incidente #{{ learningCorrectIncidenteId || '-' }}</div>
+          </div>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="sb-dialog-body">
+          <v-text-field
+            v-model="learningCorrectLugarTexto"
+            label="Lugar corregido"
+            variant="outlined"
+            :density="uiDensity"
+            required
+          />
+          <v-text-field
+            v-model="learningCorrectLugarNormalizado"
+            label="Lugar normalizado (opcional)"
+            variant="outlined"
+            :density="uiDensity"
+          />
+          <v-row dense>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                v-model="learningCorrectLat"
+                label="Lat (opcional)"
+                variant="outlined"
+                :density="uiDensity"
+              />
+            </v-col>
+            <v-col cols="12" sm="6">
+              <v-text-field
+                v-model="learningCorrectLng"
+                label="Lng (opcional)"
+                variant="outlined"
+                :density="uiDensity"
+              />
+            </v-col>
+          </v-row>
+          <v-alert v-if="learningCorrectError" type="error" variant="tonal" class="mt-2">
+            {{ learningCorrectError }}
+          </v-alert>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="d-flex justify-end ga-2 sb-dialog-actions">
+          <v-btn class="sb-btn ghost" variant="text" @click="closeCorrectRetryDialog">Cancelar</v-btn>
+          <v-btn
+            class="sb-btn primary"
+            color="teal"
+            :loading="learningCorrectSubmitting"
+            :disabled="learningCorrectSubmitting || !learningCorrectLugarTexto.trim()"
+            @click="submitCorrectRetry"
+          >
+            Corregir y retry
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-dialog v-model="audioDialog" max-width="640">
       <v-card class="sb-dialog">
         <v-card-title class="sb-dialog-title">
@@ -688,6 +767,14 @@ const learningMetricsLoading = ref(false)
 const learningMetricsError = ref('')
 const learningTab = ref('pending')
 const learningRetryingByIncidente = ref({})
+const learningCorrectDialog = ref(false)
+const learningCorrectSubmitting = ref(false)
+const learningCorrectError = ref('')
+const learningCorrectIncidenteId = ref(null)
+const learningCorrectLugarTexto = ref('')
+const learningCorrectLugarNormalizado = ref('')
+const learningCorrectLat = ref('')
+const learningCorrectLng = ref('')
 const autoRefreshIntervalMs = computed(() => config.value?.system?.autoRefreshIntervalMs || 3000)
 const autoRefreshAlways = computed(() => config.value?.system?.autoRefreshAlways === true)
 const hasActiveProcessing = computed(() => {
@@ -956,6 +1043,25 @@ const activeLearningItems = computed(() => {
   if (learningTab.value === 'corrected') return learningRecentItems.value
   return learningPendingItems.value
 })
+
+function learningGateReason(item) {
+  if (!item) return ''
+  const raw = (
+    item.gateReason ??
+    item.GateReason ??
+    item.notes ??
+    item.Notes ??
+    ''
+  ).toString()
+  if (!raw) return ''
+  const normalized = raw.replace(/^geocode_gate:/i, '').trim()
+  if (normalized.startsWith('street_tokens')) return 'tokens de calle insuficientes'
+  if (normalized.startsWith('number_delta')) return 'altura incompatible con el resultado'
+  if (normalized.startsWith('barrio_mismatch')) return 'barrio incompatible con el resultado'
+  if (normalized === 'geocode_no_result') return 'sin resultado de geocodificacion'
+  if (normalized === 'geocode_failed') return 'fallo de geocodificacion'
+  return normalized
+}
 
 function metricValue(obj, camelKey, fallback = 0) {
   if (!obj) return fallback
@@ -1280,6 +1386,82 @@ async function editIncidentFromLearning(item) {
   }
 
   editarRegistro(record)
+}
+
+function openCorrectRetryFromLearning(item) {
+  const incidenteId = item?.incidenteId ?? item?.IncidenteId
+  if (incidenteId == null) return
+  const incidente = registros.value.find(r => String(getRecordId(r)) === String(incidenteId))
+
+  learningCorrectIncidenteId.value = incidenteId
+  learningCorrectLugarTexto.value = (
+    item?.predLugarTexto ??
+    item?.PredLugarTexto ??
+    incidente?.LugarTexto ??
+    ''
+  ).toString()
+  learningCorrectLugarNormalizado.value = (
+    item?.correctLugarTexto ??
+    item?.CorrectLugarTexto ??
+    incidente?.LugarNormalizado ??
+    ''
+  ).toString()
+  learningCorrectLat.value = incidente?.Lat != null ? String(incidente.Lat) : ''
+  learningCorrectLng.value = incidente?.Lng != null ? String(incidente.Lng) : ''
+  learningCorrectError.value = ''
+  learningCorrectDialog.value = true
+}
+
+function closeCorrectRetryDialog() {
+  learningCorrectDialog.value = false
+  learningCorrectSubmitting.value = false
+  learningCorrectError.value = ''
+  learningCorrectIncidenteId.value = null
+  learningCorrectLugarTexto.value = ''
+  learningCorrectLugarNormalizado.value = ''
+  learningCorrectLat.value = ''
+  learningCorrectLng.value = ''
+}
+
+async function submitCorrectRetry() {
+  const incidenteId = learningCorrectIncidenteId.value
+  if (incidenteId == null) return
+  const lugarTexto = (learningCorrectLugarTexto.value || '').trim()
+  if (!lugarTexto) {
+    learningCorrectError.value = 'Lugar corregido es obligatorio.'
+    return
+  }
+
+  learningCorrectSubmitting.value = true
+  learningCorrectError.value = ''
+  try {
+    const payload = {
+      incidenteId,
+      correctLugarTexto: lugarTexto,
+      correctLugarNormalizado: (learningCorrectLugarNormalizado.value || '').trim() || null,
+      correctLat: parseCoord(learningCorrectLat.value),
+      correctLng: parseCoord(learningCorrectLng.value)
+    }
+
+    const { data } = await runtimeApi.correctRetryLocationLearning(payload)
+    closeCorrectRetryDialog()
+    const msg = data?.jobId
+      ? `Correccion aplicada. Job #${data.jobId} en retry.`
+      : `Correccion aplicada para incidente ${incidenteId}.`
+    showToast(msg, 'teal')
+    await cargarDatos({ silent: true })
+    await cargarLocationLearningMetrics({ silent: true })
+    await refreshLearningRetryStates()
+    startAutoRefresh()
+  } catch (err) {
+    const status = err?.response?.status
+    const detail = err?.response?.data?.detail || err?.response?.data?.title || err?.message
+    learningCorrectError.value = status
+      ? `No se pudo corregir/reintentar (${status}). ${detail || ''}`.trim()
+      : 'No se pudo corregir/reintentar.'
+  } finally {
+    learningCorrectSubmitting.value = false
+  }
 }
 
 async function retryIncidentFromLearning(item) {
@@ -1925,6 +2107,12 @@ watch(audioPlayDialog, open => {
   if (!open) clearAudioPlayback()
 })
 
+watch(learningCorrectDialog, open => {
+  if (!open && learningCorrectSubmitting.value === false) {
+    learningCorrectError.value = ''
+  }
+})
+
 onMounted(() => {
   normalizeConfig()
   if (config.value?.system?.defaultItemsPerPage) {
@@ -2088,6 +2276,13 @@ onBeforeUnmount(() => {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.learning-gate-reason {
+  margin-top: 4px;
+  font-size: 0.72rem;
+  color: #b45309;
+  line-height: 1.2;
 }
 
 .learning-retry-state {

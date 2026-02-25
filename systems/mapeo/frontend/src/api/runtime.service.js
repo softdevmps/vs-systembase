@@ -48,5 +48,9 @@ export default {
 
   getLocationLearningMetrics(take = 8) {
     return api.get(`/observabilidad/location-learning?take=${take}`)
+  },
+
+  correctRetryLocationLearning(payload) {
+    return api.post('/observabilidad/location-learning/correct-retry', payload)
   }
 }
