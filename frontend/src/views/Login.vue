@@ -187,7 +187,7 @@ async function login() {
   border: 1px solid var(--sb-border-soft);
   border-radius: 14px;
   padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.7);
+  background: color-mix(in srgb, var(--sb-surface) 86%, transparent);
   box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
 }
 
@@ -201,6 +201,7 @@ async function login() {
 
 .metric-card strong {
   font-weight: 600;
+  color: var(--sb-text, #0f172a);
 }
 
 .login-features {
@@ -219,8 +220,9 @@ async function login() {
 .login-card {
   border-radius: calc(var(--sb-radius) + 2px);
   border: 1px solid var(--sb-border);
-  background: rgba(255, 255, 255, 0.96);
+  background: color-mix(in srgb, var(--sb-surface) 96%, transparent);
   backdrop-filter: blur(12px);
+  color: var(--sb-text, #0f172a);
 }
 
 .login-title {
@@ -229,6 +231,10 @@ async function login() {
 
 .login-form :deep(.v-input) {
   margin-bottom: 12px;
+}
+
+.login-form :deep(.v-field) {
+  background: color-mix(in srgb, var(--sb-surface) 92%, transparent);
 }
 
 .login-submit {
