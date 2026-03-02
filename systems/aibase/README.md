@@ -14,9 +14,16 @@ Base de trabajo inicial para el nuevo producto AIBase, construido desde la fabri
   - `systems/aibase/docker/`
 - SQL inicial:
   - `systems/aibase/sql/001_sb_ai_init.sql`
+  - `systems/aibase/sql/002_sb_ai_runs.sql`
 - Bootstrap funcional en SystemBase:
   - Menú `/aibase`
-  - Endpoints `/api/v1/aibase/templates` y `/api/v1/aibase/projects`
+  - Endpoints de proyectos/templates/runs en `/api/v1/aibase/*`
+  - Orquestación inicial de runs (HTTP hacia engine + modo stub)
+
+## Variables backend recomendadas
+- `AIBASE_ENGINE_ENABLED=false`
+- `AIBASE_ENGINE_BASE_URL=http://localhost:8090/engine/v1`
+- `AIBASE_ENGINE_TIMEOUT_SECONDS=30`
 
 ## Objetivo del scaffold
 Preparar la estructura para implementar V1:

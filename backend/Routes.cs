@@ -114,6 +114,10 @@ namespace Backend
                 public const string ObtenerProyectos = "api/v1/aibase/projects";
                 public const string ObtenerProyectoPorId = "api/v1/aibase/projects/{id}";
                 public const string CrearProyecto = "api/v1/aibase/projects";
+                public const string ObtenerRunsProyecto = "api/v1/aibase/projects/{projectId}/runs";
+                public const string CrearRunProyecto = "api/v1/aibase/projects/{projectId}/runs";
+                public const string ObtenerRunPorId = "api/v1/aibase/runs/{id}";
+                public const string SincronizarRunPorId = "api/v1/aibase/runs/{id}/sync";
             }
 
             public static class DevTools

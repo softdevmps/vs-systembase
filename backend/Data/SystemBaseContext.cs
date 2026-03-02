@@ -48,6 +48,8 @@ public partial class SystemBaseContext : DbContext
 
     public virtual DbSet<AibaseProjects> AibaseProjects { get; set; }
 
+    public virtual DbSet<AibaseRuns> AibaseRuns { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=localhost,1433;Database=systemBase;User Id=sa;Password=PukySecure#2026!;TrustServerCertificate=True;");
@@ -393,6 +395,31 @@ public partial class SystemBaseContext : DbContext
                 .HasForeignKey(d => d.TemplateId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_sb_ai_Projects_Template");
+        });
+
+        modelBuilder.Entity<AibaseRuns>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_sb_ai_Runs");
+
+            entity.ToTable("Runs", "sb_ai");
+
+            entity.Property(e => e.RunType).HasMaxLength(50).HasDefaultValue("dataset_build");
+            entity.Property(e => e.Status).HasMaxLength(30).HasDefaultValue("queued");
+            entity.Property(e => e.EngineRunId).HasMaxLength(120);
+            entity.Property(e => e.ProgressPct).HasDefaultValue(0);
+            entity.Property(e => e.TriggerSource).HasMaxLength(30).HasDefaultValue("manual");
+            entity.Property(e => e.InputJson);
+            entity.Property(e => e.OutputJson);
+            entity.Property(e => e.LastError).HasMaxLength(1000);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.StartedAt);
+            entity.Property(e => e.FinishedAt);
+            entity.Property(e => e.UpdatedAt);
+
+            entity.HasOne(d => d.Project).WithMany(p => p.Runs)
+                .HasForeignKey(d => d.ProjectId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_sb_ai_Runs_Project");
         });
 
         modelBuilder.Entity<Usuarios>(entity =>

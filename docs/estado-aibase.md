@@ -17,11 +17,22 @@ Branch: `aibase`
     - `GET /api/v1/aibase/projects`
     - `GET /api/v1/aibase/projects/{id}`
     - `POST /api/v1/aibase/projects`
-  - Menú base agregado en seed: `AIBase` (`/aibase`).
+    - `GET /api/v1/aibase/projects/{projectId}/runs`
+    - `POST /api/v1/aibase/projects/{projectId}/runs`
+    - `GET /api/v1/aibase/runs/{id}`
+    - `POST /api/v1/aibase/runs/{id}/sync`
+  - Orquestación inicial de runs:
+    - tabla `sb_ai.Runs`
+    - despacho al engine por HTTP (`AibaseEngineClient`)
+    - fallback `stub` cuando `AIBASE_ENGINE_ENABLED=false`
+- Menú base agregado en seed: `AIBase` (`/aibase`).
 - Frontend (SystemBase):
   - Vista inicial AIBase: `frontend/src/views/Sistema/Aibase.vue`.
   - Servicio API: `frontend/src/api/aibase.service.js`.
   - Ruta habilitada: `/aibase`.
+  - UI de runs por proyecto:
+    - disparo de `dataset_build`, `rag_index`, `train_lora`, `eval_run`
+    - listado de runs y sync manual de estado.
 
 > Este corte deja listo el bootstrap funcional para crear y listar proyectos AIBase desde la fábrica.
 

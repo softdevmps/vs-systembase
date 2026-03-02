@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Backend.Models.Entidades;
 
@@ -31,4 +32,6 @@ public partial class AibaseProjects
     public DateTime? UpdatedAt { get; set; }
 
     public virtual AibaseTemplates Template { get; set; } = null!;
+
+    public virtual ICollection<AibaseRuns> Runs { get; set; } = new List<AibaseRuns>();
 }
