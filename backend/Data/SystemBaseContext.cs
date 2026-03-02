@@ -44,6 +44,10 @@ public partial class SystemBaseContext : DbContext
 
     public virtual DbSet<EntityModules> EntityModules { get; set; }
 
+    public virtual DbSet<AibaseTemplates> AibaseTemplates { get; set; }
+
+    public virtual DbSet<AibaseProjects> AibaseProjects { get; set; }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
 #warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
         => optionsBuilder.UseSqlServer("Server=localhost,1433;Database=systemBase;User Id=sa;Password=PukySecure#2026!;TrustServerCertificate=True;");
@@ -347,6 +351,48 @@ public partial class SystemBaseContext : DbContext
                 .HasMaxLength(30)
                 .HasDefaultValue("draft");
             entity.Property(e => e.Version).HasMaxLength(20);
+        });
+
+        modelBuilder.Entity<AibaseTemplates>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_sb_ai_Templates");
+
+            entity.ToTable("Templates", "sb_ai");
+
+            entity.HasIndex(e => e.Key, "UX_sb_ai_Templates_Key").IsUnique();
+
+            entity.Property(e => e.Key).HasMaxLength(80);
+            entity.Property(e => e.Name).HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.PipelineJson);
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.Version).HasMaxLength(20).HasDefaultValue("1.0");
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.UpdatedAt);
+        });
+
+        modelBuilder.Entity<AibaseProjects>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("PK_sb_ai_Projects");
+
+            entity.ToTable("Projects", "sb_ai");
+
+            entity.HasIndex(e => e.Slug, "UX_sb_ai_Projects_Slug").IsUnique();
+
+            entity.Property(e => e.Slug).HasMaxLength(80);
+            entity.Property(e => e.Name).HasMaxLength(200);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.Language).HasMaxLength(10).HasDefaultValue("es");
+            entity.Property(e => e.Tone).HasMaxLength(100);
+            entity.Property(e => e.Status).HasMaxLength(30).HasDefaultValue("draft");
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())");
+            entity.Property(e => e.UpdatedAt);
+
+            entity.HasOne(d => d.Template).WithMany(p => p.Projects)
+                .HasForeignKey(d => d.TemplateId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_sb_ai_Projects_Template");
         });
 
         modelBuilder.Entity<Usuarios>(entity =>

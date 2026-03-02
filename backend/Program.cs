@@ -113,6 +113,7 @@ var app = builder.Build();
 // ===============================
 // 🌱 Seed inicial (roles/menus/modulos/admin)
 // ===============================
+AibaseSchemaMigrator.EnsureSchema(app.Services, app.Logger);
 DbSeeder.Seed(app.Services, app.Logger);
 
 // ===============================

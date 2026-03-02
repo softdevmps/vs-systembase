@@ -108,6 +108,14 @@ namespace Backend
                 public const string GuardarConfig = "api/v1/sistemas/{systemId}/frontend-config";
             }
 
+            public static class Aibase
+            {
+                public const string ObtenerTemplates = "api/v1/aibase/templates";
+                public const string ObtenerProyectos = "api/v1/aibase/projects";
+                public const string ObtenerProyectoPorId = "api/v1/aibase/projects/{id}";
+                public const string CrearProyecto = "api/v1/aibase/projects";
+            }
+
             public static class DevTools
             {
                 public const string Restart = "api/v1/dev/restart";

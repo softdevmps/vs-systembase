@@ -3,6 +3,28 @@
 Fecha: 2026-03-02
 Branch: `aibase`
 
+## 0) Avance implementado en esta rama
+- Backend (SystemBase):
+  - Migrador idempotente `sb_ai` al iniciar API: `backend/Utils/AibaseSchemaMigrator.cs`.
+  - Tablas iniciales creadas/gestionadas:
+    - `sb_ai.Templates`
+    - `sb_ai.Projects`
+  - Seed de templates V1:
+    - `extractor-json`
+    - `chat-rag`
+  - Nuevos endpoints:
+    - `GET /api/v1/aibase/templates`
+    - `GET /api/v1/aibase/projects`
+    - `GET /api/v1/aibase/projects/{id}`
+    - `POST /api/v1/aibase/projects`
+  - Menú base agregado en seed: `AIBase` (`/aibase`).
+- Frontend (SystemBase):
+  - Vista inicial AIBase: `frontend/src/views/Sistema/Aibase.vue`.
+  - Servicio API: `frontend/src/api/aibase.service.js`.
+  - Ruta habilitada: `/aibase`.
+
+> Este corte deja listo el bootstrap funcional para crear y listar proyectos AIBase desde la fábrica.
+
 ## 1) Supuestos de V1
 - AIBase se construye sobre la fabrica actual de SystemBase, pero como modulo/producto nuevo.
 - Stack principal:

@@ -7,6 +7,7 @@ import Home from '../views/Home.vue'
 import Usuarios from '../views/Sistema/Usuarios.vue'
 import Menu from '../views/Sistema/Menu.vue'
 import Sistemas from '../views/Sistema/Sistemas.vue'
+import Aibase from '../views/Sistema/Aibase.vue'
 import SistemaEditor from '../views/Sistema/SistemaEditor.vue'
 import SistemaRuntime from '../views/Sistema/SistemaRuntime.vue'
 import SistemaFrontendEmbed from '../views/Sistema/SistemaFrontendEmbed.vue'
@@ -42,6 +43,10 @@ const routes = [
       {
         path: 'sistemas',
         component: Sistemas
+      },
+      {
+        path: 'aibase',
+        component: Aibase
       },
       {
         path: 'sistemas/:id',

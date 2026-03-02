@@ -143,9 +143,10 @@ namespace Backend.Utils
             {
                 new { Title = "Home", Route = "/home", Icon = "mdi-home", Order = 1, ParentId = (int?)null },
                 new { Title = "Sistemas", Route = "/sistemas", Icon = "mdi-apps", Order = 1, ParentId = (int?)sistemaMenu.Id },
-                new { Title = "Menu", Route = "/menu", Icon = "mdi-view-list", Order = 2, ParentId = (int?)sistemaMenu.Id },
-                new { Title = "Usuarios", Route = "/usuarios", Icon = "mdi-account-group", Order = 3, ParentId = (int?)sistemaMenu.Id },
-                new { Title = "Roles", Route = "/roles", Icon = "mdi-shield-account", Order = 4, ParentId = (int?)sistemaMenu.Id }
+                new { Title = "AIBase", Route = "/aibase", Icon = "mdi-brain", Order = 2, ParentId = (int?)sistemaMenu.Id },
+                new { Title = "Menu", Route = "/menu", Icon = "mdi-view-list", Order = 3, ParentId = (int?)sistemaMenu.Id },
+                new { Title = "Usuarios", Route = "/usuarios", Icon = "mdi-account-group", Order = 4, ParentId = (int?)sistemaMenu.Id },
+                new { Title = "Roles", Route = "/roles", Icon = "mdi-shield-account", Order = 5, ParentId = (int?)sistemaMenu.Id }
             };
 
             var created = false;
@@ -176,7 +177,7 @@ namespace Backend.Utils
                 logger.LogInformation("DbSeeder: menus base creados.");
             }
 
-            return menus.Where(m => m.Titulo is "Home" or "Sistema" or "Sistemas" or "Menu" or "Usuarios" or "Roles").ToList();
+            return menus.Where(m => m.Titulo is "Home" or "Sistema" or "Sistemas" or "AIBase" or "Menu" or "Usuarios" or "Roles").ToList();
         }
 
         private static void EnsureRoleMenus(SystemBaseContext context, Roles role, List<Menus> menus, ILogger logger)
