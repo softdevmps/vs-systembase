@@ -4,6 +4,7 @@ Monorepo con dos líneas principales:
 
 - **SystemBase (fábrica)**: plataforma para diseñar, publicar y operar sistemas CRUD.
 - **Mapeo (producto)**: runtime de incidentes con audio, transcripción, extracción y geocodificación.
+- **AIBase (en desarrollo)**: plataforma metadata-driven para crear y educar IAs por dominio.
 
 ## Componentes
 
@@ -12,6 +13,7 @@ Monorepo con dos líneas principales:
 - `frontend-runtime/`: plantilla runtime base que usa el generador.
 - `systems/mapeo/backend/`: backend del sistema de mapeo.
 - `systems/mapeo/frontend/`: frontend del sistema de mapeo.
+- `systems/aibase/`: scaffold inicial del nuevo producto AIBase.
 - `whisper-service/`: docker compose de Whisper ASR.
 - `llm-service/`: docker compose de Ollama.
 - `geocoder-service/`: docker compose de Nominatim (OSM local).
@@ -175,6 +177,7 @@ Instalar `ffmpeg` en el host y verificar que esté disponible en `PATH`.
 
 - `main`: fábrica SystemBase (base del generador).
 - `mapeo`: sistema mapeo + ajustes específicos.
+- `aibase`: desarrollo del nuevo producto AIBase.
 
 Recomendado:
 
