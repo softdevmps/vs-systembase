@@ -1,0 +1,22 @@
+{
+  "system": {
+    "appTitle": "AIBase",
+    "showSearch": false,
+    "showFilters": false,
+    "defaultItemsPerPage": 10,
+    "itemsPerPageOptions": [10, 20, 50],
+    "primaryColor": "#2563eb",
+    "secondaryColor": "#0ea5e9",
+    "density": "comfortable",
+    "fontFamily": "Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
+    "uiMode": "enterprise",
+    "locale": "es-AR",
+    "currency": "ARS",
+    "authMode": "local",
+    "authBaseUrl": "http://localhost:5036/api/v1",
+    "seedAdminUser": "admin",
+    "seedAdminPassword": "admin",
+    "seedAdminEmail": "admin@local"
+  },
+  "entities": []
+}

@@ -1,39 +1,56 @@
-# AIBase (bootstrap)
+# AIBase (independiente)
 
-Base de trabajo inicial para el nuevo producto AIBase, construido desde la fabrica SystemBase.
+AIBase ahora vive como sistema separado dentro de `systems/aibase`, sin acoplar código al backend/frontend raíz de SystemBase.
 
-## Estado actual
-- Branch de trabajo: `aibase`
-- Documentación técnica inicial:
-  - `docs/estado-aibase.md`
-- Scaffold creado:
-  - `systems/aibase/backend/`
-  - `systems/aibase/frontend/`
-  - `systems/aibase/engine/`
-  - `systems/aibase/sql/`
-  - `systems/aibase/docker/`
-- SQL inicial:
-  - `systems/aibase/sql/001_sb_ai_init.sql`
-  - `systems/aibase/sql/002_sb_ai_runs.sql`
-- Bootstrap funcional en SystemBase:
-  - Menú `/aibase`
-  - Endpoints de proyectos/templates/runs en `/api/v1/aibase/*`
-  - Orquestación inicial de runs (HTTP hacia engine + modo stub)
+## Estructura
+- `systems/aibase/backend` -> API .NET 8 independiente (`AIBase.Backend.csproj`)
+- `systems/aibase/frontend` -> UI Vue/Vuetify independiente
+- `systems/aibase/sql` -> scripts de esquema `sb_ai`
+- `systems/aibase/engine` -> placeholder para engine Python/FastAPI
+- `systems/aibase/docker` -> placeholder para compose/infra propia
 
-## Variables backend recomendadas
-- `AIBASE_ENGINE_ENABLED=false`
-- `AIBASE_ENGINE_BASE_URL=http://localhost:8090/engine/v1`
-- `AIBASE_ENGINE_TIMEOUT_SECONDS=30`
+## Backend
+### Endpoints
+- `POST /api/v1/auth/login`
+- `POST /api/v1/auth/registrar`
+- `GET /api/v1/aibase/templates`
+- `GET /api/v1/aibase/projects`
+- `GET /api/v1/aibase/projects/{id}`
+- `POST /api/v1/aibase/projects`
+- `GET /api/v1/aibase/projects/{projectId}/runs`
+- `POST /api/v1/aibase/projects/{projectId}/runs`
+- `GET /api/v1/aibase/runs/{id}`
+- `POST /api/v1/aibase/runs/{id}/sync`
 
-## Objetivo del scaffold
-Preparar la estructura para implementar V1:
-- Template `extractor-json`
-- Template `chat-rag`
-- Orquestación por jobs
-- Versionado dataset/model/eval/deployment
+### Configuración
+Copiar:
+```bash
+cd systems/aibase/backend
+cp .env.example .env
+```
+Variables clave:
+- `DB_SERVER`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
+- `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRE_MINUTES`
+- `AIBASE_ENGINE_ENABLED`, `AIBASE_ENGINE_BASE_URL`, `AIBASE_ENGINE_TIMEOUT_SECONDS`
 
-## Próximos pasos inmediatos
-1. Extender esquema `sb_ai` (runs, versiones, deployments, audit).
-2. Crear orquestador de runs contra `aibase-engine`.
-3. Crear `aibase-engine` (FastAPI) con endpoints stub.
-4. Implementar wizard paso 1-3 en frontend.
+### Run local
+```bash
+cd systems/aibase/backend
+dotnet restore
+dotnet watch run
+```
+Backend default: `http://localhost:5036`
+
+## Frontend
+```bash
+cd systems/aibase/frontend
+npm install
+npm run dev
+```
+Frontend default: `http://localhost:5177`
+
+## SQL
+- `systems/aibase/sql/001_sb_ai_init.sql`
+- `systems/aibase/sql/002_sb_ai_runs.sql`
+
+El backend también crea/valida estas tablas automáticamente al iniciar (`AibaseSchemaMigrator`).

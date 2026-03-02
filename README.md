@@ -13,7 +13,9 @@ Monorepo con dos líneas principales:
 - `frontend-runtime/`: plantilla runtime base que usa el generador.
 - `systems/mapeo/backend/`: backend del sistema de mapeo.
 - `systems/mapeo/frontend/`: frontend del sistema de mapeo.
-- `systems/aibase/`: scaffold inicial del nuevo producto AIBase.
+- `systems/aibase/backend/`: backend independiente de AIBase (.NET 8).
+- `systems/aibase/frontend/`: frontend independiente de AIBase (Vue 3 + Vuetify).
+- `systems/aibase/sql/`: scripts SQL de AIBase (`sb_ai`).
 - `whisper-service/`: docker compose de Whisper ASR.
 - `llm-service/`: docker compose de Ollama.
 - `geocoder-service/`: docker compose de Nominatim (OSM local).
@@ -34,6 +36,7 @@ Crear/copiar:
 
 - `backend/.env` desde `backend/.env.example`
 - `systems/mapeo/backend/.env` desde `systems/mapeo/backend/.env.example`
+- `systems/aibase/backend/.env` desde `systems/aibase/backend/.env.example`
 - `geocoder-service/.env` desde `geocoder-service/.env.example`
 
 ## Puertos por defecto
@@ -42,6 +45,8 @@ Crear/copiar:
 - SystemBase frontend: `http://localhost:5173`
 - Mapeo backend: `http://localhost:5035`
 - Mapeo frontend: `http://localhost:5176` (levantar con `--port 5176`)
+- AIBase backend: `http://localhost:5036`
+- AIBase frontend: `http://localhost:5177`
 - Whisper: `http://localhost:9000`
 - Ollama: `http://localhost:11434`
 - Nominatim: `http://localhost:8080`
@@ -124,6 +129,25 @@ npm install
 npm run dev -- --port 5176
 ```
 
+## Levantar AIBase (producto independiente)
+
+### Backend AIBase
+
+```bash
+cd systems/aibase/backend
+cp .env.example .env
+dotnet restore
+dotnet watch run
+```
+
+### Frontend AIBase
+
+```bash
+cd systems/aibase/frontend
+npm install
+npm run dev
+```
+
 ## Ejecución simultánea recomendada (4 terminales + docker)
 
 1. `backend` -> `dotnet watch run`
@@ -188,4 +212,5 @@ Recomendado:
 
 - `docs/estado-actual.md`
 - `docs/estado-mapeo.md`
+- `docs/estado-aibase.md`
 - `systems/ports.json`
