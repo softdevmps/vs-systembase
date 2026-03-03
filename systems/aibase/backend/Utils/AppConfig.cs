@@ -14,18 +14,5 @@ namespace Backend.Utils
             int.TryParse(Environment.GetEnvironmentVariable("JWT_EXPIRE_MINUTES"), out var minutes)
                 ? minutes
                 : 120;
-
-        public static bool AIBASE_ENGINE_ENABLED =>
-            bool.TryParse(Environment.GetEnvironmentVariable("AIBASE_ENGINE_ENABLED"), out var enabled)
-                ? enabled
-                : false;
-
-        public static string AIBASE_ENGINE_BASE_URL =>
-            Environment.GetEnvironmentVariable("AIBASE_ENGINE_BASE_URL") ?? "http://localhost:8090/engine/v1";
-
-        public static int AIBASE_ENGINE_TIMEOUT_SECONDS =>
-            int.TryParse(Environment.GetEnvironmentVariable("AIBASE_ENGINE_TIMEOUT_SECONDS"), out var seconds)
-                ? Math.Clamp(seconds, 3, 300)
-                : 30;
     }
 }

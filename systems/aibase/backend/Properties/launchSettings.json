@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "AIBase.Backend": {
+    "Aibase.Backend": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "launchBrowser": true,

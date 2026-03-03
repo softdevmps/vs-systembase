@@ -3,7 +3,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Home from '../views/Home.vue'
-import Aibase from '../views/Aibase.vue'
+import SistemaRuntime from '../views/Sistema/SistemaRuntime.vue'
 import MainLayout from '../components/Layouts/MainLayout.vue'
 
 const routes = [
@@ -15,8 +15,8 @@ const routes = [
     component: MainLayout,
     children: [
       { path: 'home', component: Home },
-      { path: 'aibase', component: Aibase },
-      { path: ':autoPath(.*)*', redirect: '/aibase' }
+      { path: ':entity', component: SistemaRuntime },
+      { path: ':autoPath(.*)*', redirect: '/home' }
     ]
   }
 ]

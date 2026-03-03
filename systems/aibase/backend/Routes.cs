@@ -16,17 +16,33 @@ namespace Backend
                 public const string Ping = "api/v1/dev/ping";
             }
 
-            public static class Aibase
+            public static class Templates
             {
-                public const string ObtenerTemplates = "api/v1/aibase/templates";
-                public const string ObtenerProyectos = "api/v1/aibase/projects";
-                public const string ObtenerProyectoPorId = "api/v1/aibase/projects/{id}";
-                public const string CrearProyecto = "api/v1/aibase/projects";
-                public const string ObtenerRunsProyecto = "api/v1/aibase/projects/{projectId}/runs";
-                public const string CrearRunProyecto = "api/v1/aibase/projects/{projectId}/runs";
-                public const string ObtenerRunPorId = "api/v1/aibase/runs/{id}";
-                public const string SincronizarRunPorId = "api/v1/aibase/runs/{id}/sync";
+                public const string Obtener = "api/v1/templates";
+                public const string ObtenerPorId = "api/v1/templates/{id}";
+                public const string Crear = "api/v1/templates";
+                public const string Editar = "api/v1/templates/{id}";
+                public const string Eliminar = "api/v1/templates/{id}";
             }
+
+            public static class Projects
+            {
+                public const string Obtener = "api/v1/projects";
+                public const string ObtenerPorId = "api/v1/projects/{id}";
+                public const string Crear = "api/v1/projects";
+                public const string Editar = "api/v1/projects/{id}";
+                public const string Eliminar = "api/v1/projects/{id}";
+            }
+
+            public static class Runs
+            {
+                public const string Obtener = "api/v1/runs";
+                public const string ObtenerPorId = "api/v1/runs/{id}";
+                public const string Crear = "api/v1/runs";
+                public const string Editar = "api/v1/runs/{id}";
+                public const string Eliminar = "api/v1/runs/{id}";
+            }
+
         }
     }
 }

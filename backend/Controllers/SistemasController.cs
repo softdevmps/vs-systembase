@@ -8,6 +8,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text.Json;
 
 namespace Backend.Controllers
 {
@@ -264,6 +265,8 @@ namespace Backend.Controllers
 
             startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
             startInfo.Environment["DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER"] = "1";
+            var backendPort = GetBackendPort(repoRoot, id, sistema.Slug);
+            startInfo.Environment["ASPNETCORE_URLS"] = $"http://localhost:{backendPort}";
 
             var process = Process.Start(startInfo);
             if (process == null)
@@ -487,8 +490,10 @@ namespace Backend.Controllers
         {
             try
             {
+                var repoRoot = Directory.GetParent(_env.ContentRootPath)?.FullName ?? _env.ContentRootPath;
+                var sistema = SistemasGestor.ObtenerPorId(systemId);
                 var basePath = NormalizeApiBase(BackendConfigGestor.ObtenerPorSistema(systemId)?.System?.ApiBase);
-                var port = 5032 + systemId;
+                var port = GetBackendPort(repoRoot, systemId, sistema?.Slug);
                 var url = $"http://localhost:{port}{basePath}/dev/ping";
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
                 using var response = await Http.GetAsync(url, cts.Token);
@@ -505,6 +510,42 @@ namespace Backend.Controllers
             var value = string.IsNullOrWhiteSpace(apiBase) ? "api/v1" : apiBase.Trim();
             value = value.Trim('/');
             return "/" + value;
+        }
+
+        private static int GetBackendPort(string repoRoot, int systemId, string? systemSlug)
+        {
+            try
+            {
+                var registryPath = Path.Combine(repoRoot, "systems", "ports.json");
+                if (!System.IO.File.Exists(registryPath))
+                    return 5032 + systemId;
+
+                using var stream = System.IO.File.OpenRead(registryPath);
+                using var doc = JsonDocument.Parse(stream);
+                if (!doc.RootElement.TryGetProperty("systems", out var systemsElement) || systemsElement.ValueKind != JsonValueKind.Array)
+                    return 5032 + systemId;
+
+                foreach (var item in systemsElement.EnumerateArray())
+                {
+                    var slug = item.TryGetProperty("slug", out var slugEl) ? slugEl.GetString() : null;
+                    var id = item.TryGetProperty("id", out var idEl) ? idEl.GetInt32() : 0;
+                    var port = item.TryGetProperty("port", out var portEl) ? portEl.GetInt32() : 0;
+                    if (port <= 0)
+                        continue;
+
+                    if (!string.IsNullOrWhiteSpace(systemSlug) && string.Equals(slug, systemSlug, StringComparison.OrdinalIgnoreCase))
+                        return port;
+
+                    if (id == systemId)
+                        return port;
+                }
+            }
+            catch
+            {
+                // fallback by convention
+            }
+
+            return 5032 + systemId;
         }
 
         private static int GetFrontendPort(int systemId)

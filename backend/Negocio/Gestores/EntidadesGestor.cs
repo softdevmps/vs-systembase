@@ -1,6 +1,7 @@
 using Backend.Data;
 using Backend.Models.Entidades;
 using Backend.Models.Sistemas;
+using Backend.Utils;
 using Microsoft.EntityFrameworkCore;
 
 namespace Backend.Negocio.Gestores
@@ -10,6 +11,30 @@ namespace Backend.Negocio.Gestores
         public static List<EntidadResponse> ObtenerPorSistema(int systemId)
         {
             using var context = new SystemBaseContext();
+
+            var entities = context.Entities
+                .Where(e => e.SystemId == systemId)
+                .OrderBy(e => e.SortOrder)
+                .ThenBy(e => e.Id)
+                .Select(e => new EntidadResponse
+                {
+                    Id = e.Id,
+                    SystemId = e.SystemId,
+                    Name = e.Name,
+                    TableName = e.TableName,
+                    DisplayName = e.DisplayName,
+                    Description = e.Description,
+                    IsActive = e.IsActive,
+                    SortOrder = e.SortOrder
+                })
+                .ToList();
+
+            if (entities.Count > 0)
+                return entities;
+
+            var seeded = DbSeeder.EnsureAibaseMetadataOnDemand(context, systemId);
+            if (!seeded)
+                return entities;
 
             return context.Entities
                 .Where(e => e.SystemId == systemId)

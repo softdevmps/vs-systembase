@@ -239,6 +239,13 @@ Se agrego un selector de sistemas por rol:
 - Internamente se asignan todos los `sb.SystemMenus` del sistema al rol.
 - El sidebar filtra por rol.
 
+## 11. Novedades de fábrica (corte actual)
+- El arranque de backend desde **Herramientas** ahora resuelve puerto por `systems/ports.json` (no solo por convención `5032 + id`).
+- Seed on-demand para `aibase`:
+  - si un sistema `aibase` no tiene metadata de entidades/campos, se carga automáticamente al consultar entidades.
+- Runtime Home base actualizado a dashboard genérico por entidad:
+  - evita acople con widgets específicos de `mapeo` en sistemas nuevos.
+
 Endpoints:
 - `GET /api/v1/roles/{id}/system-menus`
 - `PUT /api/v1/roles/{id}/system-menus`

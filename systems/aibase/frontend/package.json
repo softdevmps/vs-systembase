@@ -1,12 +1,12 @@
 {
-  "name": "aibase-frontend",
+  "name": "frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --port 5177",
+    "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --port 4177"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@mdi/font": "^7.4.47",

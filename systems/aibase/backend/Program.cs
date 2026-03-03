@@ -77,8 +77,6 @@ builder.Services.AddSwaggerGen(c =>
 
 var app = builder.Build();
 
-AibaseSchemaMigrator.EnsureSchema(app.Services, app.Logger);
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

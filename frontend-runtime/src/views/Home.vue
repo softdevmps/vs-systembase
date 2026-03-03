@@ -6,19 +6,28 @@
           <div class="hero-content">
             <div class="hero-text">
               <div class="hero-icon">
-                <v-icon color="primary" size="26">mdi-chart-areaspline</v-icon>
+                <v-icon color="primary" size="26">mdi-chart-box-outline</v-icon>
               </div>
               <div>
                 <h1>Panel general</h1>
-                <p>Vista rápida del estado del sistema y la calidad de los datos.</p>
+                <p>Vista rápida de entidades y actividad reciente.</p>
               </div>
             </div>
             <div class="hero-actions">
-              <v-btn class="sb-btn ghost" variant="text" @click="goTo(incidentesRoute)">
-                Ver incidentes
+              <v-btn
+                v-if="primaryEntity"
+                class="sb-btn ghost"
+                variant="text"
+                @click="goToEntity(primaryEntity)"
+              >
+                Ver {{ primaryEntity.label }}
               </v-btn>
-              <v-btn class="sb-btn primary" @click="goTo(jobsRoute)">
-                Ver jobs
+              <v-btn
+                v-if="secondaryEntity"
+                class="sb-btn primary"
+                @click="goToEntity(secondaryEntity)"
+              >
+                Ver {{ secondaryEntity.label }}
               </v-btn>
             </div>
           </div>
@@ -40,32 +49,49 @@
       </v-col>
     </v-row>
 
+    <v-alert
+      v-if="error"
+      class="mt-4"
+      type="warning"
+      variant="tonal"
+      density="comfortable"
+      border="start"
+      icon="mdi-alert-circle-outline"
+      :text="error"
+    />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="5">
         <v-card class="card">
           <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2" color="primary">mdi-map-marker-check-outline</v-icon>
-            Calidad de ubicaciones
+            <v-icon class="mr-2" color="primary">mdi-table-large</v-icon>
+            Registros por entidad
           </v-card-title>
           <v-divider />
           <v-card-text>
-            <div class="progress-row">
-              <span>Con coordenadas</span>
-              <span>{{ coordsWith }} / {{ totalIncidentes }}</span>
+            <div v-if="loading" class="sb-skeleton" style="height: 160px;"></div>
+            <div v-else-if="entitySummaries.length === 0" class="text-caption text-medium-emphasis">
+              No hay entidades configuradas.
             </div>
-            <v-progress-linear :model-value="coordsRatio" color="green" height="8" rounded />
-
-            <div class="progress-row mt-3">
-              <span>Sin coordenadas</span>
-              <span>{{ coordsWithout }}</span>
+            <div v-else class="entity-list">
+              <div v-for="summary in entitySummaries" :key="summary.key" class="entity-item">
+                <div class="entity-head">
+                  <div class="entity-title">
+                    <v-icon size="16" class="mr-1" :color="summary.ok ? 'primary' : 'warning'">
+                      {{ summary.icon }}
+                    </v-icon>
+                    {{ summary.label }}
+                  </div>
+                  <strong>{{ summary.count }}</strong>
+                </div>
+                <v-progress-linear
+                  :model-value="getEntityBarValue(summary)"
+                  :color="summary.ok ? 'primary' : 'warning'"
+                  height="7"
+                  rounded
+                />
+              </div>
             </div>
-            <v-progress-linear :model-value="100 - coordsRatio" color="orange" height="8" rounded />
-
-            <div class="progress-row mt-3">
-              <span>Confianza promedio</span>
-              <span>{{ avgConfidenceLabel }}</span>
-            </div>
-            <v-progress-linear :model-value="avgConfidence * 100" color="primary" height="8" rounded />
           </v-card-text>
         </v-card>
       </v-col>
@@ -82,66 +108,19 @@
           <v-divider />
           <v-card-text>
             <div v-if="loading" class="sb-skeleton" style="height: 120px;"></div>
-            <div v-else-if="recentIncidentes.length === 0" class="text-caption text-medium-emphasis">
-              No hay incidentes recientes.
+            <div v-else-if="recentActivity.length === 0" class="text-caption text-medium-emphasis">
+              No hay actividad reciente.
             </div>
             <div v-else class="recent-list">
-              <div v-for="item in recentIncidentes" :key="item.Id || item.id" class="recent-item">
+              <div v-for="item in recentActivity" :key="item.key" class="recent-item">
                 <div class="recent-dot"></div>
                 <div>
-                  <div class="recent-title">
-                    {{ item.LugarNormalizado || item.LugarTexto || 'Sin lugar' }}
-                  </div>
+                  <div class="recent-title">{{ item.title }}</div>
                   <div class="recent-meta">
-                    {{ formatDate(item.FechaHora || item.CreatedAt) }} · {{ item.Descripcion || 'Sin descripción' }}
+                    {{ item.entityLabel }} · {{ item.subtitle }}
                   </div>
                 </div>
               </div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-    </v-row>
-
-    <v-row class="mt-4" dense>
-      <v-col cols="12" md="6">
-        <v-card class="card">
-          <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2" color="primary">mdi-waveform</v-icon>
-            Audio
-          </v-card-title>
-          <v-divider />
-          <v-card-text class="split-stats">
-            <div>
-              <div class="stat-label">Audios cargados</div>
-              <div class="stat-value">{{ totalAudios }}</div>
-            </div>
-            <div>
-              <div class="stat-label">Duración total</div>
-              <div class="stat-value">{{ totalDurationLabel }}</div>
-            </div>
-          </v-card-text>
-        </v-card>
-      </v-col>
-      <v-col cols="12" md="6">
-        <v-card class="card">
-          <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2" color="primary">mdi-cogs</v-icon>
-            Jobs
-          </v-card-title>
-          <v-divider />
-          <v-card-text class="split-stats">
-            <div>
-              <div class="stat-label">En proceso</div>
-              <div class="stat-value">{{ jobsProcessing }}</div>
-            </div>
-            <div>
-              <div class="stat-label">Errores</div>
-              <div class="stat-value">{{ jobsError }}</div>
-            </div>
-            <div>
-              <div class="stat-label">Completados</div>
-              <div class="stat-value">{{ jobsDone }}</div>
             </div>
           </v-card-text>
         </v-card>
@@ -160,31 +139,40 @@ import { toKebab } from '../utils/slug'
 const router = useRouter()
 const loading = ref(true)
 const error = ref('')
+const entityStates = ref([])
 
-const incidentes = ref([])
-const jobs = ref([])
-const audios = ref([])
-
-const entities = frontendConfig?.entities || []
-
-const incidentesRoute = computed(() => {
-  const entity = entities.find(e => (e?.name || '').toLowerCase() === 'incidentes')
-  return `/${toKebab(entity?.routeSlug || entity?.name || 'incidentes')}`
-})
-
-const jobsRoute = computed(() => {
-  const entity = entities.find(e => (e?.name || '').toLowerCase().includes('incidentejobs'))
-  return `/${toKebab(entity?.routeSlug || entity?.name || 'incidente-jobs')}`
-})
-
-function goTo(route) {
-  router.push(route)
+function normalizeRecord(record) {
+  if (!record || typeof record !== 'object') return record
+  const copy = { ...record }
+  const keyMap = new Map(Object.keys(copy).map(k => [k.toLowerCase(), k]))
+  const ensure = name => {
+    if (copy[name] !== undefined) return
+    const matchKey = keyMap.get(String(name).toLowerCase())
+    if (matchKey) copy[name] = copy[matchKey]
+  }
+  ;[
+    'Id',
+    'Name',
+    'Title',
+    'Slug',
+    'Key',
+    'Descripcion',
+    'Description',
+    'CreatedAt',
+    'UpdatedAt',
+    'UpdateAt',
+    'FechaHora',
+    'Status'
+  ].forEach(ensure)
+  return copy
 }
 
-function parseNumber(value) {
-  if (value == null) return null
-  const num = Number(String(value).replace(',', '.'))
-  return Number.isFinite(num) ? num : null
+function pick(obj, ...keys) {
+  for (const key of keys) {
+    const value = obj?.[key]
+    if (value !== undefined && value !== null && String(value).trim() !== '') return value
+  }
+  return null
 }
 
 function parseDateValue(raw) {
@@ -199,7 +187,6 @@ function parseDateValue(raw) {
   }
   const str = String(raw).trim()
   if (!str) return null
-
   const direct = new Date(str)
   if (!Number.isNaN(direct.getTime())) return direct.getTime()
 
@@ -210,132 +197,136 @@ function parseDateValue(raw) {
   let year = Number(match[3])
   const hour = match[4] ? Number(match[4]) : 0
   const minute = match[5] ? Number(match[5]) : 0
-  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null
   if (year < 100) year += 2000
   const parsed = new Date(year, month - 1, day, hour, minute)
   return Number.isNaN(parsed.getTime()) ? null : parsed.getTime()
 }
 
-function normalizeRecord(record) {
-  if (!record || typeof record !== 'object') return record
-  const copy = { ...record }
-  const keyMap = new Map(Object.keys(copy).map(k => [k.toLowerCase(), k]))
-  const ensure = name => {
-    if (copy[name] !== undefined) return
-    const matchKey = keyMap.get(String(name).toLowerCase())
-    if (matchKey) copy[name] = copy[matchKey]
-  }
-  ;[
-    'LugarNormalizado',
-    'LugarTexto',
-    'Descripcion',
-    'FechaHora',
-    'CreatedAt',
+const entityDefs = computed(() => (frontendConfig?.entities || [])
+  .filter(e => e?.name)
+  .map(entity => ({
+    key: toKebab(entity?.routeSlug || entity?.name),
+    route: `/${toKebab(entity?.routeSlug || entity?.name)}`,
+    slug: toKebab(entity?.routeSlug || entity?.name),
+    label: entity?.menuLabel || entity?.displayName || entity?.name,
+    icon: entity?.menuIcon || 'mdi-table'
+  })))
+
+const primaryEntity = computed(() => entityDefs.value[0] || null)
+const secondaryEntity = computed(() => entityDefs.value[1] || null)
+
+function goToEntity(entity) {
+  if (!entity?.route) return
+  router.push(entity.route)
+}
+
+const loadedCount = computed(() => entityStates.value.filter(e => e.ok).length)
+const loadErrors = computed(() => entityStates.value.filter(e => !e.ok).length)
+const entitiesWithDataCount = computed(() => entityStates.value.filter(e => e.count > 0).length)
+const totalRecords = computed(() => entityStates.value.reduce((acc, item) => acc + (item.count || 0), 0))
+
+function getRecordTimestamp(item) {
+  return parseDateValue(pick(
+    item,
+    'UpdatedAt',
     'UpdateAt',
-    'Lat',
-    'Lng',
-    'Confidence'
-  ].forEach(ensure)
-  return copy
+    'updatedAt',
+    'updateAt',
+    'CreatedAt',
+    'createdAt',
+    'FechaHora',
+    'fechaHora'
+  ))
 }
 
-function hasCoords(item) {
-  const lat = parseNumber(item?.Lat ?? item?.lat)
-  const lng = parseNumber(item?.Lng ?? item?.lng)
-  return lat != null && lng != null
-}
-
-function getStatus(item) {
-  return (item?.Status ?? item?.status ?? item?.Step ?? item?.step ?? '').toString().toLowerCase()
-}
-
-const totalIncidentes = computed(() => incidentes.value.length)
-const coordsWith = computed(() => incidentes.value.filter(hasCoords).length)
-const coordsWithout = computed(() => Math.max(totalIncidentes.value - coordsWith.value, 0))
-const coordsRatio = computed(() => totalIncidentes.value ? Math.round((coordsWith.value / totalIncidentes.value) * 100) : 0)
-
-const avgConfidence = computed(() => {
-  const values = incidentes.value
-    .map(i => parseNumber(i?.Confidence ?? i?.confidence))
-    .filter(v => v != null)
-  if (!values.length) return 0
-  return values.reduce((a, b) => a + b, 0) / values.length
-})
-
-const avgConfidenceLabel = computed(() => avgConfidence.value ? `${avgConfidence.value.toFixed(2)}` : '—')
-
-const jobsProcessing = computed(() => jobs.value.filter(j => ['processing', 'pending', 'running', 'queued'].includes(getStatus(j))).length)
-const jobsError = computed(() => jobs.value.filter(j => getStatus(j) === 'error').length)
-const jobsDone = computed(() => jobs.value.filter(j => getStatus(j) === 'done').length)
-
-const totalAudios = computed(() => audios.value.length)
-const totalDuration = computed(() => audios.value
-  .map(a => parseNumber(a?.DurationSec ?? a?.durationSec))
-  .filter(v => v != null)
-  .reduce((a, b) => a + b, 0))
-
-const totalDurationLabel = computed(() => {
-  if (!totalDuration.value) return '—'
-  const minutes = Math.floor(totalDuration.value / 60)
-  const seconds = Math.round(totalDuration.value % 60)
-  return `${minutes}m ${seconds}s`
-})
-
-function getDateValue(item) {
-  const raw = item?.UpdateAt ?? item?.CreatedAt ?? item?.FechaHora ?? item?.updateAt ?? item?.createdAt ?? item?.fechaHora
-  return parseDateValue(raw)
-}
-
-function getSortValue(item) {
-  const dateValue = getDateValue(item)
-  if (dateValue) return dateValue
-  const idValue = parseNumber(item?.Id ?? item?.id)
-  return idValue ?? 0
-}
-
-const recentIncidentes = computed(() => {
-  return [...incidentes.value]
-    .sort((a, b) => getSortValue(b) - getSortValue(a))
-    .slice(0, 5)
-})
-
-const lastUpdatedLabel = computed(() => {
-  if (!incidentes.value.length) return '—'
-  const times = incidentes.value.map(getDateValue).filter(t => t != null)
-  if (!times.length) return '—'
-  return new Date(Math.max(...times)).toLocaleString('es-AR')
+const last24hRecords = computed(() => {
+  const limit = Date.now() - (24 * 60 * 60 * 1000)
+  let total = 0
+  for (const entity of entityStates.value) {
+    for (const item of entity.items || []) {
+      const ts = getRecordTimestamp(item)
+      if (ts && ts >= limit) total++
+    }
+  }
+  return total
 })
 
 const statCards = computed(() => ([
-  { label: 'Incidentes', value: totalIncidentes.value, icon: 'mdi-alert-circle-outline' },
-  { label: 'Con coords', value: coordsWith.value, icon: 'mdi-map-marker', color: 'green' },
-  { label: 'Sin coords', value: coordsWithout.value, icon: 'mdi-map-marker-off-outline', color: 'orange' },
-  { label: 'Jobs activos', value: jobsProcessing.value, icon: 'mdi-timer-sand', color: 'orange' },
-  { label: 'Errores', value: jobsError.value, icon: 'mdi-alert-outline', color: 'red' },
-  { label: 'Audios', value: totalAudios.value, icon: 'mdi-waveform' }
+  { label: 'Entidades', value: entityDefs.value.length, icon: 'mdi-table-large' },
+  { label: 'Cargadas', value: loadedCount.value, icon: 'mdi-database-check', color: 'green' },
+  { label: 'Con datos', value: entitiesWithDataCount.value, icon: 'mdi-format-list-bulleted-square', color: 'teal' },
+  { label: 'Registros', value: totalRecords.value, icon: 'mdi-counter' },
+  { label: 'Últimas 24h', value: last24hRecords.value, icon: 'mdi-timer-outline', color: 'primary' },
+  { label: 'Fallas carga', value: loadErrors.value, icon: 'mdi-alert-circle-outline', color: 'warning' }
 ]))
 
-function formatDate(value) {
-  const parsed = parseDateValue(value)
-  if (!parsed) return ''
-  return new Date(parsed).toLocaleString('es-AR')
+const maxEntityCount = computed(() => Math.max(...entityStates.value.map(e => e.count || 0), 1))
+function getEntityBarValue(summary) {
+  if (!summary?.count) return summary?.ok ? 8 : 4
+  return Math.round((summary.count / maxEntityCount.value) * 100)
 }
+
+const entitySummaries = computed(() => [...entityStates.value]
+  .sort((a, b) => (b.count || 0) - (a.count || 0))
+  .slice(0, 8))
+
+function buildRecentTitle(item) {
+  const id = pick(item, 'Id', 'id')
+  return String(
+    pick(item, 'Name', 'name', 'Title', 'title', 'Slug', 'slug', 'Key', 'key', 'Descripcion', 'Description')
+    || (id != null ? `Registro #${id}` : 'Registro')
+  )
+}
+
+function formatDate(value) {
+  if (!value) return 'Sin fecha'
+  return new Date(value).toLocaleString('es-AR')
+}
+
+const recentActivity = computed(() => {
+  const rows = []
+  for (const entity of entityStates.value) {
+    for (const item of entity.items || []) {
+      const rowIndex = rows.length
+      const ts = getRecordTimestamp(item)
+      rows.push({
+        key: `${entity.key}-${pick(item, 'Id', 'id', 'Key', 'key', 'Slug', 'slug') || rowIndex}`,
+        entityLabel: entity.label,
+        title: buildRecentTitle(item),
+        subtitle: formatDate(ts),
+        sortValue: ts || 0
+      })
+    }
+  }
+  return rows
+    .sort((a, b) => b.sortValue - a.sortValue)
+    .slice(0, 8)
+})
+
+const lastUpdatedLabel = computed(() => {
+  const timestamps = recentActivity.value.map(item => item.sortValue).filter(Boolean)
+  if (!timestamps.length) return '—'
+  return new Date(Math.max(...timestamps)).toLocaleString('es-AR')
+})
 
 async function load() {
   loading.value = true
   error.value = ''
-  const results = await Promise.allSettled([
-    runtimeApi.list('incidentes'),
-    runtimeApi.list('incidente-jobs'),
-    runtimeApi.list('incidente-audio')
-  ])
 
-  const [incRes, jobRes, audioRes] = results
-  incidentes.value = incRes.status === 'fulfilled' ? (incRes.value?.data || []).map(normalizeRecord) : []
-  jobs.value = jobRes.status === 'fulfilled' ? (jobRes.value?.data || []).map(normalizeRecord) : []
-  audios.value = audioRes.status === 'fulfilled' ? (audioRes.value?.data || []).map(normalizeRecord) : []
-  if (results.some(r => r.status === 'rejected')) {
-    error.value = 'No se pudieron cargar algunos datos.'
+  const defs = entityDefs.value
+  const results = await Promise.all(defs.map(async def => {
+    try {
+      const response = await runtimeApi.list(def.slug)
+      const items = Array.isArray(response?.data) ? response.data.map(normalizeRecord) : []
+      return { ...def, ok: true, count: items.length, items }
+    } catch (err) {
+      return { ...def, ok: false, count: 0, items: [], error: err?.message || 'Error' }
+    }
+  }))
+
+  entityStates.value = results
+  if (results.some(r => !r.ok)) {
+    error.value = 'No se pudieron cargar algunas entidades.'
   }
   loading.value = false
 }
@@ -425,6 +416,28 @@ onMounted(load)
   font-size: 0.85rem;
   color: var(--sb-text-soft, var(--sb-muted));
   margin-bottom: 6px;
+}
+
+.entity-list {
+  display: grid;
+  gap: 14px;
+}
+
+.entity-item {
+  display: grid;
+  gap: 6px;
+}
+
+.entity-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.entity-title {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
 }
 
 .recent-list {

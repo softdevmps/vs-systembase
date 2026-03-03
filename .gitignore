@@ -3,6 +3,10 @@ systems/mapeo
 !systems/.gitkeep
 .DS_Store
 
+bin/
+obj/
+.env
+.restart
 
 # local env files
 .env

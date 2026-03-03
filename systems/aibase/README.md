@@ -1,37 +1,39 @@
-# AIBase (independiente)
+# AIBase (runtime generado)
 
-AIBase ahora vive como sistema separado dentro de `systems/aibase`, sin acoplar código al backend/frontend raíz de SystemBase.
+AIBase corre como sistema dentro del ecosistema SystemBase, desacoplado de `mapeo`, en `systems/aibase`.
 
 ## Estructura
-- `systems/aibase/backend` -> API .NET 8 independiente (`AIBase.Backend.csproj`)
-- `systems/aibase/frontend` -> UI Vue/Vuetify independiente
-- `systems/aibase/sql` -> scripts de esquema `sb_ai`
-- `systems/aibase/engine` -> placeholder para engine Python/FastAPI
-- `systems/aibase/docker` -> placeholder para compose/infra propia
+- `systems/aibase/backend` -> API .NET 8 runtime.
+- `systems/aibase/frontend` -> frontend runtime Vue 3 + Vuetify.
+- `systems/aibase/sql` -> scripts auxiliares (`sb_ai`).
+- `systems/aibase/engine` -> placeholder para motor IA.
+- `systems/aibase/docker` -> placeholder de infraestructura.
+
+## Modelo actual
+- `sb_ai.Templates`
+- `sb_ai.Projects` (FK: `TemplateId -> Templates.Id`)
+- `sb_ai.Runs` (FK: `ProjectId -> Projects.Id`)
 
 ## Backend
 ### Endpoints
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/registrar`
-- `GET /api/v1/aibase/templates`
-- `GET /api/v1/aibase/projects`
-- `GET /api/v1/aibase/projects/{id}`
-- `POST /api/v1/aibase/projects`
-- `GET /api/v1/aibase/projects/{projectId}/runs`
-- `POST /api/v1/aibase/projects/{projectId}/runs`
-- `GET /api/v1/aibase/runs/{id}`
-- `POST /api/v1/aibase/runs/{id}/sync`
+- `GET|POST /api/v1/templates`
+- `GET|PUT|DELETE /api/v1/templates/{id}`
+- `GET|POST /api/v1/projects`
+- `GET|PUT|DELETE /api/v1/projects/{id}`
+- `GET|POST /api/v1/runs`
+- `GET|PUT|DELETE /api/v1/runs/{id}`
 
 ### Configuración
-Copiar:
 ```bash
 cd systems/aibase/backend
 cp .env.example .env
 ```
-Variables clave:
+
+Variables mínimas:
 - `DB_SERVER`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
 - `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRE_MINUTES`
-- `AIBASE_ENGINE_ENABLED`, `AIBASE_ENGINE_BASE_URL`, `AIBASE_ENGINE_TIMEOUT_SECONDS`
 
 ### Run local
 ```bash
@@ -39,6 +41,7 @@ cd systems/aibase/backend
 dotnet restore
 dotnet watch run
 ```
+
 Backend default: `http://localhost:5036`
 
 ## Frontend
@@ -47,10 +50,9 @@ cd systems/aibase/frontend
 npm install
 npm run dev
 ```
+
 Frontend default: `http://localhost:5177`
 
-## SQL
-- `systems/aibase/sql/001_sb_ai_init.sql`
-- `systems/aibase/sql/002_sb_ai_runs.sql`
-
-El backend también crea/valida estas tablas automáticamente al iniciar (`AibaseSchemaMigrator`).
+## Notas
+- El Home de runtime es genérico por entidad (sin widgets específicos de mapeo).
+- El sistema se administra desde SystemBase (Diseñador y herramientas), pero se ejecuta de forma separada en `systems/aibase`.

@@ -4,7 +4,7 @@ Monorepo con dos líneas principales:
 
 - **SystemBase (fábrica)**: plataforma para diseñar, publicar y operar sistemas CRUD.
 - **Mapeo (producto)**: runtime de incidentes con audio, transcripción, extracción y geocodificación.
-- **AIBase (en desarrollo)**: plataforma metadata-driven para crear y educar IAs por dominio.
+- **AIBase (producto en desarrollo)**: sistema generado por SystemBase para pipeline y gestión de proyectos IA.
 
 ## Componentes
 
@@ -13,9 +13,9 @@ Monorepo con dos líneas principales:
 - `frontend-runtime/`: plantilla runtime base que usa el generador.
 - `systems/mapeo/backend/`: backend del sistema de mapeo.
 - `systems/mapeo/frontend/`: frontend del sistema de mapeo.
-- `systems/aibase/backend/`: backend independiente de AIBase (.NET 8).
-- `systems/aibase/frontend/`: frontend independiente de AIBase (Vue 3 + Vuetify).
-- `systems/aibase/sql/`: scripts SQL de AIBase (`sb_ai`).
+- `systems/aibase/backend/`: backend runtime de AIBase (.NET 8).
+- `systems/aibase/frontend/`: frontend runtime de AIBase (Vue 3 + Vuetify).
+- `systems/aibase/sql/`: scripts SQL de apoyo (`sb_ai`).
 - `whisper-service/`: docker compose de Whisper ASR.
 - `llm-service/`: docker compose de Ollama.
 - `geocoder-service/`: docker compose de Nominatim (OSM local).
@@ -129,9 +129,9 @@ npm install
 npm run dev -- --port 5176
 ```
 
-## Levantar AIBase (producto independiente)
+## Levantar AIBase (sistema generado)
 
-### Backend AIBase
+### Backend
 
 ```bash
 cd systems/aibase/backend
@@ -140,7 +140,7 @@ dotnet restore
 dotnet watch run
 ```
 
-### Frontend AIBase
+### Frontend
 
 ```bash
 cd systems/aibase/frontend
@@ -172,6 +172,14 @@ npm run dev
 - Pipeline async: transcripción -> extracción -> geocodificación
 - Visualización de incidentes en tabla + mapa
 - Retry manual de jobs fallidos
+
+### AIBase (corte actual)
+
+- CRUD de `Templates`, `Projects`, `Runs`
+- Relaciones:
+  - `Projects.TemplateId -> Templates.Id`
+  - `Runs.ProjectId -> Projects.Id`
+- Home runtime genérico por entidades (métricas + actividad reciente)
 
 ## Troubleshooting
 
