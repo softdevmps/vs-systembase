@@ -40,6 +40,8 @@
       </ul>
     </v-alert>
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="4">
         <v-card class="card">
@@ -260,6 +262,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 
@@ -373,6 +376,16 @@ const rules = {
   max2000: v => String(v ?? '').length <= 2000 || 'Máximo 2000 caracteres',
   max20: v => String(v ?? '').length <= 20 || 'Máximo 20 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Tipo de modelo', description: 'Selecciona un preset para cargar un contrato base y pipeline sugerido.' },
+  { label: 'Key / Nombre / Versión', description: 'Identifican el template. La key debe ser única y estable.' },
+  { label: 'Objetivo del modelo', description: 'Describe claramente qué problema resuelve y qué salida debe entregar.' },
+  { label: 'Output Schema (JSON)', description: 'Contrato de salida consumido por dataset, evaluación y playground.' },
+  { label: 'Taxonomía / Labels', description: 'Define clases, etiquetas o categorías que el modelo puede usar.' },
+  { label: 'Reglas de validación', description: 'Restringe formatos y campos obligatorios para asegurar calidad.' },
+  { label: 'Etapas del pipeline', description: 'Activa o desactiva fases del workflow según el tipo de modelo.' }
+]
 
 function parseJson(text, fallback = null) {
   try {

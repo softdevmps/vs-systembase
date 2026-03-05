@@ -188,6 +188,7 @@ npm run dev
   6. Evaluación
   7. Deploy
   8. Playground
+- Cada etapa incluye guía contextual de opciones para onboarding de usuarios no técnicos.
 - Endpoint de orquestación AIBase:
   - `GET /api/v1/aibase/overview`
   - `GET /api/v1/aibase/projects/{projectId}/workflow`

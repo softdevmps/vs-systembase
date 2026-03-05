@@ -26,6 +26,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -408,6 +410,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -463,6 +466,15 @@ const rules = {
   max180: v => String(v ?? '').length <= 180 || 'Máximo 180 caracteres',
   max220: v => String(v ?? '').length <= 220 || 'Máximo 220 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Ambiente y orquestador', description: 'Indica dónde desplegar (dev/staging/prod) y con qué plataforma.' },
+  { label: 'Stack/servicio', description: 'Nombre operativo del servicio para identificarlo en ejecución.' },
+  { label: 'Endpoint y Health URL', description: 'Rutas públicas para consumo y verificación de disponibilidad.' },
+  { label: 'Replicas / Timeout / Concurrencia', description: 'Capacidad y límites operativos del servicio desplegado.' },
+  { label: 'CPU/Mem request', description: 'Recursos mínimos reservados para evitar inestabilidad.' },
+  { label: 'Env vars / Overrides JSON', description: 'Configuración avanzada del runtime sin tocar código.' }
+]
 
 function normalizeRecord(record) {
   if (!record || typeof record !== 'object') return record

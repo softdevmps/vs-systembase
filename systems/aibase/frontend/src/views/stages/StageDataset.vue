@@ -26,6 +26,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -322,6 +324,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -362,6 +365,15 @@ const rules = {
   max200: v => String(v ?? '').length <= 200 || 'Máximo 200 caracteres',
   max300: v => String(v ?? '').length <= 300 || 'Máximo 300 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Versión dataset', description: 'Etiqueta reproducible del dataset para auditoría y comparación de corridas.' },
+  { label: 'Fuente / Path', description: 'Indica de dónde se importan los datos crudos para construir el dataset.' },
+  { label: 'Split train/validation/test', description: 'Define la partición del dataset para entrenar y evaluar.' },
+  { label: 'Deduplicar / Normalizar / Drop null', description: 'Aplica limpieza automática antes de generar el dataset final.' },
+  { label: 'Mínimo registros / % nulos', description: 'Quality gates para evitar entrenar con datos insuficientes o sucios.' },
+  { label: 'Sample rows (JSON)', description: 'Muestra ejemplos de registros para validar mapeo y contrato antes de correr.' }
+]
 
 const sourceTypeOptions = [
   { title: 'CSV tabular', value: 'csv' },

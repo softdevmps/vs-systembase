@@ -26,6 +26,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -313,6 +315,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -368,6 +371,15 @@ const rules = {
   max200: v => String(v ?? '').length <= 200 || 'Máximo 200 caracteres',
   max300: v => String(v ?? '').length <= 300 || 'Máximo 300 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Modo de indexación', description: 'Incremental añade cambios; rebuild recrea todo el índice.' },
+  { label: 'Índice y vector store', description: 'Define dónde y cómo se almacenan los embeddings.' },
+  { label: 'Embedding model', description: 'Modelo que convierte texto en vectores para búsqueda semántica.' },
+  { label: 'Chunk size / overlap', description: 'Ajusta granularidad del contexto y continuidad entre fragmentos.' },
+  { label: 'Top K', description: 'Cantidad de fragmentos recuperados por consulta.' },
+  { label: 'Filtros JSON', description: 'Permite restringir documentos por metadata (idioma, dominio, etc.).' }
+]
 
 function normalizeRecord(record) {
   if (!record || typeof record !== 'object') return record

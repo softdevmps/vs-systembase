@@ -34,6 +34,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -372,11 +374,21 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 const route = useRoute()
 
 const MEDIA_MAX_BYTES = 8 * 1024 * 1024
+
+const optionGuideItems = [
+  { label: 'Tipo de input', description: 'Elige si probarás el modelo con texto, audio o imagen.' },
+  { label: 'Adjuntar archivo', description: 'Carga un archivo para pruebas multimodales y visualiza su preview.' },
+  { label: 'Incluir en contextJson', description: 'Inserta metadata/base64 del archivo en el contexto enviado al modelo.' },
+  { label: 'Contexto opcional JSON', description: 'Parámetros extra de inferencia (temperatura, maxTokens, etc.).' },
+  { label: 'Validación rápida', description: 'Chequea si la respuesta contiene un texto esperado para demo/gate rápido.' },
+  { label: 'Casos de demo', description: 'Permiten ejecutar escenarios predefinidos para mostrar resultados consistentes.' }
+]
 
 const loadingProjects = ref(false)
 const loadingWorkflow = ref(false)

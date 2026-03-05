@@ -26,6 +26,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -339,6 +341,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -399,6 +402,15 @@ const rules = {
   max80: v => String(v ?? '').length <= 80 || 'Máximo 80 caracteres',
   max120: v => String(v ?? '').length <= 120 || 'Máximo 120 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Suite y split', description: 'Define qué pruebas correr y sobre qué subconjunto del dataset evaluar.' },
+  { label: 'Threshold global', description: 'Umbral mínimo general para considerar el modelo apto.' },
+  { label: 'Min precision / recall', description: 'Gate de calidad para evitar pasar modelos con bajo desempeño.' },
+  { label: 'Sample size y latencia máxima', description: 'Controla tamaño de muestra y límite de performance esperado.' },
+  { label: 'Comparar baseline', description: 'Compara resultados contra una versión de referencia previa.' },
+  { label: 'Thresholds JSON', description: 'Permite reglas por métrica (f1, exactMatch, etc.) además del global.' }
+]
 
 function normalizeRecord(record) {
   if (!record || typeof record !== 'object') return record

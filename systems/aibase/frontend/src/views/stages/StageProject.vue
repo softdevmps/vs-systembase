@@ -28,6 +28,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -173,6 +175,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 
@@ -209,6 +212,14 @@ const rules = {
   max200: v => String(v ?? '').length <= 200 || 'Máximo 200 caracteres',
   max500: v => String(v ?? '').length <= 500 || 'Máximo 500 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Nombre y Slug', description: 'Definen la identidad del proyecto. El slug se usa en artefactos y rutas.' },
+  { label: 'Template', description: 'Vincula el proyecto con su contrato de entrada/salida y workflow base.' },
+  { label: 'Idioma', description: 'Idioma operativo esperado para prompts, datos y validaciones.' },
+  { label: 'Estado', description: 'Estado funcional del proyecto (draft, data_ready, trained, deployed, etc.).' },
+  { label: 'Tono', description: 'Orientación de estilo para respuestas del modelo (opcional).' }
+]
 
 function slugify(value) {
   return String(value || '')

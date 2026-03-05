@@ -26,6 +26,8 @@
       :text="error"
     />
 
+    <OptionGuide class="mt-4" :items="optionGuideItems" />
+
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
@@ -404,6 +406,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
+import OptionGuide from '../../components/Workflow/OptionGuide.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -472,6 +475,15 @@ const rules = {
   max120: v => String(v ?? '').length <= 120 || 'Máximo 120 caracteres',
   max200: v => String(v ?? '').length <= 200 || 'Máximo 200 caracteres'
 }
+
+const optionGuideItems = [
+  { label: 'Perfil de entrenamiento', description: 'Carga un set base de hiperparámetros (rápido, balanceado o calidad).' },
+  { label: 'Base model + Adapter name', description: 'Modelo base a ajustar y nombre del adapter LoRA resultante.' },
+  { label: 'Epochs / Batch / Learning rate', description: 'Controlan intensidad, velocidad y estabilidad del entrenamiento.' },
+  { label: 'LoRA rank/alpha/dropout', description: 'Ajustan capacidad del adapter y riesgo de sobreajuste.' },
+  { label: 'Precision / Quantization', description: 'Balance entre consumo de recursos, velocidad y calidad.' },
+  { label: 'Export compact model', description: 'Genera un artefacto ligero listo para despliegue portable.' }
+]
 
 function normalizeRecord(record) {
   if (!record || typeof record !== 'object') return record

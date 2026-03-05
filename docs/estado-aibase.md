@@ -70,6 +70,7 @@ Se consolidó un flujo de 8 etapas con vistas separadas:
   8. `StagePlayground` (prueba interactiva del modelo)
 - La navegación `pipeline`/`playground` legacy redirige a las etapas nuevas.
 - El estado de cada etapa se gobierna desde backend (`workflow`) con bloqueos por dependencias.
+- Se agregó ayuda contextual por etapa (`Qué significa cada opción`) para explicar campos y decisiones.
 - Playground multimodal:
   - modo `texto`, `audio` e `imagen`,
   - carga de archivo con preview,
