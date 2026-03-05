@@ -47,47 +47,46 @@ const menuItems = computed(() => {
       titulo: 'Home',
       icono: 'mdi-home',
       ruta: '/home'
+    },
+    {
+      id: 'workflow',
+      titulo: 'Workflow IA',
+      icono: 'mdi-source-branch',
+      children: [
+        { id: 'stage-template', titulo: '1. Template', icono: 'mdi-shape-plus', ruta: '/stage/template' },
+        { id: 'stage-project', titulo: '2. Proyecto', icono: 'mdi-folder-cog', ruta: '/stage/project' },
+        { id: 'stage-dataset', titulo: '3. Dataset', icono: 'mdi-database-cog', ruta: '/stage/dataset' },
+        { id: 'stage-rag', titulo: '4. RAG Index', icono: 'mdi-vector-link', ruta: '/stage/rag' },
+        { id: 'stage-train', titulo: '5. Train LoRA', icono: 'mdi-brain', ruta: '/stage/train' },
+        { id: 'stage-eval', titulo: '6. Evaluar', icono: 'mdi-chart-line', ruta: '/stage/eval' },
+        { id: 'stage-deploy', titulo: '7. Deploy', icono: 'mdi-rocket-launch', ruta: '/stage/deploy' },
+        { id: 'stage-playground', titulo: '8. Playground', icono: 'mdi-flask-outline', ruta: '/stage/playground' }
+      ]
+    },
+    {
+      id: 'group-management',
+      titulo: 'Gestión',
+      icono: 'mdi-view-list',
+      children: [
+        { id: 'templates', titulo: 'Templates', icono: 'mdi-table', ruta: '/templates' },
+        { id: 'projects', titulo: 'Proyectos', icono: 'mdi-table', ruta: '/projects' },
+        { id: 'runs', titulo: 'Runs', icono: 'mdi-table', ruta: '/runs' }
+      ]
     }
   ]
 
-  const incidentesGroup = {
-    id: 'group-incidentes',
-    titulo: 'Incidentes',
-    icono: 'mdi-folder-multiple-outline',
-    children: []
-  }
-
-  const isIncidenteRelated = entity => {
-    const name = String(entity?.name || '').toLowerCase()
-    const label = String(entity?.menuLabel || '').toLowerCase()
-    const slug = String(entityRoute(entity) || '').toLowerCase()
-    return (
-      name.includes('incidente') ||
-      label.includes('incidente') ||
-      slug.includes('incidente') ||
-      name.includes('catalogohechos') ||
-      label.includes('catalogohechos')
-    )
-  }
-
   entities.forEach(entity => {
+    const baseName = String(entity?.name || '').toLowerCase()
+    if (baseName === 'templates' || baseName === 'projects' || baseName === 'runs') return
+
     const menuItem = {
       id: entity.entityId ?? entity.id ?? entity.name,
       titulo: prettyTitle(entity.menuLabel || entity.displayName || entity.name),
       icono: entity.menuIcon || 'mdi-table',
       ruta: `/${entityRoute(entity)}`
     }
-
-    if (isIncidenteRelated(entity)) {
-      incidentesGroup.children.push(menuItem)
-    } else {
-      items.push(menuItem)
-    }
+    items.push(menuItem)
   })
-
-  if (incidentesGroup.children.length) {
-    items.push(incidentesGroup)
-  }
 
   return items
 })

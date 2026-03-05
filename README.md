@@ -179,7 +179,22 @@ npm run dev
 - Relaciones:
   - `Projects.TemplateId -> Templates.Id`
   - `Runs.ProjectId -> Projects.Id`
-- Home runtime genérico por entidades (métricas + actividad reciente)
+- Workflow guiado de 8 etapas:
+  1. Definir Template
+  2. Crear Proyecto
+  3. Build Dataset
+  4. RAG Index
+  5. Train LoRA
+  6. Evaluación
+  7. Deploy
+  8. Playground
+- Endpoint de orquestación AIBase:
+  - `GET /api/v1/aibase/overview`
+  - `GET /api/v1/aibase/projects/{projectId}/workflow`
+  - `GET /api/v1/aibase/projects/{projectId}/runs`
+  - `POST /api/v1/aibase/projects/{projectId}/run`
+  - `POST /api/v1/aibase/projects/{projectId}/infer`
+- Playground multimodal (texto/audio/imagen) para pruebas de demo post-deploy.
 
 ## Troubleshooting
 

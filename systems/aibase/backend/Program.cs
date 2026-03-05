@@ -47,6 +47,11 @@ builder.Services
     });
 
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddHttpClient("aibase-engine", client =>
+{
+    client.BaseAddress = new Uri(AppConfig.AIBASE_ENGINE_URL);
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(5, AppConfig.AIBASE_ENGINE_TIMEOUT_SECONDS));
+});
 builder.Services.AddSwaggerGen(c =>
 {
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme

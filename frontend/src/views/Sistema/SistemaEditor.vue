@@ -2906,14 +2906,26 @@ async function detenerBackend() {
     restartDialog.status = 'restarting'
     restartDialog.message = 'Deteniendo backend...'
 
-    await sistemaService.detenerBackend(systemId)
+    const { data } = await sistemaService.detenerBackend(systemId)
+    await checkBackendHealth()
 
-    backendHealth.status = 'offline'
-    restartDialog.status = 'online'
-    restartDialog.message = 'Backend detenido.'
-    setTimeout(() => {
-      restartDialog.open = false
-    }, 1200)
+    const apiStatus = (data?.status || data?.Status || '').toString().toLowerCase()
+    const sigueOnline = backendHealth.status === 'online'
+
+    if (!sigueOnline) {
+      restartDialog.status = 'online'
+      restartDialog.message = 'Backend detenido.'
+      setTimeout(() => {
+        restartDialog.open = false
+      }, 1200)
+      return
+    }
+
+    restartDialog.status = 'timeout'
+    restartDialog.message =
+      apiStatus === 'not_running'
+        ? 'El backend sigue online (otra instancia externa, por ejemplo Docker).'
+        : 'No se pudo confirmar la detencion: el backend sigue online.'
   } catch (error) {
     restartDialog.status = 'error'
     restartDialog.message = error?.response?.data?.message || error?.message || 'Error al detener backend.'
@@ -2976,14 +2988,26 @@ async function detenerFrontend() {
     frontendDialog.status = 'restarting'
     frontendDialog.message = 'Deteniendo frontend...'
 
-    await sistemaService.detenerFrontend(systemId)
+    const { data } = await sistemaService.detenerFrontend(systemId)
+    await checkFrontendHealth()
 
-    frontendHealth.status = 'offline'
-    frontendDialog.status = 'online'
-    frontendDialog.message = 'Frontend detenido.'
-    setTimeout(() => {
-      frontendDialog.open = false
-    }, 1200)
+    const apiStatus = (data?.status || data?.Status || '').toString().toLowerCase()
+    const sigueOnline = frontendHealth.status === 'online'
+
+    if (!sigueOnline) {
+      frontendDialog.status = 'online'
+      frontendDialog.message = 'Frontend detenido.'
+      setTimeout(() => {
+        frontendDialog.open = false
+      }, 1200)
+      return
+    }
+
+    frontendDialog.status = 'timeout'
+    frontendDialog.message =
+      apiStatus === 'not_running'
+        ? 'El frontend sigue online (otra instancia externa, por ejemplo Docker).'
+        : 'No se pudo confirmar la detencion: el frontend sigue online.'
   } catch (error) {
     frontendDialog.status = 'error'
     frontendDialog.message = error?.response?.data?.message || error?.message || 'Error al detener frontend.'

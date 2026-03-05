@@ -43,6 +43,15 @@ namespace Backend
                 public const string Eliminar = "api/v1/runs/{id}";
             }
 
+            public static class Aibase
+            {
+                public const string Overview = "api/v1/aibase/overview";
+                public const string RunsByProject = "api/v1/aibase/projects/{projectId}/runs";
+                public const string WorkflowByProject = "api/v1/aibase/projects/{projectId}/workflow";
+                public const string TriggerRun = "api/v1/aibase/projects/{projectId}/run";
+                public const string Infer = "api/v1/aibase/projects/{projectId}/infer";
+            }
+
         }
     }
 }
