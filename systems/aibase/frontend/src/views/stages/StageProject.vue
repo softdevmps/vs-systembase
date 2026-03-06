@@ -119,6 +119,13 @@
       </v-col>
 
       <v-col cols="12" md="5">
+        <StageAssistant
+          stage="project"
+          class="mb-4"
+          :project-id="selectedProjectId"
+          @apply="applyAssistantSuggestion"
+        />
+
         <v-card class="card">
           <v-card-title>Proyectos existentes</v-card-title>
           <v-divider />
@@ -176,6 +183,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
 import OptionGuide from '../../components/Workflow/OptionGuide.vue'
+import StageAssistant from '../../components/Workflow/StageAssistant.vue'
 
 const router = useRouter()
 
@@ -323,6 +331,22 @@ function loadProjectIntoForm(project) {
 function loadSelectedForEdit() {
   if (!selectedProject.value) return
   loadProjectIntoForm(selectedProject.value)
+}
+
+function applyAssistantSuggestion(fields) {
+  if (!fields || typeof fields !== 'object') return
+
+  const setIfString = key => {
+    const value = fields[key]
+    if (typeof value === 'string') form[key] = value
+  }
+
+  setIfString('name')
+  setIfString('slug')
+  setIfString('description')
+  setIfString('language')
+  setIfString('tone')
+  setIfString('status')
 }
 
 async function loadProjects() {

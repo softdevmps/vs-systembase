@@ -23,6 +23,10 @@
     "seedAdminPassword": "admin",
     "seedAdminEmail": "admin@local"
   },
+  "login": {
+    "title": "AIBase",
+    "tagline": "Fabrica de modelos de IA para crear, entrenar, evaluar y desplegar."
+  },
   "entities": [
     {
       "entityId": 10,

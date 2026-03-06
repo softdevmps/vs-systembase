@@ -33,5 +33,16 @@ namespace Backend.Utils
 
         public static string AIBASE_DEPLOY_HEALTH =>
             Environment.GetEnvironmentVariable("AIBASE_DEPLOY_HEALTH") ?? "http://localhost:5036/api/v1/dev/ping";
+
+        public static string AIBASE_DOCKER_PROJECT =>
+            Environment.GetEnvironmentVariable("AIBASE_DOCKER_PROJECT") ?? "aibase-stack";
+
+        public static string AIBASE_DOCKER_COMPOSE_FILE =>
+            Environment.GetEnvironmentVariable("AIBASE_DOCKER_COMPOSE_FILE") ?? "";
+
+        public static int AIBASE_DOCKER_COMMAND_TIMEOUT_SECONDS =>
+            int.TryParse(Environment.GetEnvironmentVariable("AIBASE_DOCKER_COMMAND_TIMEOUT_SECONDS"), out var seconds)
+                ? Math.Clamp(seconds, 5, 300)
+                : 45;
     }
 }

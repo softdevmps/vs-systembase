@@ -50,6 +50,14 @@ namespace Backend
                 public const string WorkflowByProject = "api/v1/aibase/projects/{projectId}/workflow";
                 public const string TriggerRun = "api/v1/aibase/projects/{projectId}/run";
                 public const string Infer = "api/v1/aibase/projects/{projectId}/infer";
+                public const string AssistantSuggest = "api/v1/aibase/assistant/suggest";
+                public const string DockerStatus = "api/v1/aibase/docker/status";
+                public const string DockerServices = "api/v1/aibase/docker/services";
+                public const string DockerUp = "api/v1/aibase/docker/up";
+                public const string DockerDown = "api/v1/aibase/docker/down";
+                public const string DockerRestart = "api/v1/aibase/docker/restart";
+                public const string DockerLogs = "api/v1/aibase/docker/logs";
+                public const string DockerServiceAction = "api/v1/aibase/docker/services/{service}/action";
             }
 
         }

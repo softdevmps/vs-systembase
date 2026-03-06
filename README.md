@@ -140,6 +140,11 @@ dotnet restore
 dotnet watch run
 ```
 
+Variables AIBase recomendadas para etapa Deploy/Docker:
+- `AIBASE_DOCKER_COMPOSE_FILE` (si vacío usa `systems/aibase/docker/docker-compose.yml`)
+- `AIBASE_DOCKER_PROJECT` (default `aibase-stack`)
+- `AIBASE_DOCKER_COMMAND_TIMEOUT_SECONDS`
+
 ### Frontend
 
 ```bash
@@ -189,13 +194,25 @@ npm run dev
   7. Deploy
   8. Playground
 - Cada etapa incluye guía contextual de opciones para onboarding de usuarios no técnicos.
+- Asistente IA por etapa (Template/Project/Dataset) para autocompletar sugerencias desde prompt libre.
 - Endpoint de orquestación AIBase:
   - `GET /api/v1/aibase/overview`
   - `GET /api/v1/aibase/projects/{projectId}/workflow`
   - `GET /api/v1/aibase/projects/{projectId}/runs`
   - `POST /api/v1/aibase/projects/{projectId}/run`
   - `POST /api/v1/aibase/projects/{projectId}/infer`
-- Playground multimodal (texto/audio/imagen) para pruebas de demo post-deploy.
+  - `POST /api/v1/aibase/assistant/suggest`
+  - `GET /api/v1/aibase/docker/status`
+  - `GET /api/v1/aibase/docker/services`
+  - `POST /api/v1/aibase/docker/up`
+  - `POST /api/v1/aibase/docker/down`
+  - `POST /api/v1/aibase/docker/restart`
+  - `GET /api/v1/aibase/docker/logs`
+  - `POST /api/v1/aibase/docker/services/{service}/action`
+- Stage Deploy con control Docker desde UI (stack, servicios, logs).
+- Playground adaptativo:
+  - chat “input -> respuesta” para templates conversacionales,
+  - modo texto/audio/imagen para pruebas de inferencia.
 
 ## Troubleshooting
 
@@ -214,6 +231,11 @@ Si falla al iniciar un backend generado, falta el proyecto runtime:
 ### Pipeline de audio falla por `ffmpeg`
 
 Instalar `ffmpeg` en el host y verificar que esté disponible en `PATH`.
+
+### AIBase Deploy muestra "No se encontró docker-compose.yml"
+
+- Definir `AIBASE_DOCKER_COMPOSE_FILE` en `systems/aibase/backend/.env` con ruta absoluta o relativa válida.
+- Si se deja vacío, AIBase intenta `systems/aibase/docker/docker-compose.yml`.
 
 ### Mapeo sin coordenadas
 

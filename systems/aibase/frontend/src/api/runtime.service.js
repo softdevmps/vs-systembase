@@ -39,5 +39,37 @@ export default {
 
   inferProject(projectId, input, contextJson = null) {
     return api.post(`/aibase/projects/${projectId}/infer`, { input, contextJson })
+  },
+
+  assistantSuggest(prompt, stage = null, projectId = null) {
+    return api.post('/aibase/assistant/suggest', { prompt, stage, projectId })
+  },
+
+  dockerStatus(stackName = null) {
+    return api.get('/aibase/docker/status', { params: { stackName } })
+  },
+
+  dockerServices(stackName = null) {
+    return api.get('/aibase/docker/services', { params: { stackName } })
+  },
+
+  dockerUp(payload = {}) {
+    return api.post('/aibase/docker/up', payload)
+  },
+
+  dockerDown(payload = {}) {
+    return api.post('/aibase/docker/down', payload)
+  },
+
+  dockerRestart(payload = {}) {
+    return api.post('/aibase/docker/restart', payload)
+  },
+
+  dockerLogs({ stackName = null, service = null, tail = 200 } = {}) {
+    return api.get('/aibase/docker/logs', { params: { stackName, service, tail } })
+  },
+
+  dockerServiceAction(service, action, stackName = null) {
+    return api.post(`/aibase/docker/services/${encodeURIComponent(service)}/action`, { action, stackName })
   }
 }

@@ -39,7 +39,7 @@
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
         <v-card class="card">
-          <v-card-title>Prueba interactiva</v-card-title>
+          <v-card-title>Uso del modelo</v-card-title>
           <v-divider />
           <v-card-text>
             <v-row dense>
@@ -57,123 +57,186 @@
                 />
               </v-col>
               <v-col cols="12" md="4" class="d-flex align-center">
-                <v-chip v-if="selectedTemplateKey" size="small" variant="tonal" color="primary">
-                  Template: {{ selectedTemplateKey }}
-                </v-chip>
+                <div class="d-flex align-center ga-2 flex-wrap">
+                  <v-chip v-if="selectedTemplateKey" size="small" variant="tonal" color="primary">
+                    Template: {{ selectedTemplateKey }}
+                  </v-chip>
+                  <v-chip v-if="templateProfileLabel" size="small" variant="tonal" color="indigo">
+                    {{ templateProfileLabel }}
+                  </v-chip>
+                </div>
               </v-col>
             </v-row>
 
-            <div class="input-mode mb-3">
-              <div class="text-caption text-medium-emphasis mb-1">Tipo de input</div>
-              <v-btn-toggle v-model="inputMode" mandatory density="comfortable" variant="outlined">
-                <v-btn value="text" prepend-icon="mdi-text">Texto</v-btn>
-                <v-btn value="audio" prepend-icon="mdi-microphone">Audio</v-btn>
-                <v-btn value="image" prepend-icon="mdi-image">Imagen</v-btn>
-              </v-btn-toggle>
+            <div v-if="templateProfileHint" class="text-caption text-medium-emphasis mb-3">
+              {{ templateProfileHint }}
             </div>
 
-            <v-textarea
-              v-model="inferInput"
-              label="Input textual"
-              rows="5"
-              auto-grow
-              density="comfortable"
-              placeholder="Escribe texto para inferencia o una descripción del archivo subido."
-            />
-
-            <v-card v-if="inputMode !== 'text'" class="media-card mb-3" variant="outlined">
-              <v-card-text>
-                <v-file-input
-                  v-model="mediaFile"
-                  :accept="mediaAccept"
-                  :label="inputMode === 'audio' ? 'Adjuntar audio' : 'Adjuntar imagen'"
-                  prepend-icon="mdi-paperclip"
-                  show-size
-                  clearable
-                  density="comfortable"
-                  @update:modelValue="onMediaChanged"
-                />
-
-                <v-alert
-                  v-if="mediaError"
-                  class="mt-2"
-                  type="warning"
-                  variant="tonal"
-                  density="comfortable"
-                  :text="mediaError"
-                />
-
-                <template v-if="mediaPayload">
-                  <div class="d-flex align-center ga-2 mt-1 flex-wrap">
-                    <v-chip size="x-small" variant="tonal" color="primary">{{ mediaPayload.fileName }}</v-chip>
-                    <v-chip size="x-small" variant="tonal">{{ mediaPayload.mime || 'mime n/a' }}</v-chip>
-                    <v-chip size="x-small" variant="tonal">{{ prettyBytes(mediaPayload.sizeBytes) }}</v-chip>
-                    <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-close" @click="clearMediaSelection">
-                      Quitar
-                    </v-btn>
+            <template v-if="isChatLike">
+              <div class="chat-shell">
+                <div v-if="!chatConversation.length" class="text-caption text-medium-emphasis">
+                  Inicia la conversación escribiendo un mensaje.
+                </div>
+                <div v-else class="chat-history">
+                  <div
+                    v-for="(item, idx) in chatConversation"
+                    :key="`${idx}-${item.role}`"
+                    :class="['chat-message', item.role === 'user' ? 'is-user' : 'is-assistant']"
+                  >
+                    <div class="chat-role">{{ item.role === 'user' ? 'Tú' : 'Modelo' }}</div>
+                    <div class="chat-text">{{ item.text }}</div>
                   </div>
+                </div>
+              </div>
 
-                  <audio
-                    v-if="mediaPayload.type === 'audio'"
-                    class="media-preview mt-3"
-                    :src="mediaPayload.dataUrl"
-                    controls
+              <v-textarea
+                v-model="chatDraft"
+                label="Mensaje"
+                rows="2"
+                auto-grow
+                density="comfortable"
+                placeholder="Escribe tu pregunta y presiona Enviar."
+                @keydown.enter.exact.prevent="sendChatMessage"
+              />
+
+              <div class="d-flex align-center ga-2 mt-2 flex-wrap">
+                <v-btn
+                  class="sb-btn primary"
+                  :loading="inferLoading"
+                  :disabled="!canSendChat"
+                  prepend-icon="mdi-send"
+                  @click="sendChatMessage"
+                >
+                  Enviar
+                </v-btn>
+                <v-btn class="sb-btn" variant="tonal" prepend-icon="mdi-broom" @click="clearChatConversation">
+                  Limpiar chat
+                </v-btn>
+              </div>
+            </template>
+
+            <template v-else>
+              <div v-if="allowInputModeToggle" class="input-mode mb-3">
+                <div class="text-caption text-medium-emphasis mb-1">Tipo de input</div>
+                <v-btn-toggle v-model="inputMode" mandatory density="comfortable" variant="outlined">
+                  <v-btn value="text" prepend-icon="mdi-text">Texto</v-btn>
+                  <v-btn value="audio" prepend-icon="mdi-microphone">Audio</v-btn>
+                  <v-btn value="image" prepend-icon="mdi-image">Imagen</v-btn>
+                </v-btn-toggle>
+              </div>
+
+              <v-textarea
+                v-model="inferInput"
+                :label="quickInputLabel"
+                rows="5"
+                auto-grow
+                density="comfortable"
+                :placeholder="quickInputPlaceholder"
+              />
+
+              <v-card v-if="inputMode !== 'text'" class="media-card mb-3" variant="outlined">
+                <v-card-text>
+                  <v-file-input
+                    v-model="mediaFile"
+                    :accept="mediaAccept"
+                    :label="inputMode === 'audio' ? 'Adjuntar audio' : 'Adjuntar imagen'"
+                    prepend-icon="mdi-paperclip"
+                    show-size
+                    clearable
+                    density="comfortable"
+                    @update:modelValue="onMediaChanged"
                   />
 
-                  <v-img
-                    v-else-if="mediaPayload.type === 'image'"
-                    class="media-image mt-3"
-                    :src="mediaPayload.dataUrl"
-                    cover
+                  <v-alert
+                    v-if="mediaError"
+                    class="mt-2"
+                    type="warning"
+                    variant="tonal"
+                    density="comfortable"
+                    :text="mediaError"
                   />
-                </template>
-              </v-card-text>
-            </v-card>
 
-            <v-checkbox
-              v-model="includeMediaInContext"
-              hide-details
-              density="compact"
-              label="Incluir archivo en contextJson"
-              class="mb-2"
-            />
+                  <template v-if="mediaPayload">
+                    <div class="d-flex align-center ga-2 mt-1 flex-wrap">
+                      <v-chip size="x-small" variant="tonal" color="primary">{{ mediaPayload.fileName }}</v-chip>
+                      <v-chip size="x-small" variant="tonal">{{ mediaPayload.mime || 'mime n/a' }}</v-chip>
+                      <v-chip size="x-small" variant="tonal">{{ prettyBytes(mediaPayload.sizeBytes) }}</v-chip>
+                      <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-close" @click="clearMediaSelection">
+                        Quitar
+                      </v-btn>
+                    </div>
 
-            <v-textarea
-              v-model="inferContextJson"
-              label="Contexto opcional (JSON)"
-              rows="2"
-              auto-grow
-              density="comfortable"
-              :error-messages="contextError ? [contextError] : []"
-              placeholder='{"temperature":0,"maxTokens":256}'
-            />
+                    <audio
+                      v-if="mediaPayload.type === 'audio'"
+                      class="media-preview mt-3"
+                      :src="mediaPayload.dataUrl"
+                      controls
+                    />
 
-            <v-text-field
-              v-model="inferExpectedContains"
-              label="Validación rápida (debe contener)"
-              density="comfortable"
-              placeholder="Ej: arrebato"
-            />
+                    <v-img
+                      v-else-if="mediaPayload.type === 'image'"
+                      class="media-image mt-3"
+                      :src="mediaPayload.dataUrl"
+                      cover
+                    />
+                  </template>
+                </v-card-text>
+              </v-card>
 
-            <div class="d-flex align-center ga-2 mt-2 flex-wrap">
-              <v-btn
-                class="sb-btn primary"
-                :loading="inferLoading"
-                :disabled="!canRunInfer"
-                prepend-icon="mdi-send"
-                @click="runInfer()"
-              >
-                Probar modelo
-              </v-btn>
+              <div class="d-flex align-center ga-2 mt-2 flex-wrap">
+                <v-btn
+                  class="sb-btn primary"
+                  :loading="inferLoading"
+                  :disabled="!canRunInfer"
+                  prepend-icon="mdi-send"
+                  @click="runInfer()"
+                >
+                  Probar modelo
+                </v-btn>
 
-              <v-btn class="sb-btn" variant="tonal" prepend-icon="mdi-broom" @click="clearForm">
-                Limpiar
-              </v-btn>
+                <v-btn class="sb-btn" variant="tonal" prepend-icon="mdi-broom" @click="clearForm">
+                  Limpiar
+                </v-btn>
+              </div>
+            </template>
 
-              <v-btn class="sb-btn ghost" variant="text" prepend-icon="mdi-content-copy" @click="copyText(inferInput)">
-                Copiar input
-              </v-btn>
+            <v-expansion-panels class="mt-3" variant="accordion">
+              <v-expansion-panel>
+                <v-expansion-panel-title>Opciones avanzadas</v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <v-checkbox
+                    v-model="includeMediaInContext"
+                    hide-details
+                    density="compact"
+                    label="Incluir archivo en contextJson"
+                    class="mb-2"
+                  />
 
+                  <v-textarea
+                    v-model="inferContextJson"
+                    label="Contexto opcional (JSON)"
+                    rows="2"
+                    auto-grow
+                    density="comfortable"
+                    :error-messages="contextError ? [contextError] : []"
+                    placeholder='{"temperature":0,"maxTokens":256}'
+                  />
+
+                  <v-text-field
+                    v-model="inferExpectedContains"
+                    label="Validación rápida (debe contener)"
+                    density="comfortable"
+                    placeholder="Ej: arrebato"
+                  />
+
+                  <v-btn class="sb-btn ghost mt-2" variant="text" prepend-icon="mdi-content-copy" @click="copyText(inferInput)">
+                    Copiar input
+                  </v-btn>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
+
+            <div class="mt-2">
               <span v-if="!canInfer" class="text-caption text-medium-emphasis">
                 Completa deploy para habilitar inferencia.
               </span>
@@ -411,11 +474,13 @@ const mediaFile = ref(null)
 const mediaPayload = ref(null)
 
 const inferInput = ref('')
+const chatDraft = ref('')
 const inferContextJson = ref('')
 const inferExpectedContains = ref('')
 const inferResult = ref(null)
 const lastInferDurationMs = ref(0)
 const outputMode = ref('json')
+const chatConversation = ref([])
 
 const sessionHistory = ref([])
 const caseResults = ref({})
@@ -462,6 +527,13 @@ function parseJson(text, fallback = null) {
   } catch (err) {
     return { ok: false, value: fallback, message: err?.message || 'JSON inválido' }
   }
+}
+
+function normalizeTemplateProfile(value) {
+  const profile = String(value || '').trim().toLowerCase()
+  if (!profile) return ''
+  if (['chat', 'transcription', 'vision', 'extraction', 'generic'].includes(profile)) return profile
+  return ''
 }
 
 function pickFirst(...values) {
@@ -589,6 +661,59 @@ const projectItems = computed(() => projects.value.map(project => ({
 const selectedProject = computed(() => projects.value.find(p => String(p.Id || p.id) === String(selectedProjectId.value)) || null)
 const selectedProjectName = computed(() => selectedProject.value?.Name || selectedProject.value?.name || '')
 const selectedTemplateKey = computed(() => String(selectedTemplate.value?.Key || selectedTemplate.value?.key || '').toLowerCase())
+const selectedTemplatePipeline = computed(() => {
+  const raw = selectedTemplate.value?.Pipelinejson || selectedTemplate.value?.pipelinejson || ''
+  const parsed = parseJson(raw, null)
+  return parsed.ok && parsed.value && typeof parsed.value === 'object' ? parsed.value : null
+})
+const selectedTemplateProfileUi = computed(() =>
+  normalizeTemplateProfile(selectedTemplatePipeline.value?.meta?.playgroundProfile)
+)
+
+const templateProfile = computed(() => {
+  if (selectedTemplateProfileUi.value) return selectedTemplateProfileUi.value
+
+  const key = selectedTemplateKey.value
+  if (!key) return 'generic'
+  if (key.includes('chat') || key.includes('rag') || key.includes('assistant')) return 'chat'
+  if (key.includes('transcrib') || key.includes('whisper') || key.includes('audio')) return 'transcription'
+  if (key.includes('vision') || key.includes('image') || key.includes('ocr')) return 'vision'
+  if (key.includes('extract')) return 'extraction'
+  return 'generic'
+})
+
+const isChatLike = computed(() => templateProfile.value === 'chat')
+const allowInputModeToggle = computed(() => templateProfile.value === 'generic')
+
+const templateProfileLabel = computed(() => {
+  if (templateProfile.value === 'chat') return 'Modo chat'
+  if (templateProfile.value === 'transcription') return 'Modo transcripción'
+  if (templateProfile.value === 'vision') return 'Modo visión'
+  if (templateProfile.value === 'extraction') return 'Modo extracción'
+  return 'Modo genérico'
+})
+
+const templateProfileHint = computed(() => {
+  if (templateProfile.value === 'chat') return 'Interfaz conversacional: escribe y el modelo responde.'
+  if (templateProfile.value === 'transcription') return 'Carga audio para transcribir o resume en texto el contenido del archivo.'
+  if (templateProfile.value === 'vision') return 'Carga imagen para analizar texto/objetos según tu template.'
+  if (templateProfile.value === 'extraction') return 'Ingresa texto para extraer campos estructurados.'
+  return 'Prueba libre: texto, audio o imagen según lo que necesites.'
+})
+
+const quickInputLabel = computed(() => {
+  if (templateProfile.value === 'transcription') return 'Contexto opcional de audio'
+  if (templateProfile.value === 'vision') return 'Prompt opcional para imagen'
+  if (templateProfile.value === 'extraction') return 'Texto a extraer'
+  return 'Input textual'
+})
+
+const quickInputPlaceholder = computed(() => {
+  if (templateProfile.value === 'transcription') return 'Opcional: indica idioma o formato de salida esperado.'
+  if (templateProfile.value === 'vision') return 'Opcional: describe qué quieres que analice la imagen.'
+  if (templateProfile.value === 'extraction') return 'Pega el texto del caso para extraer JSON estructurado.'
+  return 'Escribe texto para inferencia o una descripción del archivo subido.'
+})
 
 const canInfer = computed(() => Boolean(workflow.value?.CanInfer ?? workflow.value?.canInfer))
 const projectStatus = computed(() => workflow.value?.ProjectStatus || workflow.value?.projectStatus || '')
@@ -608,6 +733,14 @@ const canRunInfer = computed(() =>
   !inferLoading.value &&
   !contextError.value &&
   !mediaError.value &&
+  canInfer.value
+)
+
+const canSendChat = computed(() =>
+  Boolean(selectedProjectId.value) &&
+  Boolean(chatDraft.value.trim()) &&
+  !inferLoading.value &&
+  !contextError.value &&
   canInfer.value
 )
 
@@ -739,6 +872,7 @@ function openDeployStage() {
 
 function clearForm() {
   inferInput.value = ''
+  chatDraft.value = ''
   inferContextJson.value = ''
   inferExpectedContains.value = ''
   inferResult.value = null
@@ -746,6 +880,13 @@ function clearForm() {
   outputMode.value = 'json'
   clearMediaSelection()
   inputMode.value = 'text'
+}
+
+function clearChatConversation() {
+  chatConversation.value = []
+  chatDraft.value = ''
+  inferResult.value = null
+  inferError.value = ''
 }
 
 async function copyText(value) {
@@ -867,6 +1008,7 @@ function buildContextJson() {
 async function runInfer(options = {}) {
   const mode = options.mode || 'manual'
   const expectedContains = String(options.expectedContains ?? inferExpectedContains.value ?? '').trim()
+  const inputOverride = String(options.input ?? '').trim()
 
   inferError.value = ''
   inferResult.value = null
@@ -882,7 +1024,7 @@ async function runInfer(options = {}) {
     return false
   }
 
-  if (!inferInput.value.trim() && !mediaPayload.value) {
+  if (!inputOverride && !inferInput.value.trim() && !mediaPayload.value) {
     inferError.value = 'Carga texto o un archivo para inferir.'
     return false
   }
@@ -897,7 +1039,7 @@ async function runInfer(options = {}) {
     return false
   }
 
-  const payloadInput = inferInput.value.trim() || `[${inputMode.value.toUpperCase()}] ${mediaPayload.value?.fileName || 'input'}`
+  const payloadInput = inputOverride || inferInput.value.trim() || `[${inputMode.value.toUpperCase()}] ${mediaPayload.value?.fileName || 'input'}`
   const contextJson = buildContextJson()
 
   const startedAt = performance.now()
@@ -919,6 +1061,41 @@ async function runInfer(options = {}) {
   } finally {
     inferLoading.value = false
   }
+}
+
+function extractAssistantText() {
+  if (!inferResult.value) return ''
+  const outputJson = inferResult.value.OutputJson || inferResult.value.outputJson
+  const parsed = parseJson(outputJson, null)
+  if (parsed.ok && parsed.value && typeof parsed.value === 'object') {
+    const preferred = parsed.value.answer || parsed.value.response || parsed.value.text || parsed.value.content || parsed.value.message
+    if (preferred) return String(preferred)
+    return JSON.stringify(parsed.value, null, 2)
+  }
+
+  const raw = inferOutputRaw.value.trim()
+  if (!raw) return 'Sin respuesta.'
+  return raw
+}
+
+async function sendChatMessage() {
+  const userText = chatDraft.value.trim()
+  if (!userText || !canSendChat.value) return
+
+  chatConversation.value.push({ role: 'user', text: userText })
+  inferInput.value = userText
+  chatDraft.value = ''
+
+  const ok = await runInfer({ mode: 'chat', input: userText })
+  if (!ok && inferError.value) {
+    chatConversation.value.push({ role: 'assistant', text: `Error: ${inferError.value}` })
+    return
+  }
+
+  chatConversation.value.push({
+    role: 'assistant',
+    text: extractAssistantText()
+  })
 }
 
 function loadDemoCase(testCase) {
@@ -957,8 +1134,32 @@ watch(selectedProjectId, async value => {
   router.replace({ path: '/stage/playground', query: { projectId: value || undefined } })
   inferError.value = ''
   inferResult.value = null
+  chatDraft.value = ''
+  chatConversation.value = []
   caseResults.value = {}
   await Promise.all([loadProjectTemplate(), loadWorkflow(), loadLatestDeployInfo()])
+})
+
+watch(templateProfile, profile => {
+  if (profile === 'chat') {
+    inputMode.value = 'text'
+    clearMediaSelection()
+    return
+  }
+  if (profile === 'transcription') {
+    inputMode.value = 'audio'
+    inferExpectedContains.value = ''
+    return
+  }
+  if (profile === 'vision') {
+    inputMode.value = 'image'
+    inferExpectedContains.value = ''
+    return
+  }
+  if (profile === 'extraction') {
+    inputMode.value = 'text'
+    clearMediaSelection()
+  }
 })
 
 watch(inputMode, value => {
@@ -982,6 +1183,53 @@ onMounted(load)
 
 .media-card {
   border-radius: 14px;
+}
+
+.chat-shell {
+  border: 1px solid rgba(120, 140, 170, 0.22);
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 12px;
+  background: rgba(120, 140, 170, 0.06);
+}
+
+.chat-history {
+  max-height: 280px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+
+.chat-message {
+  border-radius: 12px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+}
+
+.chat-message.is-user {
+  background: rgba(37, 99, 235, 0.12);
+  border-color: rgba(37, 99, 235, 0.24);
+}
+
+.chat-message.is-assistant {
+  background: rgba(120, 140, 170, 0.08);
+  border-color: rgba(120, 140, 170, 0.2);
+}
+
+.chat-role {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+
+.chat-text {
+  font-size: 0.92rem;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .media-preview {

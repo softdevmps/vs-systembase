@@ -4,6 +4,10 @@
   color-scheme: light;
 }
 
+:root.sb-dark {
+  color-scheme: dark;
+}
+
 .sb-page-header {
   background: var(--sb-gradient);
   border: 1px solid var(--sb-border);
@@ -150,7 +154,7 @@
 
 .sb-form :deep(.v-field) {
   border-radius: 12px;
-  background: #fff;
+  background: color-mix(in srgb, var(--sb-surface) 94%, transparent);
 }
 
 .sb-form :deep(.v-field__input) {

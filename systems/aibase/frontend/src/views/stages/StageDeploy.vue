@@ -296,6 +296,135 @@
         </v-card>
 
         <v-card class="card mt-4">
+          <v-card-title class="d-flex align-center justify-space-between">
+            Control Docker
+            <v-btn icon variant="text" :disabled="dockerLoading || dockerBusy" @click="loadDockerStatus">
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <v-row dense>
+              <v-col cols="12" lg="8">
+                <v-text-field
+                  v-model="dockerStackName"
+                  label="Stack docker"
+                  density="comfortable"
+                  :disabled="dockerBusy"
+                />
+              </v-col>
+              <v-col cols="12" lg="4">
+                <div class="docker-stack-actions h-100">
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-play" :loading="dockerActionLoading === 'up'" :disabled="dockerBusy" @click="runDockerStackAction('up')">
+                    Up
+                  </v-btn>
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-stop" :loading="dockerActionLoading === 'down'" :disabled="dockerBusy" @click="runDockerStackAction('down')">
+                    Down
+                  </v-btn>
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-restart" :loading="dockerActionLoading === 'restart'" :disabled="dockerBusy" @click="runDockerStackAction('restart')">
+                    Restart
+                  </v-btn>
+                </div>
+              </v-col>
+            </v-row>
+
+            <v-alert
+              v-if="dockerError"
+              class="mt-2"
+              type="warning"
+              variant="tonal"
+              density="comfortable"
+              :text="dockerError"
+            />
+            <v-alert
+              v-if="dockerMessage"
+              class="mt-2"
+              type="success"
+              variant="tonal"
+              density="comfortable"
+              :text="dockerMessage"
+            />
+
+            <div v-if="dockerComposeFile" class="text-caption text-medium-emphasis mt-2">
+              Compose: {{ dockerComposeFile }}
+            </div>
+
+            <div class="d-flex align-center ga-2 flex-wrap mt-2">
+              <v-chip size="small" variant="tonal" :color="dockerRunningServices.length ? 'success' : 'grey'">
+                Running: {{ dockerRunningServices.length }}
+              </v-chip>
+              <v-chip size="small" variant="tonal" :color="dockerServiceItems.length ? 'primary' : 'grey'">
+                Services: {{ dockerServiceItems.length }}
+              </v-chip>
+            </div>
+
+            <v-row dense class="mt-1">
+              <v-col cols="12" lg="5">
+                <v-select
+                  v-model="dockerSelectedService"
+                  :items="dockerServiceItems"
+                  label="Servicio"
+                  density="comfortable"
+                  clearable
+                  :disabled="dockerBusy"
+                />
+              </v-col>
+              <v-col cols="12" lg="7">
+                <div class="docker-service-actions">
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-play-circle-outline" :loading="dockerActionLoading === 'service_start'" :disabled="dockerBusy || !dockerSelectedService" @click="runDockerServiceAction('start')">
+                    Start
+                  </v-btn>
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-stop-circle-outline" :loading="dockerActionLoading === 'service_stop'" :disabled="dockerBusy || !dockerSelectedService" @click="runDockerServiceAction('stop')">
+                    Stop
+                  </v-btn>
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-restart" :loading="dockerActionLoading === 'service_restart'" :disabled="dockerBusy || !dockerSelectedService" @click="runDockerServiceAction('restart')">
+                    Restart
+                  </v-btn>
+                </div>
+              </v-col>
+            </v-row>
+
+            <v-row dense class="mt-1">
+              <v-col cols="12" lg="4">
+                <v-text-field
+                  v-model.number="dockerLogsTail"
+                  type="number"
+                  label="Tail logs"
+                  density="comfortable"
+                  min="20"
+                  max="2000"
+                  :disabled="dockerBusy"
+                />
+              </v-col>
+              <v-col cols="12" lg="8">
+                <div class="docker-logs-actions h-100">
+                  <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-text-box-search-outline" :loading="dockerActionLoading === 'logs'" :disabled="dockerBusy" @click="loadDockerLogs">
+                    Ver logs
+                  </v-btn>
+                  <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-content-copy" :disabled="!dockerLogs" @click="copyText(dockerLogs)">
+                    Copiar logs
+                  </v-btn>
+                </div>
+              </v-col>
+            </v-row>
+
+            <div v-if="dockerPsRows.length" class="docker-ps-list mt-3">
+              <div v-for="row in dockerPsRows" :key="`${row.Name}-${row.Service}`" class="docker-ps-item">
+                <div class="docker-ps-title">{{ row.Service || row.Name || 'service' }}</div>
+                <v-chip size="x-small" variant="tonal" :color="dockerStateColor(row.State)">
+                  {{ row.State || 'unknown' }}
+                </v-chip>
+                <div class="docker-ps-meta">{{ row.Status || 'sin status' }}</div>
+              </div>
+            </div>
+
+            <div v-if="dockerLogs" class="preview-box mt-3 docker-log-box">
+              <pre>{{ dockerLogs }}</pre>
+            </div>
+          </v-card-text>
+        </v-card>
+
+        <v-card class="card mt-4">
           <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
             <span>Resultado de despliegue</span>
             <div class="d-flex align-center ga-2 flex-wrap">
@@ -422,12 +551,21 @@ const running = ref(false)
 const error = ref('')
 const runMessage = ref('')
 const runError = ref('')
+const dockerError = ref('')
+const dockerMessage = ref('')
 
 const projects = ref([])
 const selectedProjectId = ref(null)
 const projectWorkflow = ref(null)
 const runs = ref([])
 const selectedDeployRunId = ref(null)
+const dockerStatus = ref(null)
+const dockerStackName = ref('')
+const dockerSelectedService = ref('')
+const dockerLogs = ref('')
+const dockerLogsTail = ref(200)
+const dockerActionLoading = ref('')
+const dockerLoading = ref(false)
 
 const deployForm = reactive({
   targetEnv: 'dev',
@@ -517,6 +655,14 @@ function statusLabel(status) {
   return 'Pendiente'
 }
 
+function dockerStateColor(state) {
+  const value = String(state || '').toLowerCase()
+  if (value === 'running') return 'success'
+  if (value === 'exited' || value === 'dead') return 'error'
+  if (value === 'created' || value === 'restarting') return 'warning'
+  return 'grey'
+}
+
 function formatDate(value) {
   if (!value) return 'Sin fecha'
   return new Date(value).toLocaleString('es-AR')
@@ -552,6 +698,11 @@ function toTextBlock(value) {
     }
   }
   return String(value)
+}
+
+function resolveDockerStackName() {
+  const value = String(dockerStackName.value || deployForm.stackName || 'aibase-stack').trim()
+  return value || 'aibase-stack'
 }
 
 const projectItems = computed(() => projects.value.map(project => ({
@@ -615,6 +766,35 @@ const canRun = computed(() =>
 const deployRuns = computed(() => runs.value.filter(run =>
   String(run.RunType || run.runType || '').toLowerCase() === 'deploy_service'
 ))
+
+const dockerBusy = computed(() => dockerLoading.value || !!dockerActionLoading.value)
+
+const dockerPsRows = computed(() => {
+  const raw = dockerStatus.value?.ps
+  return Array.isArray(raw) ? raw : []
+})
+
+const dockerComposeFile = computed(() => String(dockerStatus.value?.composeFile || ''))
+
+const dockerServiceItems = computed(() => {
+  const set = new Set()
+  const configured = dockerStatus.value?.services
+  if (Array.isArray(configured)) {
+    configured.forEach(service => {
+      const value = String(service || '').trim()
+      if (value) set.add(value)
+    })
+  }
+  dockerPsRows.value.forEach(row => {
+    const value = String(row?.Service || row?.service || row?.Name || row?.name || '').trim()
+    if (value) set.add(value)
+  })
+  return Array.from(set)
+})
+
+const dockerRunningServices = computed(() =>
+  dockerPsRows.value.filter(row => String(row?.State || '').toLowerCase() === 'running')
+)
 
 const selectedDeployRun = computed(() => {
   if (!deployRuns.value.length) return null
@@ -720,8 +900,8 @@ function ensureRefreshTimer() {
   clearRefreshTimer()
   if (!shouldPollRuns.value) return
   refreshTimer = setInterval(async () => {
-    if (loadingRuns.value || running.value) return
-    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
+    if (loadingRuns.value || running.value || dockerLoading.value || dockerActionLoading.value) return
+    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns(), loadDockerStatus()])
   }, 3000)
 }
 
@@ -763,6 +943,96 @@ async function loadRuns() {
   }
 }
 
+async function loadDockerStatus() {
+  dockerLoading.value = true
+  dockerError.value = ''
+  try {
+    const response = await runtimeApi.dockerStatus(resolveDockerStackName())
+    dockerStatus.value = response?.data || null
+
+    const stack = String(response?.data?.stackName || '').trim()
+    if (stack) dockerStackName.value = stack
+
+    if (dockerServiceItems.value.length && !dockerSelectedService.value) {
+      dockerSelectedService.value = dockerServiceItems.value[0]
+    }
+  } catch (err) {
+    dockerError.value = errorText(err, 'No se pudo obtener el estado Docker.')
+  } finally {
+    dockerLoading.value = false
+  }
+}
+
+async function runDockerStackAction(action) {
+  const actionKey = String(action || '').toLowerCase()
+  if (!['up', 'down', 'restart'].includes(actionKey)) return
+
+  dockerActionLoading.value = actionKey
+  dockerError.value = ''
+  dockerMessage.value = ''
+  try {
+    let response
+    if (actionKey === 'up') {
+      response = await runtimeApi.dockerUp({ stackName: resolveDockerStackName() })
+    } else if (actionKey === 'down') {
+      response = await runtimeApi.dockerDown({ stackName: resolveDockerStackName(), removeOrphans: true })
+    } else {
+      response = await runtimeApi.dockerRestart({ stackName: resolveDockerStackName() })
+    }
+
+    const stdout = String(response?.data?.stdout || '').trim()
+    dockerMessage.value = stdout ? `Docker ${actionKey}: ${stdout}` : `Docker ${actionKey} ejecutado correctamente.`
+    await loadDockerStatus()
+  } catch (err) {
+    dockerError.value = errorText(err, `No se pudo ejecutar Docker ${actionKey}.`)
+  } finally {
+    dockerActionLoading.value = ''
+  }
+}
+
+async function runDockerServiceAction(action) {
+  const service = String(dockerSelectedService.value || '').trim()
+  if (!service) return
+
+  const actionKey = String(action || '').toLowerCase()
+  if (!['start', 'stop', 'restart'].includes(actionKey)) return
+
+  dockerActionLoading.value = `service_${actionKey}`
+  dockerError.value = ''
+  dockerMessage.value = ''
+  try {
+    const response = await runtimeApi.dockerServiceAction(service, actionKey, resolveDockerStackName())
+    const stdout = String(response?.data?.stdout || '').trim()
+    dockerMessage.value = stdout ? `${service}: ${stdout}` : `${service}: acción ${actionKey} aplicada.`
+    await loadDockerStatus()
+  } catch (err) {
+    dockerError.value = errorText(err, `No se pudo ejecutar ${actionKey} en ${service}.`)
+  } finally {
+    dockerActionLoading.value = ''
+  }
+}
+
+async function loadDockerLogs() {
+  dockerActionLoading.value = 'logs'
+  dockerError.value = ''
+  dockerMessage.value = ''
+  try {
+    const response = await runtimeApi.dockerLogs({
+      stackName: resolveDockerStackName(),
+      service: dockerSelectedService.value || null,
+      tail: Number(dockerLogsTail.value || 200)
+    })
+    dockerLogs.value = String(response?.data?.logs || response?.data?.stdout || '').trim()
+    if (!dockerLogs.value) {
+      dockerMessage.value = 'Sin logs para el filtro actual.'
+    }
+  } catch (err) {
+    dockerError.value = errorText(err, 'No se pudieron obtener los logs Docker.')
+  } finally {
+    dockerActionLoading.value = ''
+  }
+}
+
 async function loadData() {
   loadingData.value = true
   error.value = ''
@@ -773,6 +1043,10 @@ async function loadData() {
     }
     await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
     suggestDefaultsFromProject()
+    if (!dockerStackName.value) {
+      dockerStackName.value = String(deployForm.stackName || 'aibase-stack')
+    }
+    await loadDockerStatus()
   } catch (err) {
     error.value = errorText(err, 'No se pudo cargar la etapa Deploy.')
   } finally {
@@ -798,6 +1072,7 @@ async function triggerDeploy() {
     selectedDeployRunId.value = run.Id || run.id || null
     runMessage.value = 'Deploy ejecutado. Revisa estado y endpoint en el panel de resultado.'
     await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
+    await loadDockerStatus()
   } catch (err) {
     runError.value = errorText(err, 'No se pudo ejecutar el deploy.')
   } finally {
@@ -855,6 +1130,16 @@ watch(() => route.query.projectId, value => {
   selectedProjectId.value = Number.isFinite(asNumber) && asNumber > 0 ? asNumber : value
 }, { immediate: true })
 
+watch(dockerServiceItems, items => {
+  if (!Array.isArray(items) || !items.length) {
+    dockerSelectedService.value = ''
+    return
+  }
+  if (!items.includes(dockerSelectedService.value)) {
+    dockerSelectedService.value = items[0]
+  }
+})
+
 watch(shouldPollRuns, () => {
   ensureRefreshTimer()
 }, { immediate: true })
@@ -903,6 +1188,44 @@ onMounted(loadData)
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.docker-stack-actions,
+.docker-service-actions,
+.docker-logs-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.docker-ps-list {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.docker-ps-item {
+  border: 1px solid rgba(120, 140, 170, 0.2);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.docker-ps-title {
+  font-weight: 600;
+}
+
+.docker-ps-meta {
+  font-size: 0.8rem;
+  color: var(--sb-text-soft, var(--sb-muted));
+}
+
+.docker-log-box {
+  max-height: 220px;
 }
 
 .run-list {
@@ -976,6 +1299,12 @@ onMounted(loadData)
 @media (max-width: 960px) {
   .toggle-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1280px) {
+  .docker-stack-actions {
+    justify-content: flex-end;
   }
 }
 </style>

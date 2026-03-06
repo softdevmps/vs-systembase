@@ -44,6 +44,8 @@
 
     <v-row class="mt-4" dense>
       <v-col cols="12" md="4">
+        <StageAssistant stage="template" class="mb-4" @apply="applyAssistantSuggestion" />
+
         <v-card class="card">
           <v-card-title>Tipo de modelo</v-card-title>
           <v-divider />
@@ -126,14 +128,24 @@
           <v-divider />
           <v-card-text>
             <v-row dense>
-              <v-col cols="12" md="4">
+              <v-col cols="12" md="3">
                 <v-text-field v-model="form.key" label="Key" density="comfortable" :rules="[rules.required, rules.max80]" />
               </v-col>
-              <v-col cols="12" md="5">
+              <v-col cols="12" md="4">
                 <v-text-field v-model="form.name" label="Nombre" density="comfortable" :rules="[rules.required, rules.max200]" />
               </v-col>
-              <v-col cols="12" md="3">
+              <v-col cols="12" md="2">
                 <v-text-field v-model="form.version" label="Versión" density="comfortable" :rules="[rules.required, rules.max20]" />
+              </v-col>
+              <v-col cols="12" md="3">
+                <v-select
+                  v-model="form.playgroundProfile"
+                  :items="playgroundProfileOptions"
+                  item-title="title"
+                  item-value="value"
+                  label="Perfil Playground"
+                  density="comfortable"
+                />
               </v-col>
             </v-row>
 
@@ -263,6 +275,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
 import OptionGuide from '../../components/Workflow/OptionGuide.vue'
+import StageAssistant from '../../components/Workflow/StageAssistant.vue'
 
 const router = useRouter()
 
@@ -276,6 +289,7 @@ const form = reactive({
   key: '',
   name: '',
   version: '1.0.0',
+  playgroundProfile: 'chat',
   description: '',
   objective: '',
   outputSchemaJson: '{}',
@@ -303,6 +317,7 @@ const presets = [
     name: 'Chatbot RAG',
     baseKey: 'chatbot-rag',
     steps: ['dataset_build', 'rag_index', 'eval_run', 'deploy_service'],
+    profile: 'chat',
     objective: 'Responder preguntas con evidencia de documentos indexados.',
     outputSchema: { answer: '', sources: [] },
     taxonomy: { intents: ['consulta', 'seguimiento', 'otro'], tone: ['formal', 'neutral'] },
@@ -317,6 +332,7 @@ const presets = [
     name: 'Extractor JSON',
     baseKey: 'extractor-json',
     steps: ['dataset_build', 'train_lora', 'eval_run', 'deploy_service'],
+    profile: 'extraction',
     objective: 'Transformar texto libre en un JSON consistente y validable.',
     outputSchema: { tipoHecho: '', lugarTexto: '', fechaHora: '', confidence: 0 },
     taxonomy: { tipoHecho: ['robo', 'arrebato', 'hurto', 'otro'] },
@@ -331,6 +347,7 @@ const presets = [
     name: 'Transcriptor Audio',
     baseKey: 'transcriptor-audio',
     steps: ['dataset_build', 'train_lora', 'eval_run', 'deploy_service'],
+    profile: 'transcription',
     objective: 'Transcribir audios con alta legibilidad y detección de entidades clave.',
     outputSchema: { text: '', entities: [] },
     taxonomy: { entities: ['persona', 'lugar', 'hora'] },
@@ -345,6 +362,7 @@ const presets = [
     name: 'OCR Vision',
     baseKey: 'ocr-vision',
     steps: ['dataset_build', 'train_lora', 'eval_run', 'deploy_service'],
+    profile: 'vision',
     objective: 'Detectar texto en imagen y devolverlo estructurado.',
     outputSchema: { text: '', blocks: [] },
     taxonomy: { blockTypes: ['line', 'paragraph', 'table'] },
@@ -359,12 +377,21 @@ const presets = [
     name: 'Template Custom',
     baseKey: 'custom-template',
     steps: ['dataset_build', 'rag_index', 'train_lora', 'eval_run', 'deploy_service'],
+    profile: 'generic',
     objective: 'Define objetivo y contrato según tu caso.',
     outputSchema: {},
     taxonomy: {},
     validationRules: {},
     annotationGuide: ''
   }
+]
+
+const playgroundProfileOptions = [
+  { title: 'Chat', value: 'chat' },
+  { title: 'Extracción JSON', value: 'extraction' },
+  { title: 'Transcripción audio', value: 'transcription' },
+  { title: 'Visión / OCR', value: 'vision' },
+  { title: 'Genérico', value: 'generic' }
 ]
 
 const rules = {
@@ -380,6 +407,7 @@ const rules = {
 const optionGuideItems = [
   { label: 'Tipo de modelo', description: 'Selecciona un preset para cargar un contrato base y pipeline sugerido.' },
   { label: 'Key / Nombre / Versión', description: 'Identifican el template. La key debe ser única y estable.' },
+  { label: 'Perfil Playground', description: 'Controla la interfaz de prueba del modelo desde la UI.' },
   { label: 'Objetivo del modelo', description: 'Describe claramente qué problema resuelve y qué salida debe entregar.' },
   { label: 'Output Schema (JSON)', description: 'Contrato de salida consumido por dataset, evaluación y playground.' },
   { label: 'Taxonomía / Labels', description: 'Define clases, etiquetas o categorías que el modelo puede usar.' },
@@ -460,7 +488,8 @@ function buildPipelinePayload() {
       annotationGuide: form.annotationGuide?.trim() || null
     },
     meta: {
-      description: form.description || null
+      description: form.description || null,
+      playgroundProfile: form.playgroundProfile || 'generic'
     }
   }
 }
@@ -473,11 +502,37 @@ function applyPreset(preset) {
     form.key = `${preset.baseKey}-v${String(form.version || '1.0.0').replace(/\./g, '-')}`
   }
   form.objective = preset.objective || ''
+  form.playgroundProfile = preset.profile || 'generic'
   form.outputSchemaJson = JSON.stringify(preset.outputSchema || {}, null, 2)
   form.taxonomyJson = JSON.stringify(preset.taxonomy || {}, null, 2)
   form.validationRulesJson = JSON.stringify(preset.validationRules || {}, null, 2)
   form.annotationGuide = preset.annotationGuide || ''
   form.steps = [...preset.steps]
+}
+
+function applyAssistantSuggestion(fields) {
+  if (!fields || typeof fields !== 'object') return
+
+  const setIfString = key => {
+    const value = fields[key]
+    if (typeof value === 'string') form[key] = value
+  }
+
+  setIfString('presetKey')
+  setIfString('key')
+  setIfString('name')
+  setIfString('version')
+  setIfString('playgroundProfile')
+  setIfString('description')
+  setIfString('objective')
+  setIfString('outputSchemaJson')
+  setIfString('taxonomyJson')
+  setIfString('validationRulesJson')
+  setIfString('annotationGuide')
+
+  if (Array.isArray(fields.steps)) {
+    form.steps = fields.steps.map(step => String(step || '').trim().toLowerCase()).filter(Boolean)
+  }
 }
 
 function toggleStep(step) {
@@ -524,6 +579,25 @@ function parseContract(raw) {
   }
 }
 
+function parsePipelineMeta(raw) {
+  if (!raw) return null
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return parsed?.meta || null
+  } catch {
+    return null
+  }
+}
+
+function inferProfileFromKey(key) {
+  const value = String(key || '').toLowerCase()
+  if (value.includes('chat') || value.includes('rag') || value.includes('assistant')) return 'chat'
+  if (value.includes('transcrib') || value.includes('whisper') || value.includes('audio')) return 'transcription'
+  if (value.includes('vision') || value.includes('image') || value.includes('ocr')) return 'vision'
+  if (value.includes('extract')) return 'extraction'
+  return 'generic'
+}
+
 function getPresetFromSteps(steps) {
   const normalized = [...steps].sort().join('|')
   for (const preset of presets) {
@@ -539,6 +613,7 @@ function resetForm() {
   form.key = ''
   form.name = ''
   form.version = '1.0.0'
+  form.playgroundProfile = 'chat'
   form.description = ''
   form.objective = ''
   form.outputSchemaJson = '{}'
@@ -564,7 +639,9 @@ function loadTemplate(item) {
   form.createdAt = record.Createdat || record.createdAt || null
 
   const contract = parseContract(record.Pipelinejson)
+  const meta = parsePipelineMeta(record.Pipelinejson)
   form.objective = contract?.objective || ''
+  form.playgroundProfile = String(meta?.playgroundProfile || inferProfileFromKey(record.Key || record.key)).toLowerCase()
   form.outputSchemaJson = JSON.stringify(contract?.outputSchema || {}, null, 2)
   form.taxonomyJson = JSON.stringify(contract?.taxonomy || {}, null, 2)
   form.validationRulesJson = JSON.stringify(contract?.validationRules || {}, null, 2)

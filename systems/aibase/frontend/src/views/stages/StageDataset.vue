@@ -30,6 +30,13 @@
 
     <v-row class="mt-4" dense>
       <v-col cols="12" md="7">
+        <StageAssistant
+          stage="dataset"
+          class="mb-4"
+          :project-id="selectedProjectId"
+          @apply="applyAssistantSuggestion"
+        />
+
         <v-card class="card">
           <v-card-title>Configuración de dataset</v-card-title>
           <v-divider />
@@ -325,6 +332,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
 import OptionGuide from '../../components/Workflow/OptionGuide.vue'
+import StageAssistant from '../../components/Workflow/StageAssistant.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -511,6 +519,37 @@ const payloadPreview = computed(() => JSON.stringify(buildRunInputPayload(), nul
 const datasetRuns = computed(() => runs.value.filter(run =>
   String(run.RunType || run.runType || '').toLowerCase() === 'dataset_build'
 ))
+
+function applyAssistantSuggestion(fields) {
+  if (!fields || typeof fields !== 'object') return
+
+  const setIfString = key => {
+    const value = fields[key]
+    if (typeof value === 'string') datasetForm[key] = value
+  }
+  const setIfNumber = key => {
+    const value = Number(fields[key])
+    if (Number.isFinite(value)) datasetForm[key] = value
+  }
+  const setIfBool = key => {
+    const value = fields[key]
+    if (typeof value === 'boolean') datasetForm[key] = value
+  }
+
+  setIfString('datasetVersion')
+  setIfString('sourceType')
+  setIfString('sourcePath')
+  setIfString('tagsCsv')
+  setIfString('sampleRowsJson')
+  setIfNumber('splitTrainPct')
+  setIfNumber('splitValPct')
+  setIfNumber('splitTestPct')
+  setIfNumber('minRecords')
+  setIfNumber('maxNullPct')
+  setIfBool('deduplicate')
+  setIfBool('normalizeText')
+  setIfBool('dropNullTarget')
+}
 
 function buildRunInputPayload() {
   const tags = String(datasetForm.tagsCsv || '')

@@ -7,37 +7,37 @@
       <v-col cols="12" md="6" lg="5" class="login-hero">
         <div class="login-brand">
           <div class="login-brand-icon">
-            <v-icon size="28" color="primary">mdi-view-dashboard</v-icon>
+            <v-icon size="28" color="primary">mdi-brain</v-icon>
           </div>
           <div>
-            <h1>{{ appTitle }}</h1>
-            <p>{{ tagline }}</p>
+            <h1>{{ loginTitle }}</h1>
+            <p>{{ loginTagline }}</p>
           </div>
         </div>
 
         <div class="login-metrics">
           <div class="metric-card">
-            <span>Modo</span>
+            <span>Plataforma</span>
             <strong>{{ uiModeLabel }}</strong>
           </div>
           <div class="metric-card">
             <span>Base</span>
-            <strong>SystemBase · CRUD · API</strong>
+            <strong>AIBase · Workflow · Engine</strong>
           </div>
         </div>
 
         <div class="login-features">
           <div class="feature">
             <v-icon size="18" color="primary">mdi-shield-check-outline</v-icon>
-            <span>Seguridad y control de acceso</span>
+            <span>Contratos y versionado de modelos</span>
           </div>
           <div class="feature">
-            <v-icon size="18" color="primary">mdi-map-marker-check</v-icon>
-            <span>Configuración flexible por sistema</span>
+            <v-icon size="18" color="primary">mdi-robot-outline</v-icon>
+            <span>Pipeline end-to-end: dataset, train, eval y deploy</span>
           </div>
           <div class="feature">
-            <v-icon size="18" color="primary">mdi-waveform</v-icon>
-            <span>Datos centralizados y auditables</span>
+            <v-icon size="18" color="primary">mdi-flask-outline</v-icon>
+            <span>Playground para validar inferencias en tiempo real</span>
           </div>
         </div>
       </v-col>
@@ -104,9 +104,9 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const router = useRouter()
-const appTitle = computed(() => frontendConfig?.system?.appTitle || 'SystemBase')
+const loginTitle = computed(() => frontendConfig?.login?.title || 'AIBase')
 const uiModeLabel = computed(() => frontendConfig?.system?.uiMode || 'Enterprise')
-const tagline = computed(() => frontendConfig?.system?.tagline || 'Tu plataforma configurable para gestionar datos en tiempo real.')
+const loginTagline = computed(() => frontendConfig?.login?.tagline || 'Fábrica de modelos de IA: diseñá, entrená, evaluá y desplegá.')
 
 async function login() {
   error.value = ''
