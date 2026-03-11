@@ -49,7 +49,16 @@ namespace Backend
                 public const string RunsByProject = "api/v1/aibase/projects/{projectId}/runs";
                 public const string WorkflowByProject = "api/v1/aibase/projects/{projectId}/workflow";
                 public const string TriggerRun = "api/v1/aibase/projects/{projectId}/run";
+                public const string DatasetUpload = "api/v1/aibase/projects/{projectId}/dataset/upload";
+                public const string DatasetSources = "api/v1/aibase/projects/{projectId}/dataset/sources";
+                public const string DatasetGenerate = "api/v1/aibase/projects/{projectId}/dataset/generate";
+                public const string DatasetMerge = "api/v1/aibase/projects/{projectId}/dataset/merge";
+                public const string RunAll = "api/v1/aibase/projects/{projectId}/run-all";
+                public const string DeployAssets = "api/v1/aibase/projects/{projectId}/deploy-assets";
+                public const string DeployExport = "api/v1/aibase/projects/{projectId}/deploy-export";
+                public const string Bootstrap = "api/v1/aibase/bootstrap";
                 public const string Infer = "api/v1/aibase/projects/{projectId}/infer";
+                public const string InferMetrics = "api/v1/aibase/projects/{projectId}/infer-metrics";
                 public const string AssistantSuggest = "api/v1/aibase/assistant/suggest";
                 public const string DockerStatus = "api/v1/aibase/docker/status";
                 public const string DockerServices = "api/v1/aibase/docker/services";

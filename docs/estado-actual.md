@@ -2,6 +2,9 @@
 
 Este documento resume lo que ya implementamos hasta ahora en SystemBase y como se usa en el flujo actual de trabajo.
 
+Actualización AIBase (11/03/2026):
+- El estado operativo de AIBase se documenta en [docs/estado-aibase.md](./estado-aibase.md).
+
 ## 1. Objetivo de la fase actual
 En esta fase construimos el pipeline minimo para:
 - Definir sistemas por metadata (sistemas, entidades, campos, relaciones).

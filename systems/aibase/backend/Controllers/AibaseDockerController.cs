@@ -23,14 +23,17 @@ namespace Backend.Controllers
         }
 
         [HttpGet(Routes.v1.Aibase.DockerStatus)]
-        public async Task<IActionResult> DockerStatus([FromQuery] string? stackName = null)
+        public async Task<IActionResult> DockerStatus(
+            [FromQuery] string? stackName = null,
+            [FromQuery] string? composeFile = null,
+            [FromQuery] string? envFile = null)
         {
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(stackName);
+            var ctx = ResolveContext(stackName, composeFile, envFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             var ps = await RunDockerComposeAsync(ctx, new[] { "ps", "--all", "--format", "json" });
             if (!ps.Ok)
@@ -50,6 +53,7 @@ namespace Backend.Controllers
             {
                 stackName = ctx.StackName,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 services,
                 ps = psRows,
                 runningServices,
@@ -60,14 +64,17 @@ namespace Backend.Controllers
         }
 
         [HttpGet(Routes.v1.Aibase.DockerServices)]
-        public async Task<IActionResult> DockerServices([FromQuery] string? stackName = null)
+        public async Task<IActionResult> DockerServices(
+            [FromQuery] string? stackName = null,
+            [FromQuery] string? composeFile = null,
+            [FromQuery] string? envFile = null)
         {
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(stackName);
+            var ctx = ResolveContext(stackName, composeFile, envFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             var cmd = await RunDockerComposeAsync(ctx, new[] { "config", "--services" });
             if (!cmd.Ok)
@@ -77,6 +84,7 @@ namespace Backend.Controllers
             {
                 stackName = ctx.StackName,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 services = ParseServices(cmd.StdOut),
                 command = cmd.Command,
                 stderr = cmd.StdErr,
@@ -90,9 +98,9 @@ namespace Backend.Controllers
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(request?.StackName);
+            var ctx = ResolveContext(request?.StackName, request?.ComposeFile, request?.EnvFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             var services = ValidateServices(request?.Services);
             if (!services.Ok)
@@ -100,6 +108,7 @@ namespace Backend.Controllers
 
             var args = new List<string> { "up", "-d" };
             if (request?.Build == true) args.Add("--build");
+            if (request?.RemoveOrphans != false) args.Add("--remove-orphans");
             args.AddRange(services.Value);
 
             var cmd = await RunDockerComposeAsync(ctx, args);
@@ -111,6 +120,7 @@ namespace Backend.Controllers
                 action = "up",
                 stackName = ctx.StackName,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 services = services.Value,
                 command = cmd.Command,
                 stdout = cmd.StdOut,
@@ -125,9 +135,9 @@ namespace Backend.Controllers
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(request?.StackName);
+            var ctx = ResolveContext(request?.StackName, request?.ComposeFile, request?.EnvFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             var args = new List<string> { "down" };
             if (request?.RemoveOrphans != false) args.Add("--remove-orphans");
@@ -142,6 +152,7 @@ namespace Backend.Controllers
                 action = "down",
                 stackName = ctx.StackName,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 command = cmd.Command,
                 stdout = cmd.StdOut,
                 stderr = cmd.StdErr,
@@ -155,9 +166,9 @@ namespace Backend.Controllers
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(request?.StackName);
+            var ctx = ResolveContext(request?.StackName, request?.ComposeFile, request?.EnvFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             var args = new List<string> { "restart" };
             var service = (request?.Service ?? "").Trim();
@@ -178,6 +189,7 @@ namespace Backend.Controllers
                 stackName = ctx.StackName,
                 service = string.IsNullOrWhiteSpace(service) ? null : service,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 command = cmd.Command,
                 stdout = cmd.StdOut,
                 stderr = cmd.StdErr,
@@ -188,15 +200,17 @@ namespace Backend.Controllers
         [HttpGet(Routes.v1.Aibase.DockerLogs)]
         public async Task<IActionResult> DockerLogs(
             [FromQuery] string? stackName = null,
+            [FromQuery] string? composeFile = null,
+            [FromQuery] string? envFile = null,
             [FromQuery] string? service = null,
             [FromQuery] int tail = 200)
         {
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(stackName);
+            var ctx = ResolveContext(stackName, composeFile, envFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             tail = Math.Clamp(tail, 20, 2000);
             var args = new List<string> { "logs", "--no-color", "--tail", tail.ToString() };
@@ -219,6 +233,7 @@ namespace Backend.Controllers
                 service = string.IsNullOrWhiteSpace(safeService) ? null : safeService,
                 tail,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 command = cmd.Command,
                 logs = cmd.StdOut,
                 stderr = cmd.StdErr,
@@ -232,9 +247,9 @@ namespace Backend.Controllers
             var gate = EnsureDockerAccess();
             if (gate != null) return gate;
 
-            var ctx = ResolveContext(request?.StackName);
+            var ctx = ResolveContext(request?.StackName, request?.ComposeFile, request?.EnvFile);
             if (!ctx.Ok)
-                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile });
+                return BadRequest(new { error = ctx.Error, stackName = ctx.StackName, composeFile = ctx.ComposeFile, envFile = ctx.EnvFile });
 
             service = service.Trim();
             if (!IsSafeToken(service))
@@ -254,6 +269,7 @@ namespace Backend.Controllers
                 service,
                 stackName = ctx.StackName,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 command = cmd.Command,
                 stdout = cmd.StdOut,
                 stderr = cmd.StdErr,
@@ -273,7 +289,7 @@ namespace Backend.Controllers
             return null;
         }
 
-        private DockerContext ResolveContext(string? stackName)
+        private DockerContext ResolveContext(string? stackName, string? composeFileOverride = null, string? envFileOverride = null)
         {
             var resolvedStackName = string.IsNullOrWhiteSpace(stackName)
                 ? AppConfig.AIBASE_DOCKER_PROJECT
@@ -284,28 +300,138 @@ namespace Backend.Controllers
                 return DockerContext.Fail($"Stack inválido: {resolvedStackName}");
             }
 
-            var composeFile = AppConfig.AIBASE_DOCKER_COMPOSE_FILE;
-            if (string.IsNullOrWhiteSpace(composeFile))
-            {
-                composeFile = Path.Combine(_env.ContentRootPath, "..", "docker", "docker-compose.yml");
-            }
-
-            if (!Path.IsPathRooted(composeFile))
-            {
-                composeFile = Path.Combine(_env.ContentRootPath, composeFile);
-            }
-
-            composeFile = Path.GetFullPath(composeFile);
+            var composeFile = ResolveFilePath(
+                composeFileOverride,
+                string.IsNullOrWhiteSpace(AppConfig.AIBASE_DOCKER_COMPOSE_FILE)
+                    ? Path.Combine(_env.ContentRootPath, "..", "docker", "docker-compose.yml")
+                    : AppConfig.AIBASE_DOCKER_COMPOSE_FILE
+            );
+            var recoveredCompose = default(string);
             if (!System.IO.File.Exists(composeFile))
             {
-                return DockerContext.Fail(
-                    $"No se encontró docker-compose.yml en '{composeFile}'. Configura AIBASE_DOCKER_COMPOSE_FILE.",
-                    resolvedStackName,
-                    composeFile
-                );
+                recoveredCompose = TryResolveLatestBundleCompose(composeFile);
+                if (!string.IsNullOrWhiteSpace(recoveredCompose) && System.IO.File.Exists(recoveredCompose))
+                {
+                    composeFile = recoveredCompose;
+                }
+                else
+                {
+                    return DockerContext.Fail(
+                        $"No se encontró docker-compose.yml en '{composeFile}'. Configura AIBASE_DOCKER_COMPOSE_FILE.",
+                        resolvedStackName,
+                        composeFile,
+                        null
+                    );
+                }
             }
 
-            return DockerContext.Success(resolvedStackName, composeFile);
+            var extension = Path.GetExtension(composeFile);
+            if (!string.Equals(extension, ".yml", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(extension, ".yaml", StringComparison.OrdinalIgnoreCase))
+            {
+                return DockerContext.Fail("composeFile inválido: debe ser .yml o .yaml", resolvedStackName, composeFile, null);
+            }
+
+            var envFile = ResolveOptionalFilePath(envFileOverride);
+            if (!string.IsNullOrWhiteSpace(envFile) && !System.IO.File.Exists(envFile))
+            {
+                var recoveredEnv = TryResolveBundleEnvFile(envFile, composeFile);
+                if (!string.IsNullOrWhiteSpace(recoveredEnv) && System.IO.File.Exists(recoveredEnv))
+                {
+                    envFile = recoveredEnv;
+                }
+                else
+                {
+                    return DockerContext.Fail(
+                        $"No se encontró env file en '{envFile}'.",
+                        resolvedStackName,
+                        composeFile,
+                        envFile
+                    );
+                }
+            }
+
+            return DockerContext.Success(resolvedStackName, composeFile, envFile);
+        }
+
+        private static string? TryResolveLatestBundleCompose(string missingComposePath)
+        {
+            try
+            {
+                var fileName = Path.GetFileName(missingComposePath);
+                if (!string.Equals(fileName, "docker-compose.yml", StringComparison.OrdinalIgnoreCase))
+                    return null;
+
+                var runDir = Path.GetDirectoryName(missingComposePath);
+                if (string.IsNullOrWhiteSpace(runDir)) return null;
+
+                var projectDir = Directory.GetParent(runDir)?.FullName;
+                if (string.IsNullOrWhiteSpace(projectDir) || !Directory.Exists(projectDir)) return null;
+
+                var projectDirName = Path.GetFileName(projectDir);
+                if (!projectDirName.StartsWith("project-", StringComparison.OrdinalIgnoreCase)) return null;
+
+                var latest = Directory
+                    .EnumerateDirectories(projectDir)
+                    .Select(dir => Path.Combine(dir, "docker-compose.yml"))
+                    .Where(System.IO.File.Exists)
+                    .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+
+                return string.IsNullOrWhiteSpace(latest) ? null : Path.GetFullPath(latest);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string? TryResolveBundleEnvFile(string missingEnvPath, string composeFile)
+        {
+            try
+            {
+                var composeDir = Path.GetDirectoryName(composeFile);
+                if (string.IsNullOrWhiteSpace(composeDir)) return null;
+
+                var siblingEnv = Path.Combine(composeDir, ".env");
+                if (System.IO.File.Exists(siblingEnv))
+                    return Path.GetFullPath(siblingEnv);
+
+                var envFileName = Path.GetFileName(missingEnvPath);
+                if (!string.IsNullOrWhiteSpace(envFileName))
+                {
+                    var candidate = Path.Combine(composeDir, envFileName);
+                    if (System.IO.File.Exists(candidate))
+                        return Path.GetFullPath(candidate);
+                }
+
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private string ResolveFilePath(string? overridePath, string defaultPath)
+        {
+            var selected = string.IsNullOrWhiteSpace(overridePath) ? defaultPath : overridePath.Trim();
+            if (!Path.IsPathRooted(selected))
+            {
+                selected = Path.Combine(_env.ContentRootPath, selected);
+            }
+            return Path.GetFullPath(selected);
+        }
+
+        private string? ResolveOptionalFilePath(string? value)
+        {
+            var raw = (value ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            if (!Path.IsPathRooted(raw))
+            {
+                raw = Path.Combine(_env.ContentRootPath, raw);
+            }
+            return Path.GetFullPath(raw);
         }
 
         private static bool IsSafeToken(string value)
@@ -353,6 +479,11 @@ namespace Backend.Controllers
             psi.ArgumentList.Add(ctx.ComposeFile);
             psi.ArgumentList.Add("-p");
             psi.ArgumentList.Add(ctx.StackName);
+            if (!string.IsNullOrWhiteSpace(ctx.EnvFile))
+            {
+                psi.ArgumentList.Add("--env-file");
+                psi.ArgumentList.Add(ctx.EnvFile);
+            }
 
             foreach (var arg in composeArgs)
             {
@@ -595,6 +726,7 @@ namespace Backend.Controllers
                 error = $"No se pudo ejecutar Docker action '{action}'.",
                 stackName = ctx.StackName,
                 composeFile = ctx.ComposeFile,
+                envFile = ctx.EnvFile,
                 command = cmd.Command,
                 exitCode = cmd.ExitCode,
                 timedOut = cmd.TimedOut,
@@ -608,13 +740,18 @@ namespace Backend.Controllers
         public sealed class DockerUpRequest
         {
             public string? StackName { get; set; }
+            public string? ComposeFile { get; set; }
+            public string? EnvFile { get; set; }
             public List<string>? Services { get; set; }
             public bool Build { get; set; }
+            public bool RemoveOrphans { get; set; } = true;
         }
 
         public sealed class DockerDownRequest
         {
             public string? StackName { get; set; }
+            public string? ComposeFile { get; set; }
+            public string? EnvFile { get; set; }
             public bool RemoveOrphans { get; set; } = true;
             public bool RemoveVolumes { get; set; }
         }
@@ -622,12 +759,16 @@ namespace Backend.Controllers
         public sealed class DockerRestartRequest
         {
             public string? StackName { get; set; }
+            public string? ComposeFile { get; set; }
+            public string? EnvFile { get; set; }
             public string? Service { get; set; }
         }
 
         public sealed class DockerServiceActionRequest
         {
             public string? StackName { get; set; }
+            public string? ComposeFile { get; set; }
+            public string? EnvFile { get; set; }
             public string? Action { get; set; }
         }
 
@@ -646,18 +787,20 @@ namespace Backend.Controllers
             public bool Ok { get; private init; }
             public string StackName { get; private init; } = "";
             public string ComposeFile { get; private init; } = "";
+            public string? EnvFile { get; private init; }
             public string Error { get; private init; } = "";
 
-            public static DockerContext Success(string stackName, string composeFile)
-                => new() { Ok = true, StackName = stackName, ComposeFile = composeFile };
+            public static DockerContext Success(string stackName, string composeFile, string? envFile)
+                => new() { Ok = true, StackName = stackName, ComposeFile = composeFile, EnvFile = envFile };
 
-            public static DockerContext Fail(string error, string? stackName = null, string? composeFile = null)
+            public static DockerContext Fail(string error, string? stackName = null, string? composeFile = null, string? envFile = null)
                 => new()
                 {
                     Ok = false,
                     Error = error,
                     StackName = stackName ?? "",
-                    ComposeFile = composeFile ?? ""
+                    ComposeFile = composeFile ?? "",
+                    EnvFile = envFile
                 };
         }
 

@@ -33,24 +33,65 @@ export default {
     return api.get(`/aibase/projects/${projectId}/workflow`)
   },
 
+  bootstrap(payload = {}) {
+    return api.post('/aibase/bootstrap', payload)
+  },
+
   triggerProjectRun(projectId, runType, inputJson = null) {
     return api.post(`/aibase/projects/${projectId}/run`, { runType, inputJson })
+  },
+
+  uploadProjectDatasetFile(projectId, file, sourceType = null) {
+    const form = new FormData()
+    form.append('file', file)
+    if (sourceType) form.append('sourceType', sourceType)
+    return api.post(`/aibase/projects/${projectId}/dataset/upload`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
+
+  listProjectDatasetSources(projectId) {
+    return api.get(`/aibase/projects/${projectId}/dataset/sources`)
+  },
+
+  generateProjectDataset(projectId, payload = {}) {
+    return api.post(`/aibase/projects/${projectId}/dataset/generate`, payload)
+  },
+
+  mergeProjectDatasets(projectId, payload = {}) {
+    return api.post(`/aibase/projects/${projectId}/dataset/merge`, payload)
+  },
+
+  runAll(projectId, payload = {}) {
+    return api.post(`/aibase/projects/${projectId}/run-all`, payload)
+  },
+
+  deployAssets(projectId) {
+    return api.get(`/aibase/projects/${projectId}/deploy-assets`)
+  },
+
+  exportDeployBundle(projectId, payload = {}) {
+    return api.post(`/aibase/projects/${projectId}/deploy-export`, payload)
   },
 
   inferProject(projectId, input, contextJson = null) {
     return api.post(`/aibase/projects/${projectId}/infer`, { input, contextJson })
   },
 
+  inferMetrics(projectId, { take = 20 } = {}) {
+    return api.get(`/aibase/projects/${projectId}/infer-metrics`, { params: { take } })
+  },
+
   assistantSuggest(prompt, stage = null, projectId = null) {
     return api.post('/aibase/assistant/suggest', { prompt, stage, projectId })
   },
 
-  dockerStatus(stackName = null) {
-    return api.get('/aibase/docker/status', { params: { stackName } })
+  dockerStatus(stackName = null, composeFile = null, envFile = null) {
+    return api.get('/aibase/docker/status', { params: { stackName, composeFile, envFile } })
   },
 
-  dockerServices(stackName = null) {
-    return api.get('/aibase/docker/services', { params: { stackName } })
+  dockerServices(stackName = null, composeFile = null, envFile = null) {
+    return api.get('/aibase/docker/services', { params: { stackName, composeFile, envFile } })
   },
 
   dockerUp(payload = {}) {
@@ -65,11 +106,11 @@ export default {
     return api.post('/aibase/docker/restart', payload)
   },
 
-  dockerLogs({ stackName = null, service = null, tail = 200 } = {}) {
-    return api.get('/aibase/docker/logs', { params: { stackName, service, tail } })
+  dockerLogs({ stackName = null, composeFile = null, envFile = null, service = null, tail = 200 } = {}) {
+    return api.get('/aibase/docker/logs', { params: { stackName, composeFile, envFile, service, tail } })
   },
 
-  dockerServiceAction(service, action, stackName = null) {
-    return api.post(`/aibase/docker/services/${encodeURIComponent(service)}/action`, { action, stackName })
+  dockerServiceAction(service, action, stackName = null, composeFile = null, envFile = null) {
+    return api.post(`/aibase/docker/services/${encodeURIComponent(service)}/action`, { action, stackName, composeFile, envFile })
   }
 }

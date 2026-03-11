@@ -1,0 +1,22 @@
+services:
+  aibase-engine:
+    build:
+      context: ../engine
+      dockerfile: Dockerfile
+      args:
+        INSTALL_LLM_EXTRAS: "1"
+    restart: unless-stopped
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8010"]
+    ports:
+      - "8010:8010"
+    env_file:
+      - ../engine/.env
+    volumes:
+      - ../engine/data:/app/data
+      - ../engine/exports:/app/exports
+      - ../engine/cache/huggingface:/root/.cache/huggingface
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8010/health', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 8

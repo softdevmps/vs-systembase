@@ -134,7 +134,13 @@ ORDER BY r.[Id] DESC;", conn);
 
             var step = workflow.Steps.FirstOrDefault(s => string.Equals(s.RunType, runType, StringComparison.OrdinalIgnoreCase));
             if (step == null) return (false, "Etapa inexistente para este proyecto.");
-            if (!step.Enabled) return (false, "La etapa no aplica al template de este proyecto.");
+            if (!step.Enabled)
+            {
+                // Permite re-ejecutar etapas heredadas/no requeridas por template actual
+                // cuando el proyecto ya tiene historial para ese runType.
+                if (step.RunsCount <= 0)
+                    return (false, "La etapa no aplica al template de este proyecto.");
+            }
             if (!step.Available && step.Status != "completed")
                 return (false, "La etapa está bloqueada. Ejecuta las etapas previas.");
 
@@ -180,7 +186,12 @@ ORDER BY [Id] DESC;", conn);
             return list;
         }
 
-        public static int InsertRunningRun(int projectId, string runType, string? inputJson, int requestedByUserId)
+        public static int InsertRunningRun(
+            int projectId,
+            string runType,
+            string? inputJson,
+            int requestedByUserId,
+            string triggerSource = "manual")
         {
             using var conn = Db.Open();
             using var cmd = new SqlCommand(@"
@@ -188,13 +199,14 @@ INSERT INTO [sys_aibase].[Runs]
 ([ProjectId], [RunType], [Status], [EngineRunId], [ProgressPct], [RequestedByUserId], [TriggerSource],
  [InputJson], [OutputJson], [LastError], [CreatedAt], [StartedAt], [FinishedAt], [UpdatedAt])
 VALUES
-(@projectId, @runType, 'running', NULL, 10, @requestedByUserId, 'manual', @inputJson, NULL, NULL, @now, @now, NULL, @now);
+(@projectId, @runType, 'running', NULL, 10, @requestedByUserId, @triggerSource, @inputJson, NULL, NULL, @now, @now, NULL, @now);
 SELECT CAST(SCOPE_IDENTITY() AS INT);", conn);
 
             var now = DateTime.UtcNow;
             cmd.Parameters.AddWithValue("@projectId", projectId);
             cmd.Parameters.AddWithValue("@runType", runType);
             cmd.Parameters.AddWithValue("@requestedByUserId", requestedByUserId);
+            cmd.Parameters.AddWithValue("@triggerSource", string.IsNullOrWhiteSpace(triggerSource) ? "manual" : triggerSource);
             cmd.Parameters.AddWithValue("@inputJson", (object?)inputJson ?? DBNull.Value);
             cmd.Parameters.AddWithValue("@now", now);
 

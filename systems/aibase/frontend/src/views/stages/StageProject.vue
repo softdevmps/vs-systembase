@@ -110,6 +110,18 @@
               >
                 {{ editingId ? 'Guardar proyecto' : 'Crear proyecto' }}
               </v-btn>
+              <v-btn
+                v-if="editingId"
+                class="sb-btn"
+                variant="tonal"
+                color="error"
+                prepend-icon="mdi-delete-outline"
+                :loading="deleting"
+                :disabled="!canDeleteEditing"
+                @click="deleteEditingProject"
+              >
+                Eliminar proyecto
+              </v-btn>
               <v-btn class="sb-btn" variant="tonal" prepend-icon="mdi-arrow-right" :disabled="!selectedProjectId" @click="goNext">
                 Continuar a Dataset
               </v-btn>
@@ -153,6 +165,17 @@
                 <v-btn class="sb-btn ghost" variant="text" prepend-icon="mdi-pencil" :disabled="!selectedProject" @click="loadSelectedForEdit">
                   Editar seleccionado
                 </v-btn>
+                <v-btn
+                  class="sb-btn ghost"
+                  variant="text"
+                  color="error"
+                  prepend-icon="mdi-delete-outline"
+                  :loading="deleting"
+                  :disabled="!canDeleteSelected"
+                  @click="deleteSelectedProject"
+                >
+                  Eliminar seleccionado
+                </v-btn>
                 <v-btn class="sb-btn ghost" variant="text" prepend-icon="mdi-refresh" @click="loadData">
                   Recargar
                 </v-btn>
@@ -189,6 +212,7 @@ const router = useRouter()
 
 const loading = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const error = ref('')
 const projects = ref([])
 const templates = ref([])
@@ -300,6 +324,8 @@ const hasTemplate = computed(() => !!form.templateId)
 const hasBasicData = computed(() => Boolean(String(form.name).trim()) && Boolean(String(form.slug).trim()))
 const hasOperationalConfig = computed(() => Boolean(String(form.language).trim()) && Boolean(String(form.status).trim()))
 const canSave = computed(() => hasTemplate.value && hasBasicData.value && hasOperationalConfig.value)
+const canDeleteEditing = computed(() => Boolean(editingId.value) && !saving.value && !deleting.value)
+const canDeleteSelected = computed(() => Boolean(selectedProject.value) && !saving.value && !deleting.value)
 
 function resetForm() {
   editingId.value = null
@@ -431,6 +457,53 @@ async function saveProject() {
   } finally {
     saving.value = false
   }
+}
+
+async function deleteProjectById(projectId, projectName) {
+  if (!projectId) return
+
+  const targetName = String(projectName || '').trim() || `#${projectId}`
+  const ok = window.confirm(`¿Eliminar proyecto "${targetName}"? Esta acción no se puede deshacer.`)
+  if (!ok) return
+
+  deleting.value = true
+  error.value = ''
+
+  try {
+    await runtimeApi.remove('projects', projectId)
+
+    const wasSelected = String(selectedProjectId.value || '') === String(projectId)
+    const wasEditing = String(editingId.value || '') === String(projectId)
+
+    await loadProjects()
+
+    const existsSelected = projects.value.some(item => String(item.Id || item.id) === String(selectedProjectId.value))
+    if (wasSelected || !existsSelected) {
+      selectedProjectId.value = projects.value[0]?.Id || projects.value[0]?.id || null
+    }
+
+    if (wasEditing) {
+      resetForm()
+    }
+
+    await loadRunsCount(selectedProjectId.value)
+  } catch (err) {
+    error.value = errorText(err, 'No se pudo eliminar el proyecto.')
+  } finally {
+    deleting.value = false
+  }
+}
+
+function deleteEditingProject() {
+  if (!editingId.value) return
+  deleteProjectById(editingId.value, form.name)
+}
+
+function deleteSelectedProject() {
+  if (!selectedProject.value) return
+  const id = selectedProject.value.Id || selectedProject.value.id
+  const name = selectedProject.value.Name || selectedProject.value.name || ''
+  deleteProjectById(id, name)
 }
 
 function goNext() {

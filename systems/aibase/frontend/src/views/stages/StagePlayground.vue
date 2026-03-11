@@ -238,7 +238,7 @@
 
             <div class="mt-2">
               <span v-if="!canInfer" class="text-caption text-medium-emphasis">
-                Completa deploy para habilitar inferencia.
+                Completa deploy o configura modelService en Template para habilitar inferencia.
               </span>
             </div>
 
@@ -313,7 +313,7 @@
             <span>Resultado</span>
             <div class="d-flex align-center ga-2 flex-wrap">
               <v-chip v-if="inferResult" size="small" variant="tonal" :color="isMockResult ? 'warning' : 'success'">
-                {{ isMockResult ? 'mock' : 'engine' }}
+                {{ resultChannelLabel }}
               </v-chip>
               <v-chip v-if="quickVerdict" size="small" variant="tonal" :color="quickVerdict.ok ? 'success' : 'warning'">
                 {{ quickVerdict.ok ? 'validado' : 'revisar' }}
@@ -331,6 +331,19 @@
                 <div><strong>Timestamp:</strong> {{ formatDate(new Date().toISOString()) }}</div>
                 <div v-if="lastInferDurationMs"><strong>Duración:</strong> {{ lastInferDurationMs }} ms</div>
                 <div><strong>Input mode:</strong> {{ inputMode }}</div>
+                <div v-if="inferProvider"><strong>Provider:</strong> {{ inferProvider }}</div>
+                <div v-if="inferModel"><strong>Modelo:</strong> {{ inferModel }}</div>
+                <div v-if="inferEndpoint"><strong>Endpoint:</strong> {{ inferEndpoint }}</div>
+                <div><strong>Fallback:</strong> {{ inferUsedFallback ? 'sí' : 'no' }}</div>
+                <div v-if="inferQualityScore !== null"><strong>Quality score:</strong> {{ (inferQualityScore * 100).toFixed(0) }}%</div>
+                <div v-if="inferAutoLearning"><strong>Auto-learning:</strong> {{ inferAutoLearning.enabled ? 'activo' : 'inactivo' }}</div>
+                <div v-if="inferAutoLearning && inferAutoLearning.enabled"><strong>Memorias ML:</strong> {{ inferAutoLearning.records ?? 0 }}</div>
+                <div v-if="inferAutoLearning && inferAutoLearning.enabled"><strong>Aprendió en este turno:</strong> {{ inferAutoLearning.learnedThisTurn ? 'sí' : 'no' }}</div>
+                <div v-if="inferReasoning"><strong>Razonamiento:</strong> {{ inferReasoning.enabled ? 'activo' : 'inactivo' }}</div>
+                <div v-if="inferReasoning && inferReasoning.enabled"><strong>Razonamiento aplicado:</strong> {{ inferReasoning.applied ? 'sí' : 'no' }}</div>
+                <div v-if="inferReasoning && inferReasoning.enabled"><strong>Pasadas:</strong> {{ inferReasoning.passesApplied ?? 0 }}/{{ inferReasoning.passes ?? 0 }}</div>
+                <div v-if="inferReasoning && inferReasoning.enabled && inferReasoning.useVerifier"><strong>Verificador:</strong> {{ inferReasoning.verifierApplied ? 'aplicado' : 'sin cambio' }}</div>
+                <div v-if="inferReasoning && inferReasoning.enabled && inferReasoning.reason"><strong>Motivo:</strong> {{ inferReasoning.reason }}</div>
               </div>
 
               <div class="d-flex align-center ga-2 mt-3 flex-wrap">
@@ -361,10 +374,96 @@
           <v-card-text>
             <ul class="hint-list">
               <li :class="{ ok: !!selectedProjectId }">Proyecto seleccionado</li>
-              <li :class="{ ok: canInfer }">Deploy completado (canInfer)</li>
+              <li :class="{ ok: canInfer }">Deploy completado o modelService activo (canInfer)</li>
               <li :class="{ ok: !contextError }">Contexto JSON válido</li>
               <li :class="{ ok: !!inferInput.trim() || !!mediaPayload }">Input cargado (texto o archivo)</li>
             </ul>
+          </v-card-text>
+        </v-card>
+
+        <v-card class="card mt-4">
+          <v-card-title class="d-flex align-center justify-space-between">
+            Dataset activo
+            <v-btn icon variant="text" :disabled="loadingDeployRuns" @click="loadLatestDeployInfo">
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <div v-if="loadingDeployRuns" class="sb-skeleton" style="height: 72px;" />
+            <div v-else-if="!latestDatasetSummary.status" class="text-caption text-medium-emphasis">
+              No hay build dataset para este proyecto.
+            </div>
+            <template v-else>
+              <div class="result-meta">
+                <div>
+                  <strong>Build dataset:</strong>
+                  <v-chip size="x-small" variant="tonal" :color="statusColor(latestDatasetSummary.status)">
+                    {{ latestDatasetSummary.status }}
+                  </v-chip>
+                </div>
+                <div v-if="latestDatasetSummary.version"><strong>Versión:</strong> {{ latestDatasetSummary.version }}</div>
+                <div v-if="latestDatasetSummary.records !== null"><strong>Registros:</strong> {{ latestDatasetSummary.records }}</div>
+                <div v-if="latestDatasetSummary.sourceType"><strong>Fuente:</strong> {{ latestDatasetSummary.sourceType }}</div>
+                <div v-if="latestDatasetSummary.sourcePath"><strong>Path:</strong> {{ latestDatasetSummary.sourcePath }}</div>
+                <div v-if="latestDatasetSummary.builtAt"><strong>Build at:</strong> {{ formatDate(latestDatasetSummary.builtAt) }}</div>
+              </div>
+
+              <v-divider class="my-3" />
+
+              <div class="result-meta">
+                <div>
+                  <strong>Index RAG:</strong>
+                  <v-chip size="x-small" variant="tonal" :color="statusColor(latestRagSummary.status)">
+                    {{ latestRagSummary.status || 'sin indexar' }}
+                  </v-chip>
+                </div>
+                <div v-if="latestRagSummary.datasetVersion"><strong>Dataset version:</strong> {{ latestRagSummary.datasetVersion }}</div>
+                <div v-if="latestRagSummary.documents !== null"><strong>Documentos:</strong> {{ latestRagSummary.documents }}</div>
+                <div v-if="latestRagSummary.datasetSourcePath"><strong>Dataset source:</strong> {{ latestRagSummary.datasetSourcePath }}</div>
+              </div>
+
+              <v-chip class="mt-2" size="small" variant="tonal" :color="datasetLoadedInModel ? 'success' : 'warning'">
+                Dataset cargado para responder: {{ datasetLoadedInModel ? 'sí' : 'no' }}
+              </v-chip>
+            </template>
+          </v-card-text>
+        </v-card>
+
+        <v-card class="card mt-4">
+          <v-card-title class="d-flex align-center justify-space-between">
+            Métricas de inferencia
+            <v-btn icon variant="text" :disabled="loadingInferMetrics" @click="loadInferMetrics">
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <div v-if="loadingInferMetrics" class="sb-skeleton" style="height: 72px;" />
+            <v-alert
+              v-else-if="inferMetricsError"
+              type="warning"
+              variant="tonal"
+              density="comfortable"
+              :text="inferMetricsError"
+            />
+            <div v-else-if="!inferMetricsSummary" class="text-caption text-medium-emphasis">
+              Sin métricas todavía para este proyecto.
+            </div>
+            <template v-else>
+              <div class="result-meta">
+                <div><strong>Muestras:</strong> {{ inferMetricsSummary.total }}</div>
+                <div><strong>Success rate:</strong> {{ (inferMetricsSummary.successRate * 100).toFixed(0) }}%</div>
+                <div><strong>Fallback rate:</strong> {{ (inferMetricsSummary.fallbackRate * 100).toFixed(0) }}%</div>
+                <div><strong>Avg latency:</strong> {{ inferMetricsSummary.avgLatencyMs }} ms</div>
+              </div>
+              <v-chip class="mt-2" size="small" variant="tonal" :color="inferMetricsGate?.ok ? 'success' : 'warning'">
+                Gate deploy: {{ inferMetricsGate?.ok ? 'ok' : 'revisar' }}
+              </v-chip>
+              <div v-if="inferMetricsGate?.reason" class="text-caption text-medium-emphasis mt-2">
+                {{ inferMetricsGate.reason }}
+              </div>
+            </template>
           </v-card-text>
         </v-card>
 
@@ -456,17 +555,22 @@ const optionGuideItems = [
 const loadingProjects = ref(false)
 const loadingWorkflow = ref(false)
 const loadingDeployRuns = ref(false)
+const loadingInferMetrics = ref(false)
 const inferLoading = ref(false)
 
 const error = ref('')
 const inferError = ref('')
 const mediaError = ref('')
+const inferMetricsError = ref('')
 
 const projects = ref([])
 const selectedProjectId = ref(null)
 const selectedTemplate = ref(null)
 const workflow = ref(null)
 const latestDeployRun = ref(null)
+const latestDatasetRun = ref(null)
+const latestRagRun = ref(null)
+const inferMetrics = ref(null)
 
 const inputMode = ref('text')
 const includeMediaInContext = ref(true)
@@ -506,7 +610,7 @@ function normalizeRecord(record) {
   }
   ;[
     'Id', 'Name', 'TemplateId', 'Templateid', 'RunType', 'Status', 'Inputjson', 'Outputjson',
-    'CreatedAt', 'ProjectId', 'Projectid', 'CanInfer', 'ProjectStatus', 'NextRunType'
+    'CreatedAt', 'ProjectId', 'Projectid', 'CanInfer', 'ProjectStatus', 'NextRunType', 'DiagnosticsJson'
   ].forEach(ensure)
   return copy
 }
@@ -536,6 +640,13 @@ function normalizeTemplateProfile(value) {
   return ''
 }
 
+function normalizeModelProvider(value) {
+  const key = String(value || '').trim().toLowerCase()
+  if (['openai-compatible', 'openai_compatible', 'chatgpt'].includes(key)) return 'openai'
+  if (['openai', 'ollama', 'engine'].includes(key)) return key
+  return ''
+}
+
 function pickFirst(...values) {
   for (const value of values) {
     if (value === null || value === undefined) continue
@@ -543,6 +654,24 @@ function pickFirst(...values) {
     if (text) return text
   }
   return ''
+}
+
+function runSortScore(run) {
+  if (!run || typeof run !== 'object') return 0
+  const idValue = Number(run.Id || run.id || 0)
+  if (Number.isFinite(idValue) && idValue > 0) return idValue
+  const dateValue = new Date(
+    run.UpdatedAt || run.updatedAt || run.FinishedAt || run.finishedAt || run.CreatedAt || run.createdAt || 0
+  ).getTime()
+  return Number.isFinite(dateValue) ? dateValue : 0
+}
+
+function pickLatestRunByType(runs, runType) {
+  const key = String(runType || '').toLowerCase()
+  if (!Array.isArray(runs) || !key) return null
+  const filtered = runs.filter(item => String(item.RunType || item.runType || '').toLowerCase() === key)
+  if (!filtered.length) return null
+  return filtered.slice().sort((a, b) => runSortScore(b) - runSortScore(a))[0] || null
 }
 
 function statusColor(status) {
@@ -666,9 +795,29 @@ const selectedTemplatePipeline = computed(() => {
   const parsed = parseJson(raw, null)
   return parsed.ok && parsed.value && typeof parsed.value === 'object' ? parsed.value : null
 })
+const selectedTemplateModelService = computed(() => {
+  const config = selectedTemplatePipeline.value?.meta?.modelService
+    || selectedTemplatePipeline.value?.meta?.modelservice
+    || selectedTemplatePipeline.value?.modelService
+    || null
+  if (!config || typeof config !== 'object') return null
+  return config
+})
 const selectedTemplateProfileUi = computed(() =>
   normalizeTemplateProfile(selectedTemplatePipeline.value?.meta?.playgroundProfile)
 )
+const hasDirectModelService = computed(() => {
+  const config = selectedTemplateModelService.value
+  if (!config) return false
+  if (config.enabled === false) return false
+
+  const provider = normalizeModelProvider(config.provider || config.type)
+  if (!provider) return false
+  if (provider === 'engine') return true
+  const baseUrl = String(config.baseUrl || config.url || config.endpoint || '').trim()
+  const model = String(config.model || config.modelName || '').trim()
+  return Boolean(baseUrl && model)
+})
 
 const templateProfile = computed(() => {
   if (selectedTemplateProfileUi.value) return selectedTemplateProfileUi.value
@@ -715,7 +864,9 @@ const quickInputPlaceholder = computed(() => {
   return 'Escribe texto para inferencia o una descripción del archivo subido.'
 })
 
-const canInfer = computed(() => Boolean(workflow.value?.CanInfer ?? workflow.value?.canInfer))
+const canInfer = computed(() =>
+  Boolean(workflow.value?.CanInfer ?? workflow.value?.canInfer) || hasDirectModelService.value
+)
 const projectStatus = computed(() => workflow.value?.ProjectStatus || workflow.value?.projectStatus || '')
 const nextRunType = computed(() => String(workflow.value?.NextRunType || workflow.value?.nextRunType || '').toLowerCase())
 const nextRunLabel = computed(() => runTypeLabels[nextRunType.value] || nextRunType.value || '—')
@@ -749,6 +900,56 @@ const inferOutputRaw = computed(() => {
   return String(inferResult.value.Output || inferResult.value.output || inferResult.value.OutputJson || inferResult.value.outputJson || '')
 })
 
+const inferProvider = computed(() => String(inferResult.value?.Provider || inferResult.value?.provider || '').trim())
+const inferModel = computed(() => String(inferResult.value?.Model || inferResult.value?.model || '').trim())
+const inferEndpoint = computed(() => String(inferResult.value?.Endpoint || inferResult.value?.endpoint || '').trim())
+const inferUsedFallback = computed(() => {
+  const direct = inferResult.value?.UsedFallback ?? inferResult.value?.usedFallback
+  if (typeof direct === 'boolean') return direct
+  const outputJson = inferResult.value?.OutputJson || inferResult.value?.outputJson || ''
+  const parsed = parseJson(outputJson, null)
+  if (parsed.ok && parsed.value && typeof parsed.value === 'object' && typeof parsed.value.usedFallback === 'boolean') {
+    return parsed.value.usedFallback
+  }
+  return false
+})
+const inferQualityScore = computed(() => {
+  const direct = inferResult.value?.QualityScore ?? inferResult.value?.qualityScore
+  if (Number.isFinite(Number(direct))) return Number(direct)
+  const outputJson = inferResult.value?.OutputJson || inferResult.value?.outputJson || ''
+  const parsed = parseJson(outputJson, null)
+  if (parsed.ok && parsed.value && typeof parsed.value === 'object' && Number.isFinite(Number(parsed.value.qualityScore))) {
+    return Number(parsed.value.qualityScore)
+  }
+  return null
+})
+const inferDiagnostics = computed(() => {
+  if (!inferResult.value) return null
+  const direct = inferResult.value?.DiagnosticsJson || inferResult.value?.diagnosticsJson
+  const directParsed = parseJson(direct, null)
+  if (directParsed.ok && directParsed.value && typeof directParsed.value === 'object') {
+    return directParsed.value
+  }
+  const outputJson = inferResult.value?.OutputJson || inferResult.value?.outputJson || ''
+  const parsed = parseJson(outputJson, null)
+  if (parsed.ok && parsed.value && typeof parsed.value === 'object' && parsed.value.diagnostics && typeof parsed.value.diagnostics === 'object') {
+    return parsed.value.diagnostics
+  }
+  return null
+})
+const inferAutoLearning = computed(() => {
+  const diag = inferDiagnostics.value
+  if (!diag || typeof diag !== 'object') return null
+  const auto = diag.autoLearning
+  return auto && typeof auto === 'object' ? auto : null
+})
+const inferReasoning = computed(() => {
+  const diag = inferDiagnostics.value
+  if (!diag || typeof diag !== 'object') return null
+  const reasoning = diag.reasoning
+  return reasoning && typeof reasoning === 'object' ? reasoning : null
+})
+
 const inferOutputJsonPretty = computed(() => {
   if (!inferResult.value) return ''
 
@@ -769,6 +970,11 @@ const inferOutputJsonPretty = computed(() => {
 })
 
 const isMockResult = computed(() => Boolean(inferResult.value?.IsMock || inferResult.value?.isMock))
+const resultChannelLabel = computed(() => {
+  if (isMockResult.value) return 'mock'
+  if (inferProvider.value) return inferProvider.value
+  return 'engine'
+})
 
 const quickVerdict = computed(() => {
   if (!inferResult.value) return null
@@ -796,6 +1002,93 @@ const latestDeploySummary = computed(() => {
     service: pickFirst(deploy?.service, outputObj?.service, deploy?.stackName, outputObj?.stackName, inputObj?.stackName),
     endpoint: pickFirst(deploy?.endpoint, outputObj?.endpoint, inputObj?.endpoint),
     health: pickFirst(deploy?.health, outputObj?.health, inputObj?.healthUrl)
+  }
+})
+
+const latestDatasetSummary = computed(() => {
+  if (!latestDatasetRun.value) {
+    return {
+      status: '',
+      version: '',
+      records: null,
+      sourceType: '',
+      sourcePath: '',
+      builtAt: ''
+    }
+  }
+
+  const outputParsed = parseJson(latestDatasetRun.value.Outputjson || latestDatasetRun.value.outputjson || '', null)
+  const inputParsed = parseJson(latestDatasetRun.value.Inputjson || latestDatasetRun.value.inputjson || '', null)
+  const outputObj = outputParsed.ok ? outputParsed.value : null
+  const inputObj = inputParsed.ok ? inputParsed.value : null
+  const dataset = outputObj?.dataset || outputObj?.output?.dataset || {}
+  const source = inputObj?.source || {}
+
+  const recordsRaw = dataset?.records
+  const recordsNum = Number(recordsRaw)
+
+  return {
+    status: String(outputObj?.status || latestDatasetRun.value.Status || latestDatasetRun.value.status || '').toLowerCase(),
+    version: pickFirst(dataset?.datasetVersion, inputObj?.datasetVersion),
+    records: Number.isFinite(recordsNum) ? recordsNum : null,
+    sourceType: pickFirst(dataset?.sourceType, source?.type, inputObj?.sourceType),
+    sourcePath: pickFirst(dataset?.sourcePath, source?.path, inputObj?.sourcePath),
+    builtAt: pickFirst(dataset?.builtAt, outputObj?.at, latestDatasetRun.value.UpdatedAt, latestDatasetRun.value.updatedAt)
+  }
+})
+
+const latestRagSummary = computed(() => {
+  if (!latestRagRun.value) {
+    return {
+      status: '',
+      datasetVersion: '',
+      documents: null,
+      datasetSourcePath: '',
+      loadedFromDataset: false
+    }
+  }
+
+  const outputParsed = parseJson(latestRagRun.value.Outputjson || latestRagRun.value.outputjson || '', null)
+  const inputParsed = parseJson(latestRagRun.value.Inputjson || latestRagRun.value.inputjson || '', null)
+  const outputObj = outputParsed.ok ? outputParsed.value : null
+  const inputObj = inputParsed.ok ? inputParsed.value : null
+  const rag = outputObj?.rag || outputObj?.output?.rag || {}
+
+  const docsRaw = rag?.documents
+  const docsNum = Number(docsRaw)
+
+  return {
+    status: String(outputObj?.status || latestRagRun.value.Status || latestRagRun.value.status || '').toLowerCase(),
+    datasetVersion: pickFirst(inputObj?.datasetVersion),
+    documents: Number.isFinite(docsNum) ? docsNum : null,
+    datasetSourcePath: pickFirst(rag?.datasetSourcePath),
+    loadedFromDataset: Boolean(rag?.loadedFromDataset)
+  }
+})
+
+const datasetLoadedInModel = computed(() => {
+  if (latestRagSummary.value.status !== 'completed') return false
+  if ((latestRagSummary.value.documents || 0) <= 0) return false
+  return true
+})
+
+const inferMetricsSummary = computed(() => {
+  const raw = inferMetrics.value?.summary
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    total: Number(raw.total || 0),
+    successRate: Number(raw.successRate || 0),
+    fallbackRate: Number(raw.fallbackRate || 0),
+    avgLatencyMs: Number(raw.avgLatencyMs || 0)
+  }
+})
+
+const inferMetricsGate = computed(() => {
+  const raw = inferMetrics.value?.gate
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    ok: Boolean(raw.ok),
+    reason: String(raw.reason || '')
   }
 })
 
@@ -952,17 +1245,39 @@ async function loadWorkflow() {
 
 async function loadLatestDeployInfo() {
   latestDeployRun.value = null
+  latestDatasetRun.value = null
+  latestRagRun.value = null
   if (!selectedProjectId.value) return
 
   loadingDeployRuns.value = true
   try {
     const response = await runtimeApi.listProjectRuns(selectedProjectId.value, 40)
     const allRuns = Array.isArray(response?.data) ? response.data.map(normalizeRecord) : []
-    latestDeployRun.value = allRuns.find(run => String(run.RunType || run.runType || '').toLowerCase() === 'deploy_service') || null
+    latestDeployRun.value = pickLatestRunByType(allRuns, 'deploy_service')
+    latestDatasetRun.value = pickLatestRunByType(allRuns, 'dataset_build')
+    latestRagRun.value = pickLatestRunByType(allRuns, 'rag_index')
   } catch {
     latestDeployRun.value = null
+    latestDatasetRun.value = null
+    latestRagRun.value = null
   } finally {
     loadingDeployRuns.value = false
+  }
+}
+
+async function loadInferMetrics() {
+  inferMetricsError.value = ''
+  inferMetrics.value = null
+  if (!selectedProjectId.value) return
+
+  loadingInferMetrics.value = true
+  try {
+    const response = await runtimeApi.inferMetrics(selectedProjectId.value, { take: 40 })
+    inferMetrics.value = response?.data || null
+  } catch (err) {
+    inferMetricsError.value = errorText(err, 'No se pudieron obtener métricas de inferencia.')
+  } finally {
+    loadingInferMetrics.value = false
   }
 }
 
@@ -983,7 +1298,7 @@ function pushHistoryEntry({ mode, expectedContains = '', ok = false }) {
   }
 }
 
-function buildContextJson() {
+function buildContextJson(mode = 'manual', payloadInput = '') {
   const base = contextParsed.value.ok ? (contextParsed.value.value || {}) : {}
   const ctx = typeof base === 'object' && base !== null ? { ...base } : {}
 
@@ -1001,6 +1316,29 @@ function buildContextJson() {
       }
     ]
   }
+
+  if (isChatLike.value) {
+    const normalized = chatConversation.value
+      .map(item => ({
+        role: String(item?.role || '').toLowerCase() === 'assistant' ? 'assistant' : 'user',
+        text: String(item?.text || '').trim()
+      }))
+      .filter(item => item.text)
+
+    if (normalized.length) {
+      const history = [...normalized]
+      const last = history[history.length - 1]
+      if (last && last.role === 'user' && last.text === String(payloadInput || '').trim()) {
+        history.pop()
+      }
+
+      if (history.length) {
+        ctx.chatHistory = history.slice(-20)
+      }
+    }
+  }
+
+  ctx.clientMode = mode
 
   return Object.keys(ctx).length ? JSON.stringify(ctx) : null
 }
@@ -1020,7 +1358,7 @@ async function runInfer(options = {}) {
   }
 
   if (!canInfer.value) {
-    inferError.value = 'El proyecto todavía no habilitó inferencia (falta deploy).'
+    inferError.value = 'No hay inferencia habilitada: completa deploy o configura modelService en el template.'
     return false
   }
 
@@ -1040,7 +1378,7 @@ async function runInfer(options = {}) {
   }
 
   const payloadInput = inputOverride || inferInput.value.trim() || `[${inputMode.value.toUpperCase()}] ${mediaPayload.value?.fileName || 'input'}`
-  const contextJson = buildContextJson()
+  const contextJson = buildContextJson(mode, payloadInput)
 
   const startedAt = performance.now()
   inferLoading.value = true
@@ -1052,6 +1390,7 @@ async function runInfer(options = {}) {
     const outputText = `${inferOutputRaw.value}\n${inferOutputJsonPretty.value}`.toLowerCase()
     const ok = expectedContains ? outputText.includes(expectedContains.toLowerCase()) : true
     pushHistoryEntry({ mode, expectedContains, ok })
+    await loadInferMetrics()
     return ok
   } catch (err) {
     inferError.value = errorText(err, 'No se pudo ejecutar la inferencia.')
@@ -1127,7 +1466,7 @@ async function runAllDemoCases() {
 async function load() {
   error.value = ''
   await loadProjects()
-  await Promise.all([loadProjectTemplate(), loadWorkflow(), loadLatestDeployInfo()])
+  await Promise.all([loadProjectTemplate(), loadWorkflow(), loadLatestDeployInfo(), loadInferMetrics()])
 }
 
 watch(selectedProjectId, async value => {
@@ -1137,7 +1476,7 @@ watch(selectedProjectId, async value => {
   chatDraft.value = ''
   chatConversation.value = []
   caseResults.value = {}
-  await Promise.all([loadProjectTemplate(), loadWorkflow(), loadLatestDeployInfo()])
+  await Promise.all([loadProjectTemplate(), loadWorkflow(), loadLatestDeployInfo(), loadInferMetrics()])
 })
 
 watch(templateProfile, profile => {

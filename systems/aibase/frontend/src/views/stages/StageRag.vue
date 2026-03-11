@@ -246,6 +246,28 @@
       </v-col>
 
       <v-col cols="12" md="5">
+        <v-card class="card mb-4">
+          <v-card-title class="d-flex align-center justify-space-between">
+            Fuente activa de dataset
+            <v-btn icon variant="text" :disabled="loadingDatasetSources || !selectedProjectId" @click="loadDatasetSources()">
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <div v-if="loadingDatasetSources" class="sb-skeleton" style="height: 90px;"></div>
+            <template v-else-if="activeDatasetSourcePath">
+              <div class="text-caption text-medium-emphasis mb-1">SourcePath activo</div>
+              <div class="source-path-box">{{ activeDatasetSourcePath }}</div>
+              <div class="text-caption text-medium-emphasis mt-2">Archivo</div>
+              <div class="text-body-2">{{ activeDatasetFileName }}</div>
+            </template>
+            <div v-else class="text-caption text-medium-emphasis">
+              No hay una fuente de dataset activa. Ve a Etapa Dataset, selecciona una fuente y ejecuta Build Dataset.
+            </div>
+          </v-card-text>
+        </v-card>
+
         <v-card class="card">
           <v-card-title>Prerequisitos</v-card-title>
           <v-divider />
@@ -333,6 +355,9 @@ const templates = ref([])
 const selectedProjectId = ref(null)
 const projectWorkflow = ref(null)
 const runs = ref([])
+const loadingDatasetSources = ref(false)
+const datasetSources = ref([])
+const activeDatasetSourcePath = ref('')
 
 const ragForm = reactive({
   reindexMode: 'incremental',
@@ -468,6 +493,17 @@ const datasetStep = computed(() => workflowSteps.value.find(step =>
 const ragStep = computed(() => workflowSteps.value.find(step =>
   String(step.RunType || step.runType || '').toLowerCase() === 'rag_index'
 ))
+const activeDatasetSource = computed(() =>
+  datasetSources.value.find(item => String(item?.sourcePath || '') === String(activeDatasetSourcePath.value || '')) || null
+)
+const activeDatasetFileName = computed(() => {
+  const fromItem = String(activeDatasetSource.value?.fileName || '').trim()
+  if (fromItem) return fromItem
+  const rawPath = String(activeDatasetSourcePath.value || '').trim()
+  if (!rawPath) return '—'
+  const parts = rawPath.split('/')
+  return parts[parts.length - 1] || rawPath
+})
 
 const chunkingError = computed(() => {
   const size = Number(ragForm.chunkSize || 0)
@@ -487,7 +523,8 @@ const canRunStage = computed(() => {
   const enabled = Boolean(ragStep.value.Enabled ?? ragStep.value.enabled)
   const available = Boolean(ragStep.value.Available ?? ragStep.value.available)
   const status = String(ragStep.value.Status || ragStep.value.status || '').toLowerCase()
-  return enabled && (available || status === 'completed')
+  if (status === 'completed') return true
+  return enabled && available
 })
 
 const filtersParsed = computed(() => parseJson(ragForm.filtersJson, {}))
@@ -611,6 +648,36 @@ async function loadRuns() {
   }
 }
 
+async function loadDatasetSources(projectId = selectedProjectId.value) {
+  const id = Number(projectId || 0)
+  if (!id) {
+    datasetSources.value = []
+    activeDatasetSourcePath.value = ''
+    return
+  }
+
+  loadingDatasetSources.value = true
+  try {
+    const response = await runtimeApi.listProjectDatasetSources(id)
+    const items = Array.isArray(response?.data?.sources) ? response.data.sources : []
+    datasetSources.value = items
+
+    const explicitActive = String(response?.data?.activeSourcePath || '').trim()
+    if (explicitActive) {
+      activeDatasetSourcePath.value = explicitActive
+      return
+    }
+
+    const activeItem = items.find(item => Boolean(item?.isActive))
+    activeDatasetSourcePath.value = String(activeItem?.sourcePath || '').trim()
+  } catch {
+    datasetSources.value = []
+    activeDatasetSourcePath.value = ''
+  } finally {
+    loadingDatasetSources.value = false
+  }
+}
+
 async function loadData() {
   loadingData.value = true
   error.value = ''
@@ -619,7 +686,7 @@ async function loadData() {
     if (!selectedProjectId.value && projects.value.length) {
       selectedProjectId.value = projects.value[0].Id || projects.value[0].id
     }
-    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
+    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns(), loadDatasetSources(selectedProjectId.value)])
     suggestDefaultsFromProject()
   } catch (err) {
     error.value = errorText(err, 'No se pudo cargar la etapa RAG.')
@@ -643,7 +710,7 @@ async function triggerRagIndex() {
       JSON.stringify(payload)
     )
     runMessage.value = 'RAG Index ejecutado. Revisa la salida en runs.'
-    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
+    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns(), loadDatasetSources(selectedProjectId.value)])
   } catch (err) {
     runError.value = errorText(err, 'No se pudo ejecutar la indexación RAG.')
   } finally {
@@ -674,7 +741,7 @@ watch(selectedProjectId, async id => {
   runError.value = ''
   ragForm.indexName = ''
   ragForm.datasetVersion = ''
-  await Promise.all([loadWorkflow(id), loadRuns()])
+  await Promise.all([loadWorkflow(id), loadRuns(), loadDatasetSources(id)])
   suggestDefaultsFromProject()
 })
 
@@ -755,6 +822,15 @@ onMounted(loadData)
   color: var(--sb-danger, #dc2626);
   font-size: 0.84rem;
   margin-top: 6px;
+}
+
+.source-path-box {
+  border: 1px solid rgba(120, 140, 170, 0.22);
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.03);
+  padding: 8px;
+  font-size: 0.78rem;
+  word-break: break-all;
 }
 
 .preview-box {

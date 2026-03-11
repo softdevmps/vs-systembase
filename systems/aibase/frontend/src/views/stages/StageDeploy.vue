@@ -29,7 +29,7 @@
     <OptionGuide class="mt-4" :items="optionGuideItems" />
 
     <v-row class="mt-4" dense>
-      <v-col cols="12" md="7">
+      <v-col cols="12" lg="7" xl="8" class="deploy-main-col">
         <v-card class="card">
           <v-card-title>Configuración de despliegue</v-card-title>
           <v-divider />
@@ -259,19 +259,36 @@
         </v-card>
       </v-col>
 
-      <v-col cols="12" md="5">
+      <v-col cols="12" lg="5" xl="4" class="deploy-secondary-grid deploy-side-col">
         <v-card class="card">
-          <v-card-title>Gate de deploy</v-card-title>
+          <v-card-title class="d-flex align-center justify-space-between">
+            Gate de deploy
+            <v-btn icon variant="text" :disabled="inferMetricsLoading" @click="loadInferMetrics">
+              <v-icon>mdi-refresh</v-icon>
+            </v-btn>
+          </v-card-title>
           <v-divider />
           <v-card-text>
             <ul class="hint-list">
               <li :class="{ ok: !!selectedProjectId }">Proyecto seleccionado</li>
               <li :class="{ ok: evalCompleted }">Evaluación completada</li>
               <li :class="{ ok: canRunStage }">Etapa habilitada en workflow</li>
+              <li :class="{ ok: qualityGateOk }">Quality gate de inferencia</li>
               <li :class="{ ok: !envVarsError }">JSON env vars válido</li>
               <li :class="{ ok: !extraJsonError }">JSON de overrides válido</li>
               <li :class="{ ok: !numericError }">Parámetros numéricos válidos</li>
             </ul>
+            <div v-if="inferMetricsSummaryText" class="text-caption text-medium-emphasis mt-2">
+              {{ inferMetricsSummaryText }}
+            </div>
+            <v-alert
+              v-if="inferMetricsError"
+              class="mt-2"
+              type="warning"
+              variant="tonal"
+              density="comfortable"
+              :text="inferMetricsError"
+            />
           </v-card-text>
         </v-card>
 
@@ -295,7 +312,7 @@
           </v-card-text>
         </v-card>
 
-        <v-card class="card mt-4">
+        <v-card class="card mt-4 deploy-docker-card">
           <v-card-title class="d-flex align-center justify-space-between">
             Control Docker
             <v-btn icon variant="text" :disabled="dockerLoading || dockerBusy" @click="loadDockerStatus">
@@ -303,18 +320,43 @@
             </v-btn>
           </v-card-title>
           <v-divider />
-          <v-card-text>
+          <v-card-text class="docker-panel">
+            <div class="docker-overview">
+              <v-chip size="small" variant="tonal" :color="dockerRunningServices.length ? 'success' : 'grey'">
+                Running: {{ dockerRunningServices.length }}
+              </v-chip>
+              <v-chip size="small" variant="tonal" :color="dockerServiceItems.length ? 'primary' : 'grey'">
+                Services: {{ dockerServiceItems.length }}
+              </v-chip>
+            </div>
+            <v-alert
+              v-if="dockerError"
+              class="mt-1"
+              type="warning"
+              variant="tonal"
+              density="comfortable"
+              :text="dockerError"
+            />
+            <v-alert
+              v-if="dockerMessage"
+              class="mt-1"
+              type="success"
+              variant="tonal"
+              density="comfortable"
+              :text="dockerMessage"
+            />
+
             <v-row dense>
-              <v-col cols="12" lg="8">
+              <v-col cols="12" md="6">
                 <v-text-field
                   v-model="dockerStackName"
                   label="Stack docker"
-                  density="comfortable"
+                  density="compact"
                   :disabled="dockerBusy"
                 />
               </v-col>
-              <v-col cols="12" lg="4">
-                <div class="docker-stack-actions h-100">
+              <v-col cols="12" md="6">
+                <div class="docker-stack-actions">
                   <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-play" :loading="dockerActionLoading === 'up'" :disabled="dockerBusy" @click="runDockerStackAction('up')">
                     Up
                   </v-btn>
@@ -328,48 +370,18 @@
               </v-col>
             </v-row>
 
-            <v-alert
-              v-if="dockerError"
-              class="mt-2"
-              type="warning"
-              variant="tonal"
-              density="comfortable"
-              :text="dockerError"
-            />
-            <v-alert
-              v-if="dockerMessage"
-              class="mt-2"
-              type="success"
-              variant="tonal"
-              density="comfortable"
-              :text="dockerMessage"
-            />
-
-            <div v-if="dockerComposeFile" class="text-caption text-medium-emphasis mt-2">
-              Compose: {{ dockerComposeFile }}
-            </div>
-
-            <div class="d-flex align-center ga-2 flex-wrap mt-2">
-              <v-chip size="small" variant="tonal" :color="dockerRunningServices.length ? 'success' : 'grey'">
-                Running: {{ dockerRunningServices.length }}
-              </v-chip>
-              <v-chip size="small" variant="tonal" :color="dockerServiceItems.length ? 'primary' : 'grey'">
-                Services: {{ dockerServiceItems.length }}
-              </v-chip>
-            </div>
-
             <v-row dense class="mt-1">
-              <v-col cols="12" lg="5">
+              <v-col cols="12" md="6">
                 <v-select
                   v-model="dockerSelectedService"
                   :items="dockerServiceItems"
                   label="Servicio"
-                  density="comfortable"
+                  density="compact"
                   clearable
                   :disabled="dockerBusy"
                 />
               </v-col>
-              <v-col cols="12" lg="7">
+              <v-col cols="12" md="6">
                 <div class="docker-service-actions">
                   <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-play-circle-outline" :loading="dockerActionLoading === 'service_start'" :disabled="dockerBusy || !dockerSelectedService" @click="runDockerServiceAction('start')">
                     Start
@@ -385,19 +397,19 @@
             </v-row>
 
             <v-row dense class="mt-1">
-              <v-col cols="12" lg="4">
+              <v-col cols="12" md="4">
                 <v-text-field
                   v-model.number="dockerLogsTail"
                   type="number"
                   label="Tail logs"
-                  density="comfortable"
+                  density="compact"
                   min="20"
                   max="2000"
                   :disabled="dockerBusy"
                 />
               </v-col>
-              <v-col cols="12" lg="8">
-                <div class="docker-logs-actions h-100">
+              <v-col cols="12" md="8">
+                <div class="docker-logs-actions">
                   <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-text-box-search-outline" :loading="dockerActionLoading === 'logs'" :disabled="dockerBusy" @click="loadDockerLogs">
                     Ver logs
                   </v-btn>
@@ -408,19 +420,74 @@
               </v-col>
             </v-row>
 
-            <div v-if="dockerPsRows.length" class="docker-ps-list mt-3">
-              <div v-for="row in dockerPsRows" :key="`${row.Name}-${row.Service}`" class="docker-ps-item">
-                <div class="docker-ps-title">{{ row.Service || row.Name || 'service' }}</div>
-                <v-chip size="x-small" variant="tonal" :color="dockerStateColor(row.State)">
-                  {{ row.State || 'unknown' }}
-                </v-chip>
-                <div class="docker-ps-meta">{{ row.Status || 'sin status' }}</div>
-              </div>
-            </div>
+            <v-expansion-panels class="docker-advanced-panel mt-1">
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  Contexto compose/env
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <v-row dense>
+                    <v-col cols="12">
+                      <v-text-field
+                        v-model="dockerComposePath"
+                        label="Compose file (bundle)"
+                        density="compact"
+                        :disabled="dockerBusy"
+                        placeholder="/abs/path/docker-compose.yml"
+                      />
+                    </v-col>
+                    <v-col cols="12">
+                      <v-text-field
+                        v-model="dockerEnvFilePath"
+                        label="Env file (opcional)"
+                        density="compact"
+                        :disabled="dockerBusy"
+                        placeholder="/abs/path/.env"
+                      />
+                    </v-col>
+                  </v-row>
 
-            <div v-if="dockerLogs" class="preview-box mt-3 docker-log-box">
-              <pre>{{ dockerLogs }}</pre>
-            </div>
+                  <div v-if="dockerComposeFileResolved || dockerEnvFileResolved" class="text-caption text-medium-emphasis mt-1">
+                    <div v-if="dockerComposeFileResolved">Compose: {{ dockerComposeFileResolved }}</div>
+                    <div v-if="dockerEnvFileResolved">Env: {{ dockerEnvFileResolved }}</div>
+                  </div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  Estado contenedores ({{ dockerPsRows.length }})
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <div v-if="dockerPsRows.length" class="docker-ps-list">
+                    <div v-for="row in dockerPsRows" :key="`${row.Name}-${row.Service}`" class="docker-ps-item">
+                      <div class="docker-ps-title">{{ row.Service || row.Name || 'service' }}</div>
+                      <v-chip size="x-small" variant="tonal" :color="dockerStateColor(row.State)">
+                        {{ row.State || 'unknown' }}
+                      </v-chip>
+                      <div class="docker-ps-meta">{{ row.Status || 'sin status' }}</div>
+                    </div>
+                  </div>
+                  <div v-else class="text-caption text-medium-emphasis">
+                    Sin contenedores para el stack actual.
+                  </div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+
+              <v-expansion-panel>
+                <v-expansion-panel-title>
+                  Salida de logs
+                </v-expansion-panel-title>
+                <v-expansion-panel-text>
+                  <div v-if="dockerLogs" class="preview-box docker-log-box">
+                    <pre>{{ dockerLogs }}</pre>
+                  </div>
+                  <div v-else class="text-caption text-medium-emphasis">
+                    No hay logs cargados todavía.
+                  </div>
+                </v-expansion-panel-text>
+              </v-expansion-panel>
+            </v-expansion-panels>
           </v-card-text>
         </v-card>
 
@@ -519,6 +586,144 @@
         </v-card>
 
         <v-card class="card mt-4">
+          <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+            <span>Activos de consumo</span>
+            <div class="d-flex align-center ga-2 flex-wrap">
+              <v-chip v-if="deployAssetsSummary.stackName" size="x-small" variant="tonal" color="primary">
+                {{ deployAssetsSummary.stackName }}
+              </v-chip>
+              <v-btn
+                class="sb-btn ghost"
+                variant="text"
+                size="small"
+                prepend-icon="mdi-refresh"
+                :loading="deployAssetsLoading"
+                :disabled="!selectedProjectId || exportingBundle"
+                @click="loadDeployAssets"
+              >
+                Actualizar
+              </v-btn>
+              <v-btn
+                class="sb-btn"
+                variant="tonal"
+                size="small"
+                prepend-icon="mdi-archive-arrow-down-outline"
+                :loading="exportingBundle"
+                :disabled="!selectedProjectId || deployAssetsLoading"
+                @click="exportDockerBundle"
+              >
+                Generar bundle Docker
+              </v-btn>
+            </div>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <div v-if="deployAssetsLoading" class="sb-skeleton" style="height: 120px;"></div>
+            <v-alert
+              v-else-if="deployAssetsError"
+              type="warning"
+              variant="tonal"
+              density="comfortable"
+              :text="deployAssetsError"
+            />
+            <v-alert
+              v-else-if="exportBundleError"
+              type="warning"
+              variant="tonal"
+              density="comfortable"
+              :text="exportBundleError"
+            />
+            <div v-else>
+              <v-alert
+                v-if="exportBundleMessage"
+                class="mb-2"
+                type="success"
+                variant="tonal"
+                density="comfortable"
+                :text="exportBundleMessage"
+              />
+              <v-alert
+                v-if="deployAssetsSummary.engineNotice"
+                class="mb-2"
+                type="info"
+                variant="tonal"
+                density="comfortable"
+                :text="deployAssetsSummary.engineNotice"
+              />
+              <div class="result-meta">
+                <div v-if="deployAssetsSummary.endpoint">
+                  <strong>Endpoint:</strong>
+                  <a :href="deployAssetsSummary.endpoint" target="_blank" rel="noopener noreferrer">{{ deployAssetsSummary.endpoint }}</a>
+                </div>
+                <div v-if="deployAssetsSummary.health">
+                  <strong>Health:</strong>
+                  <a :href="deployAssetsSummary.health" target="_blank" rel="noopener noreferrer">{{ deployAssetsSummary.health }}</a>
+                </div>
+                <div v-if="deployAssetsSummary.bundleDir"><strong>Bundle:</strong> {{ deployAssetsSummary.bundleDir }}</div>
+                <div v-if="deployAssetsSummary.composeFile"><strong>Compose:</strong> {{ deployAssetsSummary.composeFile }}</div>
+                <div v-if="deployAssetsSummary.envFile"><strong>Env:</strong> {{ deployAssetsSummary.envFile }}</div>
+                <div v-if="deployAssetsSummary.engineEndpoint"><strong>Engine:</strong> {{ deployAssetsSummary.engineEndpoint }}</div>
+                <div v-if="deployAssetsSummary.imageTag"><strong>Image:</strong> {{ deployAssetsSummary.imageTag }}</div>
+                <div v-if="deployAssetsSummary.createdAt"><strong>Generado:</strong> {{ formatDate(deployAssetsSummary.createdAt) }}</div>
+              </div>
+
+              <div v-if="deployAssetsSummary.dockerCommand" class="mt-3">
+                <div class="d-flex align-center justify-space-between mb-1">
+                  <strong>Docker command</strong>
+                  <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-content-copy" @click="copyText(deployAssetsSummary.dockerCommand)">
+                    Copiar
+                  </v-btn>
+                </div>
+                <div class="preview-box command-box">
+                  <pre>{{ deployAssetsSummary.dockerCommand }}</pre>
+                </div>
+              </div>
+
+              <v-tabs v-model="deploySnippetTab" class="mt-3" density="comfortable">
+                <v-tab value="curl">cURL</v-tab>
+                <v-tab value="js">JavaScript</v-tab>
+                <v-tab value="py">Python</v-tab>
+              </v-tabs>
+              <v-window v-model="deploySnippetTab" class="mt-2">
+                <v-window-item value="curl">
+                  <div class="d-flex align-center justify-space-between mb-1">
+                    <strong>Snippet cURL</strong>
+                    <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-content-copy" @click="copyText(deployAssetsSummary.curlSnippet)">
+                      Copiar
+                    </v-btn>
+                  </div>
+                  <div class="preview-box">
+                    <pre>{{ deployAssetsSummary.curlSnippet }}</pre>
+                  </div>
+                </v-window-item>
+                <v-window-item value="js">
+                  <div class="d-flex align-center justify-space-between mb-1">
+                    <strong>Snippet JS</strong>
+                    <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-content-copy" @click="copyText(deployAssetsSummary.javaScriptSnippet)">
+                      Copiar
+                    </v-btn>
+                  </div>
+                  <div class="preview-box">
+                    <pre>{{ deployAssetsSummary.javaScriptSnippet }}</pre>
+                  </div>
+                </v-window-item>
+                <v-window-item value="py">
+                  <div class="d-flex align-center justify-space-between mb-1">
+                    <strong>Snippet Python</strong>
+                    <v-btn class="sb-btn ghost" variant="text" size="small" prepend-icon="mdi-content-copy" @click="copyText(deployAssetsSummary.pythonSnippet)">
+                      Copiar
+                    </v-btn>
+                  </div>
+                  <div class="preview-box">
+                    <pre>{{ deployAssetsSummary.pythonSnippet }}</pre>
+                  </div>
+                </v-window-item>
+              </v-window>
+            </div>
+          </v-card-text>
+        </v-card>
+
+        <v-card class="card mt-4">
           <v-card-title class="d-flex align-center justify-space-between">
             Preview inputJson
             <v-btn class="sb-btn ghost" variant="text" prepend-icon="mdi-content-copy" @click="copyPayloadPreview">Copiar</v-btn>
@@ -561,18 +766,30 @@ const runs = ref([])
 const selectedDeployRunId = ref(null)
 const dockerStatus = ref(null)
 const dockerStackName = ref('')
+const dockerComposePath = ref('')
+const dockerEnvFilePath = ref('')
 const dockerSelectedService = ref('')
 const dockerLogs = ref('')
 const dockerLogsTail = ref(200)
 const dockerActionLoading = ref('')
 const dockerLoading = ref(false)
+const deployAssetsLoading = ref(false)
+const deployAssetsError = ref('')
+const deployAssetsData = ref(null)
+const inferMetricsLoading = ref(false)
+const inferMetricsError = ref('')
+const inferMetrics = ref(null)
+const exportingBundle = ref(false)
+const exportBundleError = ref('')
+const exportBundleMessage = ref('')
+const deploySnippetTab = ref('curl')
 
 const deployForm = reactive({
   targetEnv: 'dev',
   orchestrator: 'docker_compose',
   stackName: 'aibase-stack',
-  endpoint: 'http://localhost:5177',
-  healthUrl: 'http://localhost:5036/api/v1/dev/ping',
+  endpoint: 'http://localhost:8010',
+  healthUrl: 'http://localhost:8010/health',
   replicas: 1,
   timeoutSec: 180,
   maxConcurrency: 100,
@@ -611,6 +828,7 @@ const optionGuideItems = [
   { label: 'Endpoint y Health URL', description: 'Rutas públicas para consumo y verificación de disponibilidad.' },
   { label: 'Replicas / Timeout / Concurrencia', description: 'Capacidad y límites operativos del servicio desplegado.' },
   { label: 'CPU/Mem request', description: 'Recursos mínimos reservados para evitar inestabilidad.' },
+  { label: 'Quality gate', description: 'Antes de deploy valida métricas recientes de inferencia desde Playground.' },
   { label: 'Env vars / Overrides JSON', description: 'Configuración avanzada del runtime sin tocar código.' }
 ]
 
@@ -633,6 +851,18 @@ function errorText(err, fallback = 'Error de comunicación.') {
     || (typeof err?.response?.data === 'string' ? err.response.data : null)
     || err?.message
   return String(msg || fallback)
+}
+
+function dockerErrorText(err, fallback) {
+  const base = errorText(err, fallback)
+  const stderr = String(err?.response?.data?.stderr || '').trim()
+  const command = String(err?.response?.data?.command || '').trim()
+  if (!stderr && !command) return base
+
+  const chunks = [base]
+  if (stderr) chunks.push(`Detalle: ${stderr}`)
+  if (command) chunks.push(`Comando: ${command}`)
+  return chunks.join('\n')
 }
 
 function statusColor(status) {
@@ -705,6 +935,49 @@ function resolveDockerStackName() {
   return value || 'aibase-stack'
 }
 
+function normalizeOptionalPath(value) {
+  const text = String(value || '').trim()
+  return text || null
+}
+
+function buildDockerContextPayload() {
+  return {
+    stackName: resolveDockerStackName(),
+    composeFile: normalizeOptionalPath(dockerComposePath.value),
+    envFile: normalizeOptionalPath(dockerEnvFilePath.value)
+  }
+}
+
+function applyDockerContextFromAssets(force = false) {
+  const stackName = String(
+    deployAssetsData.value?.StackName
+    || deployAssetsData.value?.stackName
+    || deployAssetsData.value?.ServiceName
+    || deployAssetsData.value?.serviceName
+    || ''
+  ).trim()
+  const composePath = String(
+    deployAssetsData.value?.ComposeFile
+    || deployAssetsData.value?.composeFile
+    || ''
+  ).trim()
+  const envPath = String(
+    deployAssetsData.value?.EnvFile
+    || deployAssetsData.value?.envFile
+    || ''
+  ).trim()
+
+  if (force || !String(dockerStackName.value || '').trim()) {
+    if (stackName) dockerStackName.value = stackName
+  }
+  if (force || !String(dockerComposePath.value || '').trim()) {
+    if (composePath) dockerComposePath.value = composePath
+  }
+  if (force || !String(dockerEnvFilePath.value || '').trim()) {
+    if (envPath) dockerEnvFilePath.value = envPath
+  }
+}
+
 const projectItems = computed(() => projects.value.map(project => ({
   title: project.Name || project.name || `Proyecto #${project.Id || project.id}`,
   value: project.Id || project.id
@@ -760,7 +1033,8 @@ const canRun = computed(() =>
   !extraJsonError.value &&
   !numericError.value &&
   canRunStage.value &&
-  evalCompleted.value
+  evalCompleted.value &&
+  qualityGateOk.value
 )
 
 const deployRuns = computed(() => runs.value.filter(run =>
@@ -774,7 +1048,13 @@ const dockerPsRows = computed(() => {
   return Array.isArray(raw) ? raw : []
 })
 
-const dockerComposeFile = computed(() => String(dockerStatus.value?.composeFile || ''))
+const dockerComposeFileResolved = computed(() =>
+  pickFirst(dockerStatus.value?.composeFile, dockerComposePath.value)
+)
+
+const dockerEnvFileResolved = computed(() =>
+  pickFirst(dockerStatus.value?.envFile, dockerEnvFilePath.value)
+)
 
 const dockerServiceItems = computed(() => {
   const set = new Set()
@@ -860,6 +1140,63 @@ const deployResultSummary = computed(() => {
 
 const payloadPreview = computed(() => JSON.stringify(buildRunInputPayload(), null, 2))
 
+const deployAssetsSummary = computed(() => {
+  const raw = deployAssetsData.value || {}
+  return {
+    stackName: pickFirst(raw.StackName, raw.stackName, deployForm.stackName),
+    serviceName: pickFirst(raw.ServiceName, raw.serviceName, raw.StackName, raw.stackName),
+    imageTag: pickFirst(raw.ImageTag, raw.imageTag),
+    bundleDir: pickFirst(raw.BundleDir, raw.bundleDir),
+    composeFile: pickFirst(raw.ComposeFile, raw.composeFile),
+    envFile: pickFirst(raw.EnvFile, raw.envFile),
+    engineEndpoint: pickFirst(raw.EngineEndpoint, raw.engineEndpoint),
+    engineNotice: pickFirst(raw.EngineNotice, raw.engineNotice),
+    endpoint: pickFirst(raw.Endpoint, raw.endpoint, deployResultSummary.value.endpoint),
+    health: pickFirst(raw.Health, raw.health, deployResultSummary.value.health),
+    dockerCommand: pickFirst(raw.DockerCommand, raw.dockerCommand, deployResultSummary.value.command),
+    curlSnippet: pickFirst(raw.CurlSnippet, raw.curlSnippet),
+    javaScriptSnippet: pickFirst(raw.JavaScriptSnippet, raw.javaScriptSnippet, raw.javascriptSnippet),
+    pythonSnippet: pickFirst(raw.PythonSnippet, raw.pythonSnippet),
+    createdAt: pickFirst(raw.CreatedAt, raw.createdAt)
+  }
+})
+
+const inferMetricsGate = computed(() => {
+  const raw = inferMetrics.value?.gate
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    ok: Boolean(raw.ok),
+    reason: pickFirst(raw.reason, raw.message)
+  }
+})
+
+const inferMetricsSummary = computed(() => {
+  const raw = inferMetrics.value?.summary
+  if (!raw || typeof raw !== 'object') return null
+  return {
+    total: Number(raw.total || 0),
+    successRate: Number(raw.successRate || 0),
+    fallbackRate: Number(raw.fallbackRate || 0),
+    avgLatencyMs: Number(raw.avgLatencyMs || 0)
+  }
+})
+
+const qualityGateOk = computed(() => {
+  if (!selectedProjectId.value) return false
+  if (inferMetricsLoading.value) return false
+  if (inferMetricsError.value) return false
+  if (inferMetricsGate.value) return inferMetricsGate.value.ok
+  return false
+})
+
+const inferMetricsSummaryText = computed(() => {
+  if (!inferMetricsSummary.value) return ''
+  const summary = inferMetricsSummary.value
+  const gate = inferMetricsGate.value
+  const gateLabel = gate ? (gate.ok ? 'ok' : `revisar (${gate.reason || 'gate'})`) : 'sin gate'
+  return `Muestras: ${summary.total} · Success: ${(summary.successRate * 100).toFixed(0)}% · Fallback: ${(summary.fallbackRate * 100).toFixed(0)}% · Avg latency: ${summary.avgLatencyMs} ms · Gate: ${gateLabel}`
+})
+
 function buildRunInputPayload() {
   return {
     targetEnv: deployForm.targetEnv,
@@ -901,7 +1238,7 @@ function ensureRefreshTimer() {
   if (!shouldPollRuns.value) return
   refreshTimer = setInterval(async () => {
     if (loadingRuns.value || running.value || dockerLoading.value || dockerActionLoading.value) return
-    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns(), loadDockerStatus()])
+    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns(), loadDockerStatus(), loadInferMetrics()])
   }, 3000)
 }
 
@@ -943,15 +1280,149 @@ async function loadRuns() {
   }
 }
 
+async function loadDeployAssets() {
+  deployAssetsLoading.value = true
+  deployAssetsError.value = ''
+  try {
+    if (!selectedProjectId.value) {
+      deployAssetsData.value = null
+      return
+    }
+    const response = await runtimeApi.deployAssets(selectedProjectId.value)
+    deployAssetsData.value = response?.data || null
+    applyDockerContextFromAssets(false)
+  } catch (err) {
+    deployAssetsData.value = null
+    deployAssetsError.value = errorText(err, 'No se pudieron obtener los activos de deploy.')
+  } finally {
+    deployAssetsLoading.value = false
+  }
+}
+
+async function loadInferMetrics() {
+  inferMetricsLoading.value = true
+  inferMetricsError.value = ''
+  try {
+    if (!selectedProjectId.value) {
+      inferMetrics.value = null
+      return
+    }
+    const response = await runtimeApi.inferMetrics(selectedProjectId.value, { take: 40 })
+    inferMetrics.value = response?.data || null
+  } catch (err) {
+    inferMetrics.value = null
+    inferMetricsError.value = errorText(err, 'No se pudieron obtener métricas de inferencia.')
+  } finally {
+    inferMetricsLoading.value = false
+  }
+}
+
+function inferPortFromUrl(urlText, fallback = 8010) {
+  const raw = String(urlText || '').trim()
+  if (!raw) return fallback
+  try {
+    const normalized = raw.includes('://') ? raw : `http://${raw}`
+    const parsed = new URL(normalized)
+    if (parsed.port) {
+      const asNumber = Number(parsed.port)
+      if (Number.isFinite(asNumber) && asNumber >= 1 && asNumber <= 65535) return asNumber
+    }
+    return parsed.protocol === 'https:' ? 443 : 80
+  } catch {
+    return fallback
+  }
+}
+
+function buildDeployExportPayload() {
+  const overrides = extraParsed.value.ok && extraParsed.value.value && typeof extraParsed.value.value === 'object'
+    ? extraParsed.value.value
+    : {}
+  const envVars = envVarsParsed.value.ok && envVarsParsed.value.value && typeof envVarsParsed.value.value === 'object'
+    ? envVarsParsed.value.value
+    : {}
+
+  const serviceName = String(deployForm.stackName || '').trim() || 'aibase-stack'
+  const endpoint = String(deployForm.endpoint || '').trim() || `http://localhost:${inferPortFromUrl('', 8010)}`
+  const healthUrl = String(deployForm.healthUrl || '').trim() || `${endpoint.replace(/\/+$/, '')}/health`
+
+  const hostPort = inferPortFromUrl(endpoint, 8010)
+  const containerPort = Number(overrides.containerPort || 8010)
+  const imageTag = String(overrides.imageTag || overrides.dockerImage || '').trim()
+
+  const extraEnv = {}
+  Object.entries(envVars).forEach(([key, value]) => {
+    const normalizedKey = String(key || '').trim()
+    if (!normalizedKey) return
+    extraEnv[normalizedKey] = value == null ? '' : String(value)
+  })
+
+  return {
+    serviceName,
+    imageTag: imageTag || null,
+    hostPort,
+    containerPort: Number.isFinite(containerPort) && containerPort > 0 ? containerPort : 8010,
+    endpoint,
+    healthUrl,
+    extraEnv
+  }
+}
+
+async function exportDockerBundle() {
+  if (!selectedProjectId.value) return false
+
+  exportingBundle.value = true
+  exportBundleError.value = ''
+  exportBundleMessage.value = ''
+
+  try {
+    const payload = buildDeployExportPayload()
+    const response = await runtimeApi.exportDeployBundle(selectedProjectId.value, payload)
+    deployAssetsData.value = response?.data || null
+    deployAssetsError.value = ''
+
+    const nextStack = String(
+      deployAssetsData.value?.StackName
+      || deployAssetsData.value?.stackName
+      || payload.serviceName
+      || deployForm.stackName
+      || ''
+    ).trim()
+    if (nextStack) {
+      dockerStackName.value = nextStack
+    }
+    applyDockerContextFromAssets(true)
+
+    const notice = String(
+      deployAssetsData.value?.EngineNotice
+      || deployAssetsData.value?.engineNotice
+      || ''
+    ).trim()
+    exportBundleMessage.value = notice
+      ? `Bundle Docker generado. ${notice}`
+      : 'Bundle Docker generado. El panel Docker ya quedó apuntando a ese servicio.'
+    return true
+  } catch (err) {
+    exportBundleError.value = errorText(err, 'No se pudo generar el bundle Docker desde el engine.')
+    return false
+  } finally {
+    exportingBundle.value = false
+  }
+}
+
 async function loadDockerStatus() {
   dockerLoading.value = true
   dockerError.value = ''
   try {
-    const response = await runtimeApi.dockerStatus(resolveDockerStackName())
+    const ctx = buildDockerContextPayload()
+    const response = await runtimeApi.dockerStatus(ctx.stackName, ctx.composeFile, ctx.envFile)
     dockerStatus.value = response?.data || null
 
     const stack = String(response?.data?.stackName || '').trim()
     if (stack) dockerStackName.value = stack
+    const compose = String(response?.data?.composeFile || '').trim()
+    if (compose) dockerComposePath.value = compose
+    const envFile = String(response?.data?.envFile || '').trim()
+    if (envFile) dockerEnvFilePath.value = envFile
 
     if (dockerServiceItems.value.length && !dockerSelectedService.value) {
       dockerSelectedService.value = dockerServiceItems.value[0]
@@ -972,19 +1443,20 @@ async function runDockerStackAction(action) {
   dockerMessage.value = ''
   try {
     let response
+    const ctx = buildDockerContextPayload()
     if (actionKey === 'up') {
-      response = await runtimeApi.dockerUp({ stackName: resolveDockerStackName() })
+      response = await runtimeApi.dockerUp({ ...ctx, build: true, removeOrphans: true })
     } else if (actionKey === 'down') {
-      response = await runtimeApi.dockerDown({ stackName: resolveDockerStackName(), removeOrphans: true })
+      response = await runtimeApi.dockerDown({ ...ctx, removeOrphans: true })
     } else {
-      response = await runtimeApi.dockerRestart({ stackName: resolveDockerStackName() })
+      response = await runtimeApi.dockerRestart(ctx)
     }
 
     const stdout = String(response?.data?.stdout || '').trim()
     dockerMessage.value = stdout ? `Docker ${actionKey}: ${stdout}` : `Docker ${actionKey} ejecutado correctamente.`
     await loadDockerStatus()
   } catch (err) {
-    dockerError.value = errorText(err, `No se pudo ejecutar Docker ${actionKey}.`)
+    dockerError.value = dockerErrorText(err, `No se pudo ejecutar Docker ${actionKey}.`)
   } finally {
     dockerActionLoading.value = ''
   }
@@ -1001,12 +1473,19 @@ async function runDockerServiceAction(action) {
   dockerError.value = ''
   dockerMessage.value = ''
   try {
-    const response = await runtimeApi.dockerServiceAction(service, actionKey, resolveDockerStackName())
+    const ctx = buildDockerContextPayload()
+    const response = await runtimeApi.dockerServiceAction(
+      service,
+      actionKey,
+      ctx.stackName,
+      ctx.composeFile,
+      ctx.envFile
+    )
     const stdout = String(response?.data?.stdout || '').trim()
     dockerMessage.value = stdout ? `${service}: ${stdout}` : `${service}: acción ${actionKey} aplicada.`
     await loadDockerStatus()
   } catch (err) {
-    dockerError.value = errorText(err, `No se pudo ejecutar ${actionKey} en ${service}.`)
+    dockerError.value = dockerErrorText(err, `No se pudo ejecutar ${actionKey} en ${service}.`)
   } finally {
     dockerActionLoading.value = ''
   }
@@ -1017,8 +1496,11 @@ async function loadDockerLogs() {
   dockerError.value = ''
   dockerMessage.value = ''
   try {
+    const ctx = buildDockerContextPayload()
     const response = await runtimeApi.dockerLogs({
-      stackName: resolveDockerStackName(),
+      stackName: ctx.stackName,
+      composeFile: ctx.composeFile,
+      envFile: ctx.envFile,
       service: dockerSelectedService.value || null,
       tail: Number(dockerLogsTail.value || 200)
     })
@@ -1027,7 +1509,7 @@ async function loadDockerLogs() {
       dockerMessage.value = 'Sin logs para el filtro actual.'
     }
   } catch (err) {
-    dockerError.value = errorText(err, 'No se pudieron obtener los logs Docker.')
+    dockerError.value = dockerErrorText(err, 'No se pudieron obtener los logs Docker.')
   } finally {
     dockerActionLoading.value = ''
   }
@@ -1041,11 +1523,12 @@ async function loadData() {
     if (!selectedProjectId.value && projects.value.length) {
       selectedProjectId.value = projects.value[0].Id || projects.value[0].id
     }
-    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
+    await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns(), loadDeployAssets(), loadInferMetrics()])
     suggestDefaultsFromProject()
     if (!dockerStackName.value) {
       dockerStackName.value = String(deployForm.stackName || 'aibase-stack')
     }
+    applyDockerContextFromAssets(false)
     await loadDockerStatus()
   } catch (err) {
     error.value = errorText(err, 'No se pudo cargar la etapa Deploy.')
@@ -1073,6 +1556,8 @@ async function triggerDeploy() {
     runMessage.value = 'Deploy ejecutado. Revisa estado y endpoint en el panel de resultado.'
     await Promise.all([loadWorkflow(selectedProjectId.value), loadRuns()])
     await loadDockerStatus()
+    await loadInferMetrics()
+    await exportDockerBundle()
   } catch (err) {
     runError.value = errorText(err, 'No se pudo ejecutar el deploy.')
   } finally {
@@ -1116,12 +1601,24 @@ watch(selectedProjectId, async id => {
     runs.value = []
     selectedDeployRunId.value = null
     projectWorkflow.value = null
+    deployAssetsData.value = null
+    inferMetrics.value = null
+    dockerStatus.value = null
+    dockerComposePath.value = ''
+    dockerEnvFilePath.value = ''
+    deployAssetsError.value = ''
+    inferMetricsError.value = ''
+    exportBundleError.value = ''
+    exportBundleMessage.value = ''
     return
   }
   runMessage.value = ''
   runError.value = ''
-  await Promise.all([loadWorkflow(id), loadRuns()])
+  exportBundleError.value = ''
+  exportBundleMessage.value = ''
+  await Promise.all([loadWorkflow(id), loadRuns(), loadDeployAssets(), loadInferMetrics()])
   suggestDefaultsFromProject()
+  await loadDockerStatus()
 })
 
 watch(() => route.query.projectId, value => {
@@ -1154,6 +1651,13 @@ onMounted(loadData)
 <style scoped>
 .stage-page {
   padding-bottom: 30px;
+  max-width: 1720px;
+  margin: 0 auto;
+}
+
+.deploy-main-col,
+.deploy-side-col {
+  align-self: start;
 }
 
 .toggle-grid {
@@ -1190,14 +1694,57 @@ onMounted(loadData)
   gap: 8px;
 }
 
-.docker-stack-actions,
-.docker-service-actions,
-.docker-logs-actions {
+.deploy-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.deploy-secondary-grid > .card {
+  margin-top: 0 !important;
+}
+
+.deploy-docker-card {
+  grid-column: 1 / -1;
+}
+
+.docker-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.docker-overview {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  justify-content: flex-start;
+}
+
+.docker-stack-actions,
+.docker-service-actions,
+.docker-logs-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.docker-stack-actions :deep(.v-btn),
+.docker-service-actions :deep(.v-btn),
+.docker-logs-actions :deep(.v-btn) {
+  width: 100%;
+}
+
+.docker-advanced-panel :deep(.v-expansion-panel-title) {
+  min-height: 40px;
+  padding-top: 8px;
+  padding-bottom: 8px;
+  font-size: 0.88rem;
+}
+
+.docker-advanced-panel :deep(.v-expansion-panel-text__wrapper) {
+  padding-top: 10px;
+  padding-bottom: 4px;
 }
 
 .docker-ps-list {
@@ -1302,9 +1849,10 @@ onMounted(loadData)
   }
 }
 
-@media (min-width: 1280px) {
-  .docker-stack-actions {
-    justify-content: flex-end;
+@media (min-width: 1280px) and (max-width: 1919px) {
+  .deploy-secondary-grid {
+    grid-template-columns: 1fr;
   }
 }
+
 </style>
