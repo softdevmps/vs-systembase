@@ -346,6 +346,19 @@
                 <div v-if="inferReasoning && inferReasoning.enabled && inferReasoning.reason"><strong>Motivo:</strong> {{ inferReasoning.reason }}</div>
               </div>
 
+              <v-alert
+                v-if="isFacialModeActive"
+                class="mt-3"
+                :type="facialDetectedCount > 0 ? 'success' : 'info'"
+                variant="tonal"
+                density="comfortable"
+              >
+                <div class="facial-count-line">ROSTROS DETECTADOS: {{ facialDetectedCount }}</div>
+                <div v-if="facialSummary" class="text-caption text-medium-emphasis mt-1">
+                  {{ facialSummary }}
+                </div>
+              </v-alert>
+
               <div class="d-flex align-center ga-2 mt-3 flex-wrap">
                 <v-btn class="sb-btn" variant="tonal" size="small" prepend-icon="mdi-content-copy" @click="copyText(inferOutputRaw)">
                   Copiar raw
@@ -633,6 +646,45 @@ function parseJson(text, fallback = null) {
   }
 }
 
+function parseJsonValue(value, fallback = null) {
+  if (value === null || value === undefined) return { ok: true, value: fallback }
+  if (typeof value === 'object') return { ok: true, value }
+  return parseJson(String(value), fallback)
+}
+
+function extractFacesPayload(parsed) {
+  if (!parsed || typeof parsed !== 'object') return { faces: [], summary: '' }
+
+  if (Array.isArray(parsed.faces)) {
+    return { faces: parsed.faces, summary: String(parsed.summary || '').trim() }
+  }
+
+  if (parsed.output && typeof parsed.output === 'object' && Array.isArray(parsed.output.faces)) {
+    return {
+      faces: parsed.output.faces,
+      summary: String(parsed.output.summary || parsed.summary || '').trim()
+    }
+  }
+
+  const messageContent = parsed.message?.content
+  if (typeof messageContent === 'string') {
+    const nested = parseJsonValue(messageContent, null)
+    if (nested.ok && nested.value && typeof nested.value === 'object' && Array.isArray(nested.value.faces)) {
+      return { faces: nested.value.faces, summary: String(nested.value.summary || '').trim() }
+    }
+  }
+
+  const answer = parsed.answer
+  if (typeof answer === 'string') {
+    const nested = parseJsonValue(answer, null)
+    if (nested.ok && nested.value && typeof nested.value === 'object' && Array.isArray(nested.value.faces)) {
+      return { faces: nested.value.faces, summary: String(nested.value.summary || '').trim() }
+    }
+  }
+
+  return { faces: [], summary: '' }
+}
+
 function normalizeTemplateProfile(value) {
   const profile = String(value || '').trim().toLowerCase()
   if (!profile) return ''
@@ -790,6 +842,11 @@ const projectItems = computed(() => projects.value.map(project => ({
 const selectedProject = computed(() => projects.value.find(p => String(p.Id || p.id) === String(selectedProjectId.value)) || null)
 const selectedProjectName = computed(() => selectedProject.value?.Name || selectedProject.value?.name || '')
 const selectedTemplateKey = computed(() => String(selectedTemplate.value?.Key || selectedTemplate.value?.key || '').toLowerCase())
+const isFacialTemplate = computed(() => {
+  const key = selectedTemplateKey.value
+  return key.includes('facial') || key.includes('face') || key.includes('rostro') || key.includes('cara')
+})
+const isFacialModeActive = computed(() => templateProfile.value === 'vision' && isFacialTemplate.value && !!inferResult.value)
 const selectedTemplatePipeline = computed(() => {
   const raw = selectedTemplate.value?.Pipelinejson || selectedTemplate.value?.pipelinejson || ''
   const parsed = parseJson(raw, null)
@@ -826,7 +883,7 @@ const templateProfile = computed(() => {
   if (!key) return 'generic'
   if (key.includes('chat') || key.includes('rag') || key.includes('assistant')) return 'chat'
   if (key.includes('transcrib') || key.includes('whisper') || key.includes('audio')) return 'transcription'
-  if (key.includes('vision') || key.includes('image') || key.includes('ocr')) return 'vision'
+  if (key.includes('vision') || key.includes('image') || key.includes('ocr') || key.includes('facial') || key.includes('face') || key.includes('rostro')) return 'vision'
   if (key.includes('extract')) return 'extraction'
   return 'generic'
 })
@@ -837,6 +894,7 @@ const allowInputModeToggle = computed(() => templateProfile.value === 'generic')
 const templateProfileLabel = computed(() => {
   if (templateProfile.value === 'chat') return 'Modo chat'
   if (templateProfile.value === 'transcription') return 'Modo transcripción'
+  if (templateProfile.value === 'vision' && isFacialTemplate.value) return 'Modo facial'
   if (templateProfile.value === 'vision') return 'Modo visión'
   if (templateProfile.value === 'extraction') return 'Modo extracción'
   return 'Modo genérico'
@@ -845,6 +903,7 @@ const templateProfileLabel = computed(() => {
 const templateProfileHint = computed(() => {
   if (templateProfile.value === 'chat') return 'Interfaz conversacional: escribe y el modelo responde.'
   if (templateProfile.value === 'transcription') return 'Carga audio para transcribir o resume en texto el contenido del archivo.'
+  if (templateProfile.value === 'vision' && isFacialTemplate.value) return 'Carga una imagen con rostros para detectar caras y score de confianza.'
   if (templateProfile.value === 'vision') return 'Carga imagen para analizar texto/objetos según tu template.'
   if (templateProfile.value === 'extraction') return 'Ingresa texto para extraer campos estructurados.'
   return 'Prueba libre: texto, audio o imagen según lo que necesites.'
@@ -852,6 +911,7 @@ const templateProfileHint = computed(() => {
 
 const quickInputLabel = computed(() => {
   if (templateProfile.value === 'transcription') return 'Contexto opcional de audio'
+  if (templateProfile.value === 'vision' && isFacialTemplate.value) return 'Instrucción opcional para detección facial'
   if (templateProfile.value === 'vision') return 'Prompt opcional para imagen'
   if (templateProfile.value === 'extraction') return 'Texto a extraer'
   return 'Input textual'
@@ -859,6 +919,7 @@ const quickInputLabel = computed(() => {
 
 const quickInputPlaceholder = computed(() => {
   if (templateProfile.value === 'transcription') return 'Opcional: indica idioma o formato de salida esperado.'
+  if (templateProfile.value === 'vision' && isFacialTemplate.value) return 'Ej: Detecta rostros y devuelve id, score y bbox.'
   if (templateProfile.value === 'vision') return 'Opcional: describe qué quieres que analice la imagen.'
   if (templateProfile.value === 'extraction') return 'Pega el texto del caso para extraer JSON estructurado.'
   return 'Escribe texto para inferencia o una descripción del archivo subido.'
@@ -967,6 +1028,30 @@ const inferOutputJsonPretty = computed(() => {
   }
 
   return ''
+})
+
+const inferOutputParsedObject = computed(() => {
+  if (!inferResult.value) return null
+
+  const outputJson = inferResult.value.OutputJson || inferResult.value.outputJson
+  const parsed = parseJsonValue(outputJson, null)
+  if (parsed.ok && parsed.value && typeof parsed.value === 'object') return parsed.value
+
+  const parsedRaw = parseJsonValue(inferOutputRaw.value, null)
+  if (parsedRaw.ok && parsedRaw.value && typeof parsedRaw.value === 'object') return parsedRaw.value
+
+  return null
+})
+
+const facialPayload = computed(() => extractFacesPayload(inferOutputParsedObject.value))
+const facialDetectedCount = computed(() => {
+  if (!isFacialModeActive.value) return 0
+  return facialPayload.value.faces.length
+})
+const facialSummary = computed(() => {
+  if (!isFacialModeActive.value) return ''
+  const value = String(facialPayload.value.summary || '').trim()
+  return value
 })
 
 const isMockResult = computed(() => Boolean(inferResult.value?.IsMock || inferResult.value?.isMock))
@@ -1137,6 +1222,52 @@ const demoCases = computed(() => {
         description: 'Debe devolver respuesta útil y concreta.',
         expectedContains: 'respuesta',
         input: 'Qué necesito para desplegar en ambiente staging?'
+      }
+    ]
+  }
+
+  if (key.includes('facial') || key.includes('face') || key.includes('rostro') || key.includes('cara')) {
+    return [
+      {
+        id: 'face-1',
+        title: 'Detección básica',
+        description: 'Sube una imagen con 1 rostro y valida score + bbox.',
+        expectedContains: 'score',
+        input: 'Detecta los rostros visibles y devuelve faces con id, score y bbox.',
+        mode: 'image',
+        requiresMedia: true
+      },
+      {
+        id: 'face-2',
+        title: 'Múltiples rostros',
+        description: 'Sube imagen grupal para validar varias detecciones.',
+        expectedContains: 'faces',
+        input: 'Lista cada rostro detectado con score de confianza y caja delimitadora.',
+        mode: 'image',
+        requiresMedia: true
+      }
+    ]
+  }
+
+  if (key.includes('vision') || key.includes('image') || key.includes('ocr')) {
+    return [
+      {
+        id: 'vision-1',
+        title: 'OCR de documento',
+        description: 'Sube captura/foto de texto y valida extracción.',
+        expectedContains: 'text',
+        input: 'Extrae el texto principal de la imagen y devuelve bloques detectados.',
+        mode: 'image',
+        requiresMedia: true
+      },
+      {
+        id: 'vision-2',
+        title: 'Campos visibles',
+        description: 'Sube imagen con formulario/factura para extracción estructurada.',
+        expectedContains: 'blocks',
+        input: 'Identifica bloques de texto y resume los campos principales.',
+        mode: 'image',
+        requiresMedia: true
       }
     ]
   }
@@ -1438,14 +1569,28 @@ async function sendChatMessage() {
 }
 
 function loadDemoCase(testCase) {
-  inputMode.value = 'text'
-  clearMediaSelection()
+  const targetMode = String(testCase?.mode || 'text').toLowerCase()
+  inputMode.value = ['audio', 'image', 'text'].includes(targetMode) ? targetMode : 'text'
+  if (inputMode.value === 'text') {
+    clearMediaSelection()
+  }
   inferInput.value = testCase.input
   inferExpectedContains.value = testCase.expectedContains
 }
 
 async function runDemoCase(testCase) {
   loadDemoCase(testCase)
+  if (testCase?.requiresMedia && !mediaPayload.value) {
+    inferError.value = 'Este caso demo requiere adjuntar un archivo antes de ejecutar.'
+    caseResults.value = {
+      ...caseResults.value,
+      [testCase.id]: {
+        ok: false,
+        when: formatDate(new Date().toISOString())
+      }
+    }
+    return
+  }
   const ok = await runInfer({ mode: `demo:${testCase.id}`, expectedContains: testCase.expectedContains })
   caseResults.value = {
     ...caseResults.value,
@@ -1601,6 +1746,12 @@ onMounted(load)
   display: grid;
   gap: 6px;
   font-size: 0.9rem;
+}
+
+.facial-count-line {
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .preview-box {

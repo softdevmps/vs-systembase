@@ -153,6 +153,9 @@ npm install
 npm run dev
 ```
 
+Guia completa AIBase (setup, chat, facial, deploy y troubleshooting):
+- `systems/aibase/README.md`
+
 ## Ejecución simultánea recomendada (4 terminales + docker)
 
 1. `backend` -> `dotnet watch run`
@@ -213,6 +216,7 @@ npm run dev
 - Playground adaptativo:
   - chat “input -> respuesta” para templates conversacionales,
   - modo texto/audio/imagen para pruebas de inferencia.
+  - modo facial con contador visible `ROSTROS DETECTADOS: N`.
 
 ## Troubleshooting
 

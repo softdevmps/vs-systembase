@@ -326,6 +326,8 @@ class RuntimeModel:
             "extractor-json-v1": "google/flan-t5-base",
             "transcriptor-audio-v1": "google/flan-t5-base",
             "vision-ocr-v1": "google/flan-t5-base",
+            "facial-recognition-v1": "google/flan-t5-base",
+            "reconocimiento-facial-v1": "google/flan-t5-base",
             "custom-local-v1": "google/flan-t5-base",
         }
         if not isinstance(context, dict):

@@ -1,87 +1,49 @@
-# AIBase (runtime generado)
+# AIBase en SystemBase
 
-AIBase corre como sistema dentro del ecosistema SystemBase, desacoplado de `mapeo`, en `systems/aibase`.
+AIBase es un sistema que habita dentro del ecosistema SystemBase y funciona como fabrica de asistentes/modelos de IA con flujo completo desde UI:
+
+1. Template
+2. Project
+3. Dataset
+4. RAG
+5. Train
+6. Eval
+7. Deploy
+8. Playground
 
 ## Estructura
-- `systems/aibase/backend` -> API .NET 8 runtime.
-- `systems/aibase/frontend` -> frontend runtime Vue 3 + Vuetify.
-- `systems/aibase/sql` -> scripts auxiliares (`sb_ai`).
-- `systems/aibase/engine` -> motor IA local (FastAPI) con inferencia/pipeline/export.
-- `systems/aibase/docker` -> stack docker de AIBase.
+- `systems/aibase/backend`: API .NET 8 (workflow, inferencia, Docker control).
+- `systems/aibase/frontend`: UI Vue 3 + Vuetify.
+- `systems/aibase/engine`: motor local FastAPI.
+- `systems/aibase/docker`: stack local del engine.
+- `systems/aibase/sql`: scripts auxiliares de base.
 
-## Modelo actual
-- `sb_ai.Templates`
-- `sb_ai.Projects` (FK: `TemplateId -> Templates.Id`)
-- `sb_ai.Runs` (FK: `ProjectId -> Projects.Id`)
+## Pre-requisitos
+- .NET 8 SDK
+- Node 20+
+- Python 3.11+
+- Docker Desktop
+- Ollama (recomendado para chat y vision local)
 
-## Backend
-### Endpoints
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/registrar`
-- `GET|POST /api/v1/templates`
-- `GET|PUT|DELETE /api/v1/templates/{id}`
-- `GET|POST /api/v1/projects`
-- `GET|PUT|DELETE /api/v1/projects/{id}`
-- `GET|POST /api/v1/runs`
-- `GET|PUT|DELETE /api/v1/runs/{id}`
-
-### Configuración
+## Levantar AIBase en local
+### 1) Backend
 ```bash
 cd systems/aibase/backend
 cp .env.example .env
-```
-
-Variables mínimas:
-- `DB_SERVER`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`
-- `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_EXPIRE_MINUTES`
-
-### Run local
-```bash
-cd systems/aibase/backend
 dotnet restore
-dotnet watch run
+dotnet run
 ```
+Backend: `http://localhost:5036`
 
-Backend default: `http://localhost:5036`
-
-## Frontend
+### 2) Frontend
 ```bash
 cd systems/aibase/frontend
 npm install
 npm run dev
 ```
+Frontend: `http://localhost:5177`
 
-Frontend default: `http://localhost:5177`
-
-## Notas
-- El Home de runtime es genérico por entidad (sin widgets específicos de mapeo).
-- El sistema se administra desde SystemBase (Diseñador y herramientas), pero se ejecuta de forma separada en `systems/aibase`.
-
-## Playground con modelo real (chat tipo ChatGPT)
-### Opción recomendada hoy: Ollama local
-1. Crear/editar un `Template` en **Etapa 1 · Definir Template**.
-2. En **Servicio de inferencia** elegir proveedor:
-   - `Engine local (propio)`: usa `AIBASE_ENGINE_URL` (motor AIBase en `systems/aibase/engine`).
-   - `Ollama (local)`: `Base URL` `http://localhost:11434`, `Path` `/api/chat`, `Modelo` `llama3.2:3b`.
-   - `OpenAI compatible`: `Base URL` (por ejemplo API compatible), `Path` `/v1/chat/completions`, `Modelo` (por ejemplo `gpt-4o-mini`), `API Key` o `API Key Env`.
-3. Guardar el template y asociarlo a un proyecto (Etapa 2).
-4. Ir a **Etapa 8 · Playground** y enviar preguntas (chat 1 a 1).
-
-El backend ahora intenta inferir en este orden:
-1. `modelService` configurado en `Template.PipelineJson.meta`.
-2. Mock (`AIBASE_ENGINE_MOCK=true`).
-3. Engine externo (`AIBASE_ENGINE_URL`).
-
-## Nota importante de red (Ollama)
-- Si AIBase backend corre en host (`http://localhost:5036`), usar `http://localhost:11434`.
-- Si el consumidor corre dentro de contenedor Docker, puede usar `http://host.docker.internal:11434`.
-- El backend ahora incluye fallback automático de host para Ollama (`host.docker.internal` <-> `localhost`/`127.0.0.1`).
-
-## Nota importante de warm-up (Ollama)
-- En la primera llamada puede devolverse `done_reason: "load"` con respuesta vacía.
-- El backend ahora reintenta automáticamente una vez para obtener respuesta útil en ese primer turno.
-
-## Motor propio en Docker (recomendado)
+### 3) Engine local (opcional, provider `engine`)
 ```bash
 cd systems/aibase/engine
 cp .env.example .env
@@ -89,7 +51,97 @@ cp .env.example .env
 cd ../docker
 docker compose up -d --build
 ```
+Engine: `http://localhost:8010`
 
-Luego, en `systems/aibase/backend/.env`:
-- `AIBASE_ENGINE_URL=http://localhost:8010`
-- `AIBASE_ENGINE_MOCK=false`
+## Proveedores de inferencia soportados
+En Template -> Servicio de inferencia:
+
+- `engine` (motor propio AIBase via `AIBASE_ENGINE_URL`)
+- `ollama` (local)
+- `openai compatible`
+
+## Configuracion recomendada hoy
+### Chat 1 a 1 estable
+- Provider: `Ollama (local)`
+- Base URL: `http://localhost:11434`
+- Path API: `/api/chat`
+- Model: `llama3.2:3b`
+
+### Vision / reconocimiento facial en local
+- Provider: `Ollama (local)`
+- Base URL: `http://localhost:11434`
+- Path API: `/api/chat`
+- Model sugerido: `moondream` (mas liviano que llava)
+
+Notas:
+- Si `llava` falla por memoria, AIBase intenta degradar automaticamente a modelos de vision mas livianos.
+- Si la salida de vision viene no estructurada, AIBase la normaliza para devolver estructura util en Playground.
+
+## Flujo operativo recomendado (end-to-end)
+1. Crear o editar Template.
+2. Crear Project asociado al Template.
+3. Cargar/generar Dataset en Data Ops.
+4. Construir RAG Index (si el template usa RAG).
+5. Ejecutar Train/Eval si aplica al caso.
+6. Ir a Deploy y desplegar servicio.
+7. Probar en Playground.
+
+## Playground
+### Chat
+- Enviar preguntas directamente.
+- Revisar panel Resultado: provider, modelo, endpoint, fallback, latencia, quality score.
+
+### Facial
+- Cargar imagen.
+- Enviar instruccion (por ejemplo: `detecta rostros`).
+- El panel Resultado muestra JSON y resumen.
+- La UI muestra contador visible: `ROSTROS DETECTADOS: N`.
+
+## Comportamientos implementados relevantes
+- Fallback de host Ollama (`localhost`, `127.0.0.1`, `host.docker.internal`).
+- Auto pull de modelo Ollama cuando falta.
+- Reintento de warm-up cuando Ollama responde con `done_reason=load`.
+- Manejo de OOM/runner caido con degradacion de modelo en vision.
+- Normalizacion de salida facial cuando el modelo devuelve texto no estructurado.
+
+## Troubleshooting rapido
+### Error: `host.docker.internal ... not known`
+Si backend corre en host, usar `http://localhost:11434` en el template.
+
+### Error: `model ... not found`
+Descargar modelo:
+```bash
+ollama pull llama3.2:3b
+ollama pull moondream
+```
+
+### Error: memoria insuficiente / runner killed
+Reducir carga de Ollama:
+```bash
+ollama stop llama3.2:3b
+ollama stop llava
+ollama stop moondream
+```
+Luego levantar con menos concurrencia:
+```bash
+OLLAMA_MAX_LOADED_MODELS=1 OLLAMA_NUM_PARALLEL=1 OLLAMA_KEEP_ALIVE=0 ollama serve
+```
+
+### El Playground no refleja cambios del backend
+Reiniciar backend .NET:
+```bash
+cd systems/aibase/backend
+pkill -f Aibase.Backend || true
+dotnet run
+```
+
+## Base de datos de AIBase
+Modelo principal en schema `sb_ai`:
+- `Templates`
+- `Projects`
+- `Runs`
+
+## Documentacion complementaria
+- Estado general del repo: `docs/estado-actual.md`
+- Estado especifico AIBase: `docs/estado-aibase.md`
+- Stack docker engine: `systems/aibase/docker/README.md`

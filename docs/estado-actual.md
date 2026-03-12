@@ -2,8 +2,10 @@
 
 Este documento resume lo que ya implementamos hasta ahora en SystemBase y como se usa en el flujo actual de trabajo.
 
-Actualización AIBase (11/03/2026):
+Actualizacion AIBase (12/03/2026):
 - El estado operativo de AIBase se documenta en [docs/estado-aibase.md](./estado-aibase.md).
+- AIBase ya opera chat y vision facial desde la misma UI, con fallback y normalizacion de salida para Ollama.
+- Guia de uso actualizada en `systems/aibase/README.md`.
 
 ## 1. Objetivo de la fase actual
 En esta fase construimos el pipeline minimo para:

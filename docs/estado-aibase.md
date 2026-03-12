@@ -1,112 +1,86 @@
-# Estado actual - AIBase (11/03/2026)
+# Estado actual - AIBase (12/03/2026)
 
 Branch de trabajo: `aibase`
 
 ## Resumen ejecutivo
-AIBase está operativo como fábrica end-to-end desde UI:
-- definición de template/proyecto,
-- dataset (carga/generación/merge),
+AIBase esta operativo como fabrica end-to-end dentro de SystemBase:
+- definicion de template/proyecto,
+- dataset (carga, generacion por topicos y merge),
 - RAG index,
 - train/eval/deploy,
-- playground conversacional.
+- playground para chat y vision facial.
 
-Hoy la configuración más estable para chat general es `provider=ollama` con `llama3.2:3b`.
+Configuracion mas estable para chat general hoy:
+- `provider=ollama`
+- `model=llama3.2:3b`
 
 ## Arquitectura vigente
-- `systems/aibase/backend`: API .NET 8 (orquestación, workflow, inferencia, Docker control).
+- `systems/aibase/backend`: API .NET 8 (workflow, inferencia, docker control).
 - `systems/aibase/frontend`: Vue 3 + Vuetify (flujo por etapas).
-- `systems/aibase/engine`: FastAPI para motor local (HF/rules/ollama bridge).
-- `systems/aibase/docker`: compose para stack local.
+- `systems/aibase/engine`: FastAPI (motor local y pipelines).
+- `systems/aibase/docker`: stack local para engine.
 
-## Capacidades implementadas
-### Flujo por etapas
-1. Template
-2. Project
-3. Dataset
-4. RAG
-5. Train
-6. Eval
-7. Deploy
-8. Playground
+## Estado funcional por etapa
+1. Template: ok (crear/editar/eliminar, contrato, modelService).
+2. Project: ok (crear/editar/eliminar, seleccion de template).
+3. Dataset: ok (upload + data ops + generador + merge).
+4. RAG: ok (index y estado por proyecto).
+5. Train: ok (train LoRA con artifact metadata local).
+6. Eval: ok (ejecucion y metricas).
+7. Deploy: ok (gate + control Docker desde UI).
+8. Playground: ok (chat, OCR/vision y facial).
 
-Cada etapa usa gate de prerequisitos y estado de workflow.
+## Cambios consolidados en este corte
+### Inferencia y robustez (backend)
+- Fallback de endpoints Ollama (`localhost`, `127.0.0.1`, `host.docker.internal`).
+- Auto-pull de modelo cuando Ollama responde "model not found".
+- Reintento de warm-up cuando `done_reason=load`.
+- Degradacion automatica en vision cuando hay OOM/runner kill.
+- Fallback adicional `/api/generate` para modelos que no devuelven contenido en `/api/chat`.
 
-### Template / Model Service
-- Crear, editar y eliminar templates desde UI.
-- Contrato del modelo (schema/taxonomía/reglas).
-- Perfil de playground por template.
-- `modelService` configurable por UI:
-  - `engine`,
-  - `ollama`,
-  - `openai compatible`.
-- Parámetros de inferencia:
-  - task, temperature, topP, repetition penalty, maxTokens.
-- Opciones avanzadas:
-  - quality gate,
-  - auto-learning,
-  - modo razonamiento (passes/verifier/score mínimo/plan steps).
+### Modo facial
+- Deteccion de templates faciales corregida en backend.
+- Normalizacion de salida facial cuando el modelo devuelve texto libre (ej: `ids = [...]`).
+- Salida estructurada estable:
+  - `faces[]`
+  - `summary`
+  - `model`
+  - `source`
+  - `raw`
 
-### Dataset y Data Ops
-- Upload CSV/JSON/JSONL.
-- Mapeo al contrato y preview.
-- Generador de dataset por tópicos (Wikipedia) integrado en UI.
-- Progreso visual durante generación.
-- Listado de datasets generados.
-- Selección de fuente activa de dataset.
-- Merge de datasets (unificación).
+### UI / Playground
+- Etiquetas y hints especificos para modo facial.
+- Casos demo de vision/facial.
+- Indicador visible en resultado:
+  - `ROSTROS DETECTADOS: N`
 
-### RAG / Train / Eval / Deploy
-- Build dataset y guardado de versión.
-- Construcción de índice RAG por proyecto.
-- Train LoRA (artifact local metadata).
-- Eval y métricas por corrida.
-- Deploy con configuración de endpoint/health.
-- Control Docker desde UI:
-  - stack up/down/restart,
-  - acciones por servicio,
-  - lectura de logs.
-
-### Playground
-- Chat 1 a 1 por template/proyecto.
-- Input texto y contexto.
-- Panel de resultado con provider/model/endpoint/latencia/fallback/score.
-- Métricas de inferencia y estado de deploy.
-
-## Integración de inferencia (estado de hoy)
-### Backend (.NET) `ModelServiceClient`
-- Soporte operativo para `provider=ollama`.
-- Soporte de `path`:
-  - `/api/chat`,
-  - `/api/generate`.
-- Fallback automático de host para Ollama:
-  - `host.docker.internal`,
-  - `localhost`,
-  - `127.0.0.1`.
-- Manejo de warm-up de Ollama (`done_reason=load`): reintento automático.
-
-### Engine (FastAPI)
-- Motor HF/rules activo.
-- Mejoras de razonamiento y auto-learning incorporadas.
-- Soporte `provider=ollama` en runtime del engine.
-
-## Configuración recomendada para uso diario
-En Template -> Servicio de inferencia:
+## Configuracion recomendada de uso
+### Chat 1 a 1
 - Provider: `Ollama (local)`
 - Base URL: `http://localhost:11434`
 - Path: `/api/chat`
-- Model: `llama3.2:3b`
+- Modelo: `llama3.2:3b`
 
-Notas:
-- Si el consumidor corre en contenedor, puede requerir `host.docker.internal`.
-- Para modelos HF grandes (ej. 7B) en CPU/memoria limitada hay latencia alta o fallback.
+### Facial/vision en hardware limitado
+- Provider: `Ollama (local)`
+- Base URL: `http://localhost:11434`
+- Path: `/api/chat`
+- Modelo: `moondream`
+
+## Limitaciones conocidas
+- En maquinas con poca RAM/VRAM, `llava` puede fallar por OOM.
+- Algunos modelos vision pueden devolver salida no estructurada o vacia; AIBase la normaliza/fallback, pero no siempre ofrece `bbox` real.
+- Para deteccion facial estricta (bbox confiable) se recomienda integrar detector dedicado (OpenCV/MediaPipe) como backend especializado.
 
 ## Verificaciones realizadas
-- `dotnet build` OK en `systems/aibase/backend/Aibase.Backend.csproj`.
-- `python -m py_compile` OK en engine app.
-- Inferencia validada con salida real por Ollama (`fallback=false` en pruebas exitosas).
+- `dotnet build systems/aibase/backend/Aibase.Backend.csproj` OK.
+- `npm run build` en `systems/aibase/frontend` OK.
+- Pruebas reales en Playground:
+  - chat con ollama,
+  - facial con salida normalizada y contador de rostros.
 
-## Pendiente inmediato
-1. Afinar calidad conversacional (prompting + evaluación continua por dominio).
-2. Política de selección RAG vs memoria conversacional por intent/score.
-3. Perfilar latencia y throughput por modelo Ollama (3B/7B) en hardware objetivo.
-4. Consolidar documentación de operación para demo y producción.
+## Pendiente inmediato sugerido
+1. Agregar detector facial dedicado (no LLM) para `bbox` real y confianza consistente.
+2. Exponer tabla visual de `faces` (id, score, bbox) en Playground.
+3. Afinar contratos de salida por tipo de template (chat/extractor/facial/ocr).
+4. Agregar smoke tests automaticos por etapa para no depender de prueba manual.

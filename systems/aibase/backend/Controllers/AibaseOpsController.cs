@@ -1500,6 +1500,14 @@ namespace Backend.Controllers
                 model = modelResult.Model;
                 endpoint = modelResult.Endpoint;
                 useMock = false;
+
+                if (string.Equals(provider, "ollama", StringComparison.OrdinalIgnoreCase)
+                    && IsFacialTemplateKey(template.Key))
+                {
+                    var normalized = NormalizeFacialOutput(output, outputJson, model);
+                    output = normalized.Output;
+                    outputJson = normalized.OutputJson;
+                }
             }
             else if (useMock)
             {
@@ -2048,7 +2056,7 @@ namespace Backend.Controllers
             else if (ContainsAny(normalized, "facial", "rostro", "cara", "identidad"))
             {
                 modelType = "facial_recognition";
-                preset = "custom";
+                preset = "facial_recognition";
                 templateName = "Reconocimiento Facial";
                 templateKey = "reconocimiento-facial-v1";
                 objective = "Detectar y comparar rostros para identificación asistida.";
@@ -2147,6 +2155,181 @@ namespace Backend.Controllers
             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"[^a-z0-9]+", "-");
             normalized = normalized.Trim('-');
             return string.IsNullOrWhiteSpace(normalized) ? "proyecto-ia" : normalized;
+        }
+
+        private static bool IsFacialTemplateKey(string? templateKey)
+        {
+            var key = NormalizeText(templateKey ?? "");
+            if (string.IsNullOrWhiteSpace(key)) return false;
+            return key.Contains("facial", StringComparison.Ordinal)
+                   || key.Contains("rostro", StringComparison.Ordinal)
+                   || key.Contains("face", StringComparison.Ordinal)
+                   || key.Contains("cara", StringComparison.Ordinal);
+        }
+
+        private static (string Output, string OutputJson) NormalizeFacialOutput(string output, string? outputJson, string? modelName)
+        {
+            var rawOutput = (output ?? "").Trim();
+            var rawEnvelope = (outputJson ?? "").Trim();
+
+            if (TryParseFacesJson(rawOutput, out var parsedJson))
+            {
+                return (
+                    string.IsNullOrWhiteSpace(parsedJson.summary)
+                        ? $"Detección facial: {parsedJson.faces.Count} rostro(s)."
+                        : parsedJson.summary,
+                    JsonSerializer.Serialize(new
+                    {
+                        faces = parsedJson.faces,
+                        summary = string.IsNullOrWhiteSpace(parsedJson.summary)
+                            ? $"Detección facial: {parsedJson.faces.Count} rostro(s)."
+                            : parsedJson.summary,
+                        model = modelName ?? "",
+                        source = "model_json"
+                    })
+                );
+            }
+
+            var textCandidate = rawOutput;
+            if (string.IsNullOrWhiteSpace(textCandidate) && !string.IsNullOrWhiteSpace(rawEnvelope))
+            {
+                textCandidate = ExtractAssistantTextFromEnvelope(rawEnvelope);
+            }
+
+            var scores = ExtractScoreCandidates(textCandidate);
+            var faces = scores
+                .Select((score, idx) => new
+                {
+                    id = $"unknown_{idx + 1}",
+                    score = Math.Round(score, 4),
+                    bbox = Array.Empty<int>()
+                })
+                .ToArray();
+
+            var summary = faces.Length > 0
+                ? $"Detección facial estimada: {faces.Length} rostro(s). El modelo no devolvió bounding boxes."
+                : "No se pudieron inferir rostros de forma estructurada para esta imagen.";
+
+            var normalizedJson = JsonSerializer.Serialize(new
+            {
+                faces,
+                summary,
+                model = modelName ?? "",
+                source = "normalized_text",
+                raw = string.IsNullOrWhiteSpace(textCandidate) ? rawEnvelope : textCandidate
+            });
+
+            return (summary, normalizedJson);
+        }
+
+        private static (List<object> faces, string summary) ParseFacesJsonElement(JsonElement root)
+        {
+            var faces = new List<object>();
+            var summary = ReadString(root, "summary") ?? "";
+            if (TryGetPropertyIgnoreCase(root, "faces", out var facesEl) && facesEl.ValueKind == JsonValueKind.Array)
+            {
+                var idx = 1;
+                foreach (var face in facesEl.EnumerateArray())
+                {
+                    if (face.ValueKind != JsonValueKind.Object) continue;
+                    var id = ReadString(face, "id");
+                    var score = ReadDouble(face, "score", -1);
+                    var bbox = TryGetPropertyIgnoreCase(face, "bbox", out var bboxEl) && bboxEl.ValueKind == JsonValueKind.Array
+                        ? bboxEl.EnumerateArray()
+                            .Select(x =>
+                            {
+                                if (x.ValueKind == JsonValueKind.Number && x.TryGetInt32(out var n)) return n;
+                                var raw = x.ToString();
+                                return int.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0;
+                            })
+                            .ToArray()
+                        : Array.Empty<int>();
+
+                    faces.Add(new
+                    {
+                        id = string.IsNullOrWhiteSpace(id) ? $"unknown_{idx}" : id,
+                        score = score < 0 ? 0.0 : Math.Round(score, 4),
+                        bbox
+                    });
+                    idx++;
+                }
+            }
+
+            return (faces, summary);
+        }
+
+        private static bool TryParseFacesJson(string raw, out (List<object> faces, string summary) parsed)
+        {
+            parsed = (new List<object>(), "");
+            if (string.IsNullOrWhiteSpace(raw)) return false;
+
+            try
+            {
+                using var doc = JsonDocument.Parse(raw);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object) return false;
+                if (!TryGetPropertyIgnoreCase(doc.RootElement, "faces", out var facesEl) || facesEl.ValueKind != JsonValueKind.Array)
+                    return false;
+                parsed = ParseFacesJsonElement(doc.RootElement);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string ExtractAssistantTextFromEnvelope(string rawEnvelope)
+        {
+            if (string.IsNullOrWhiteSpace(rawEnvelope)) return "";
+            try
+            {
+                using var doc = JsonDocument.Parse(rawEnvelope);
+                var root = doc.RootElement;
+
+                if (TryGetPropertyIgnoreCase(root, "message", out var message)
+                    && message.ValueKind == JsonValueKind.Object
+                    && TryGetPropertyIgnoreCase(message, "content", out var content)
+                    && content.ValueKind == JsonValueKind.String)
+                {
+                    return content.GetString() ?? "";
+                }
+
+                if (TryGetPropertyIgnoreCase(root, "response", out var response)
+                    && response.ValueKind == JsonValueKind.String)
+                {
+                    return response.GetString() ?? "";
+                }
+            }
+            catch
+            {
+                // no-op
+            }
+            return "";
+        }
+
+        private static List<double> ExtractScoreCandidates(string text)
+        {
+            var result = new List<double>();
+            if (string.IsNullOrWhiteSpace(text)) return result;
+
+            var matches = Regex.Matches(text, @"-?\d+(?:[.,]\d+)?");
+            foreach (Match match in matches)
+            {
+                var raw = (match.Value ?? "").Trim().Replace(',', '.');
+                if (!double.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var value)) continue;
+                if (value < 0 || value > 1) continue;
+                result.Add(value);
+            }
+
+            if (result.Count > 1 && Math.Abs(result[0]) < 0.00001)
+            {
+                result = result.Skip(1).ToList();
+            }
+
+            return result
+                .Where(x => x >= 0.05)
+                .Take(20)
+                .ToList();
         }
 
         private sealed class RunExecutionResult

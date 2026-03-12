@@ -892,13 +892,37 @@ const presets = [
     validationRules: { required: ['text'] },
     annotationGuide: 'Usar coordenadas en píxeles cuando se detecten bloques.',
     modelService: {
-      provider: 'engine',
-      baseUrl: '',
-      path: '',
-      model: 'vision-ocr-v1',
-      temperature: 0.1,
+      provider: 'ollama',
+      baseUrl: 'http://localhost:11434',
+      path: '/api/chat',
+      model: 'llava',
+      temperature: 0.2,
       maxTokens: 512,
       systemPrompt: 'Analiza imágenes y responde en formato estructurado.'
+    }
+  },
+  {
+    key: 'facial_recognition',
+    title: 'Reconocimiento facial',
+    icon: 'mdi-face-recognition',
+    description: 'Detecta rostros, score y cajas de detección en imágenes.',
+    name: 'Reconocimiento Facial',
+    baseKey: 'reconocimiento-facial',
+    steps: ['dataset_build', 'train_lora', 'eval_run', 'deploy_service'],
+    profile: 'vision',
+    objective: 'Detectar rostros en imágenes y devolver identificadores con score de confianza.',
+    outputSchema: { faces: [{ id: '', score: 0, bbox: [0, 0, 0, 0] }], summary: '' },
+    taxonomy: { labels: ['persona_conocida', 'persona_desconocida'], source: ['camara', 'foto', 'video_frame'] },
+    validationRules: { required: ['faces'], minScore: 0.8 },
+    annotationGuide: 'No inventar identidades. Si no hay rostro detectable, devolver faces vacío.',
+    modelService: {
+      provider: 'ollama',
+      baseUrl: 'http://localhost:11434',
+      path: '/api/chat',
+      model: 'llava',
+      temperature: 0.2,
+      maxTokens: 512,
+      systemPrompt: 'Analiza rostros en imágenes y devuelve salida estructurada con score y bbox.'
     }
   },
   {
@@ -1562,7 +1586,7 @@ function inferProfileFromKey(key) {
   const value = String(key || '').toLowerCase()
   if (value.includes('chat') || value.includes('rag') || value.includes('assistant')) return 'chat'
   if (value.includes('transcrib') || value.includes('whisper') || value.includes('audio')) return 'transcription'
-  if (value.includes('vision') || value.includes('image') || value.includes('ocr')) return 'vision'
+  if (value.includes('vision') || value.includes('image') || value.includes('ocr') || value.includes('facial') || value.includes('face') || value.includes('rostro')) return 'vision'
   if (value.includes('extract')) return 'extraction'
   return 'generic'
 }
