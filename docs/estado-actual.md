@@ -53,6 +53,7 @@ CRUD + publicar:
 - `GET /api/v1/sistemas`
 - `POST /api/v1/sistemas`
 - `PUT /api/v1/sistemas/{id}`
+- `DELETE /api/v1/sistemas/{id}`
 - `POST /api/v1/sistemas/{id}/publicar`
 - `POST /api/v1/sistemas/{id}/export`
 
@@ -157,7 +158,7 @@ En la pestaña **Herramientas** del diseñador:
 ## 6. Frontend (pantallas actuales)
 ### 6.1 Sistemas
 Ruta: `/sistemas`
-- Lista, crea y publica sistemas.
+- Lista, crea, publica y elimina sistemas.
 - Al publicar refresca el sidebar automaticamente.
 
 ### 6.2 Disenador de sistema

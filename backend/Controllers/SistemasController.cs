@@ -69,6 +69,22 @@ namespace Backend.Controllers
             return ok ? Ok() : NotFound();
         }
 
+        [HttpDelete(Routes.v1.Sistemas.Eliminar)]
+        public IActionResult Eliminar(int id)
+        {
+            var result = SistemasGestor.Eliminar(id);
+            if (result.NotFound)
+                return NotFound();
+
+            if (!result.Ok)
+                return BadRequest(new { message = $"No se pudo eliminar el sistema. {result.Error}" });
+
+            TryStopTrackedProcess(BackendProcesses, id);
+            TryStopTrackedProcess(FrontendProcesses, id);
+
+            return Ok();
+        }
+
         [HttpPost(Routes.v1.Sistemas.Publicar)]
         public IActionResult Publicar(int id)
         {
@@ -600,6 +616,27 @@ namespace Backend.Controllers
             {
                 return (false, string.Empty, ex.Message);
             }
+        }
+
+        private static void TryStopTrackedProcess(ConcurrentDictionary<int, Process> processes, int id)
+        {
+            if (!processes.TryGetValue(id, out var process) || process.HasExited)
+            {
+                processes.TryRemove(id, out _);
+                return;
+            }
+
+            try
+            {
+                process.Kill(true);
+                process.WaitForExit(10000);
+            }
+            catch
+            {
+                // ignore
+            }
+
+            processes.TryRemove(id, out _);
         }
     }
 }

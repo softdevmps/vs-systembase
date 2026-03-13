@@ -50,6 +50,7 @@ namespace Backend
                 public const string ObtenerPorSlug = "api/v1/sistemas/slug/{slug}";
                 public const string Crear = "api/v1/sistemas";
                 public const string Editar = "api/v1/sistemas/{id}";
+                public const string Eliminar = "api/v1/sistemas/{id}";
                 public const string Publicar = "api/v1/sistemas/{id}/publicar";
                 public const string Exportar = "api/v1/sistemas/{id}/export";
                 public const string GenerarBackend = "api/v1/sistemas/{id}/generar-backend";

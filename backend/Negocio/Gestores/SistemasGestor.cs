@@ -123,6 +123,75 @@ namespace Backend.Negocio.Gestores
             return true;
         }
 
+        public static (bool Ok, bool NotFound, string? Error) Eliminar(int id)
+        {
+            using var context = new SystemBaseContext();
+
+            var sistema = context.Systems.FirstOrDefault(s => s.Id == id);
+            if (sistema == null)
+                return (false, true, null);
+
+            using var trx = context.Database.BeginTransaction();
+            try
+            {
+                var entityIds = context.Entities
+                    .Where(e => e.SystemId == id)
+                    .Select(e => e.Id)
+                    .ToList();
+
+                var permissions = context.Permissions
+                    .Where(p => p.SystemId == id)
+                    .Include(p => p.Role)
+                    .ToList();
+
+                foreach (var permission in permissions)
+                    permission.Role.Clear();
+
+                var systemMenus = context.SystemMenus
+                    .Where(m => m.SystemId == id)
+                    .Include(m => m.Role)
+                    .ToList();
+
+                foreach (var menu in systemMenus)
+                    menu.Role.Clear();
+
+                if (entityIds.Count > 0)
+                {
+                    var fields = context.Fields
+                        .Where(f => entityIds.Contains(f.EntityId));
+
+                    var entityModules = context.EntityModules
+                        .Where(em => entityIds.Contains(em.EntityId));
+
+                    context.Fields.RemoveRange(fields);
+                    context.EntityModules.RemoveRange(entityModules);
+                }
+
+                var relations = context.Relations.Where(r => r.SystemId == id);
+                var systemBuilds = context.SystemBuilds.Where(b => b.SystemId == id);
+                var systemModules = context.SystemModules.Where(sm => sm.SystemId == id);
+                var entities = context.Entities.Where(e => e.SystemId == id);
+
+                context.Relations.RemoveRange(relations);
+                context.SystemBuilds.RemoveRange(systemBuilds);
+                context.SystemModules.RemoveRange(systemModules);
+                context.Permissions.RemoveRange(permissions);
+                context.SystemMenus.RemoveRange(systemMenus);
+                context.Entities.RemoveRange(entities);
+                context.Systems.Remove(sistema);
+
+                context.SaveChanges();
+                trx.Commit();
+
+                return (true, false, null);
+            }
+            catch (Exception ex)
+            {
+                trx.Rollback();
+                return (false, false, ex.Message);
+            }
+        }
+
         private static bool IsValidSlug(string slug)
         {
             if (string.IsNullOrWhiteSpace(slug))

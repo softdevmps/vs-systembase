@@ -21,6 +21,10 @@ export default {
     return api.put(`/sistemas/${id}`, data);
   },
 
+  eliminar(id) {
+    return api.delete(`/sistemas/${id}`);
+  },
+
   publicar(id) {
     return api.post(`/sistemas/${id}/publicar`);
   },
