@@ -1,13 +1,19 @@
+using Backend.Data;
+using Backend.Models.Entidades;
 using Backend.Models.Sistemas;
 using Backend.Negocio.Generadores;
 using Backend.Negocio.Gestores;
 using Backend.Utils;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using System.Collections.Concurrent;
+using System.Data;
 using System.Diagnostics;
 using System.IO.Compression;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 
 namespace Backend.Controllers
 {
@@ -184,6 +190,76 @@ namespace Backend.Controllers
                 return BadRequest(result);
 
             return PhysicalFile(result.ZipPath, "application/zip", result.ZipFileName);
+        }
+
+        [HttpPost(Routes.v1.Sistemas.EjecutarSql)]
+        public IActionResult EjecutarSql(int id, [FromBody] SqlScriptExecuteRequest request)
+        {
+            if (!_env.IsDevelopment())
+                return Forbid();
+
+            if (!ModelState.IsValid)
+                return BadRequest(new { message = "Script SQL invalido." });
+
+            var usuario = UsuarioToken();
+            if (usuario.UsuarioId == 0)
+                return Unauthorized();
+
+            if (!IsAdminUser(usuario.UsuarioId))
+                return Forbid();
+
+            var sistema = SistemasGestor.ObtenerPorId(id);
+            if (sistema == null)
+                return NotFound();
+
+            var script = NormalizeSqlScript(request.Script);
+            if (string.IsNullOrWhiteSpace(script))
+                return BadRequest(new { message = "El script SQL esta vacio." });
+
+            var expectedSchema = $"sys_{sistema.Slug}".ToLowerInvariant();
+            var validation = ValidateSqlScript(script, expectedSchema);
+            if (!validation.Ok)
+                return BadRequest(new { message = validation.Error });
+
+            var batches = SplitSqlBatches(script);
+            if (batches.Count == 0)
+                return BadRequest(new { message = "No se detectaron sentencias SQL ejecutables." });
+
+            using var context = new SystemBaseContext();
+            using var trx = context.Database.BeginTransaction();
+            try
+            {
+                var executed = 0;
+                foreach (var batch in batches)
+                {
+                    context.Database.ExecuteSqlRaw(batch);
+                    executed++;
+                }
+
+                MetadataSyncResult? metadata = null;
+                if (request.ImportMetadata)
+                    metadata = SyncSchemaMetadata(context, id, expectedSchema);
+
+                var message = $"Script SQL ejecutado. Batches: {executed}.";
+                if (metadata != null)
+                {
+                    message += $" Metadata: entidades +{metadata.EntitiesCreated}/{metadata.EntitiesUpdated}, campos +{metadata.FieldsCreated}/{metadata.FieldsUpdated}.";
+                }
+
+                trx.Commit();
+                return Ok(new
+                {
+                    message,
+                    schema = expectedSchema,
+                    batches = executed,
+                    metadata
+                });
+            }
+            catch (Exception ex)
+            {
+                trx.Rollback();
+                return BadRequest(new { message = $"Error ejecutando SQL: {ex.Message}" });
+            }
         }
 
         [HttpPost(Routes.v1.Sistemas.GenerarBackend)]
@@ -542,6 +618,482 @@ namespace Backend.Controllers
             {
                 return false;
             }
+        }
+
+        private static bool IsAdminUser(int usuarioId)
+        {
+            using var context = new SystemBaseContext();
+
+            return context.Usuarios
+                .Include(u => u.Rol)
+                .Any(u =>
+                    u.Id == usuarioId &&
+                    (u.Username != null && u.Username.ToLower() == "admin" ||
+                     (u.Rol != null && u.Rol.Nombre.ToLower() == "admin")));
+        }
+
+        private static string NormalizeSqlScript(string? script)
+        {
+            if (string.IsNullOrWhiteSpace(script))
+                return string.Empty;
+
+            return script
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n')
+                .Trim();
+        }
+
+        private static (bool Ok, string Error) ValidateSqlScript(string script, string expectedSchema)
+        {
+            if (script.Length > 200_000)
+                return (false, "El script excede el tamano permitido (200 KB).");
+
+            if (!script.Contains(expectedSchema, StringComparison.OrdinalIgnoreCase))
+                return (false, $"El script debe usar el schema del sistema: {expectedSchema}.");
+
+            var forbiddenPattern = @"\b(use|backup|restore|shutdown|reconfigure|sp_configure|xp_cmdshell|exec\s+xp_|create\s+database|drop\s+database|alter\s+database|create\s+login|drop\s+login|alter\s+login)\b";
+            if (Regex.IsMatch(script, forbiddenPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                return (false, "El script contiene sentencias no permitidas para esta consola.");
+
+            var forbiddenSchemas = new[] { "dbo", "sb" };
+            foreach (var schema in forbiddenSchemas)
+            {
+                var schemaPattern = $@"(?:\[{schema}\]|{schema})\s*\.";
+                if (Regex.IsMatch(script, schemaPattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                    return (false, $"No se permite operar sobre schema {schema}. Usa solo {expectedSchema}.");
+            }
+
+            var sysSchemaMatches = Regex.Matches(
+                script,
+                @"(?:\[(?<schema>sys_[A-Za-z0-9_]+)\]|(?<schema>sys_[A-Za-z0-9_]+))\s*\.",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+
+            foreach (Match match in sysSchemaMatches)
+            {
+                var schema = match.Groups["schema"].Value.ToLowerInvariant();
+                if (!string.Equals(schema, expectedSchema, StringComparison.OrdinalIgnoreCase))
+                    return (false, $"El script referencia un schema distinto ({schema}). Solo se permite {expectedSchema}.");
+            }
+
+            var createTableMatches = Regex.Matches(
+                script,
+                @"\bcreate\s+table\s+(?<name>(?:\[[^\]]+\]|\w+)(?:\s*\.\s*(?:\[[^\]]+\]|\w+))?)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
+            );
+
+            foreach (Match match in createTableMatches)
+            {
+                var name = match.Groups["name"].Value;
+                if (!TryExtractSchema(name, out var schema))
+                    return (false, $"CREATE TABLE debe incluir schema explicito ({expectedSchema}).");
+
+                if (!string.Equals(schema, expectedSchema, StringComparison.OrdinalIgnoreCase))
+                    return (false, $"CREATE TABLE fuera del schema permitido ({expectedSchema}).");
+            }
+
+            return (true, string.Empty);
+        }
+
+        private static bool TryExtractSchema(string value, out string schema)
+        {
+            schema = string.Empty;
+            var parts = value.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (parts.Length < 2)
+                return false;
+
+            schema = TrimSqlIdentifier(parts[0]).ToLowerInvariant();
+            return !string.IsNullOrWhiteSpace(schema);
+        }
+
+        private static string TrimSqlIdentifier(string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.StartsWith("[") && trimmed.EndsWith("]") && trimmed.Length >= 2)
+                return trimmed[1..^1].Trim();
+            return trimmed;
+        }
+
+        private static List<string> SplitSqlBatches(string script)
+        {
+            var chunks = Regex.Split(
+                script,
+                @"^\s*GO\s*;?\s*$",
+                RegexOptions.IgnoreCase | RegexOptions.Multiline | RegexOptions.CultureInvariant
+            );
+
+            return chunks
+                .Select(x => x.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .ToList();
+        }
+
+        private static MetadataSyncResult SyncSchemaMetadata(SystemBaseContext context, int systemId, string schemaName)
+        {
+            var result = new MetadataSyncResult();
+            var runtimeTables = LoadRuntimeTables(context, schemaName);
+            if (runtimeTables.Count == 0)
+                return result;
+
+            var entities = context.Entities
+                .Where(e => e.SystemId == systemId)
+                .ToList();
+
+            var entitiesByTable = entities
+                .Where(e => !string.IsNullOrWhiteSpace(e.TableName))
+                .ToDictionary(e => e.TableName!.ToLowerInvariant(), e => e);
+
+            var nextSortOrder = entities.Count == 0 ? 1 : entities.Max(e => e.SortOrder) + 1;
+            var utcNow = DateTime.UtcNow;
+
+            foreach (var table in runtimeTables)
+            {
+                if (!entitiesByTable.TryGetValue(table.ToLowerInvariant(), out var entity))
+                {
+                    entity = new Entities
+                    {
+                        SystemId = systemId,
+                        Name = ToPascalIdentifier(table),
+                        DisplayName = ToDisplayName(table),
+                        TableName = table,
+                        SortOrder = nextSortOrder++,
+                        IsActive = true,
+                        CreatedAt = utcNow
+                    };
+                    context.Entities.Add(entity);
+                    entities.Add(entity);
+                    entitiesByTable[table.ToLowerInvariant()] = entity;
+                    result.EntitiesCreated++;
+                }
+                else
+                {
+                    var changed = false;
+                    if (string.IsNullOrWhiteSpace(entity.Name))
+                    {
+                        entity.Name = ToPascalIdentifier(table);
+                        changed = true;
+                    }
+                    if (string.IsNullOrWhiteSpace(entity.DisplayName))
+                    {
+                        entity.DisplayName = ToDisplayName(table);
+                        changed = true;
+                    }
+                    if (entity.SortOrder <= 0)
+                    {
+                        entity.SortOrder = nextSortOrder++;
+                        changed = true;
+                    }
+                    if (changed)
+                    {
+                        entity.UpdatedAt = utcNow;
+                        result.EntitiesUpdated++;
+                    }
+                }
+            }
+
+            context.SaveChanges();
+
+            var syncedEntities = context.Entities
+                .Where(e => e.SystemId == systemId && runtimeTables.Contains(e.TableName!))
+                .ToList()
+                .Where(e => !string.IsNullOrWhiteSpace(e.TableName))
+                .ToDictionary(e => e.TableName!.ToLowerInvariant(), e => e);
+
+            var syncedEntityIds = syncedEntities.Values.Select(e => e.Id).ToList();
+            var existingFields = context.Fields
+                .Where(f => syncedEntityIds.Contains(f.EntityId))
+                .ToList();
+
+            var fieldsByKey = existingFields.ToDictionary(
+                f => BuildFieldKey(f.EntityId, f.ColumnName),
+                f => f
+            );
+
+            var runtimeColumns = LoadRuntimeColumns(context, schemaName);
+            foreach (var column in runtimeColumns)
+            {
+                if (!syncedEntities.TryGetValue(column.TableName.ToLowerInvariant(), out var entity))
+                    continue;
+
+                var key = BuildFieldKey(entity.Id, column.ColumnName);
+                var mappedType = MapSqlTypeToFieldType(column.SqlType);
+                var required = !column.IsNullable || column.IsPrimaryKey || column.IsIdentity;
+                var maxLength = CalculateMaxLength(column.SqlType, column.MaxLengthBytes);
+                var precision = mappedType == "decimal" ? (int?)column.PrecisionValue : null;
+                var scale = mappedType == "decimal" ? (int?)column.ScaleValue : null;
+                var defaultValue = NormalizeDefaultDefinition(column.DefaultDefinition);
+
+                if (!fieldsByKey.TryGetValue(key, out var field))
+                {
+                    field = new Fields
+                    {
+                        EntityId = entity.Id,
+                        Name = ToPascalIdentifier(column.ColumnName),
+                        ColumnName = column.ColumnName,
+                        DataType = mappedType,
+                        Required = required,
+                        MaxLength = maxLength,
+                        Precision = precision,
+                        Scale = scale,
+                        DefaultValue = defaultValue,
+                        IsPrimaryKey = column.IsPrimaryKey,
+                        IsIdentity = column.IsIdentity,
+                        IsUnique = column.IsUnique,
+                        SortOrder = column.ColumnOrder,
+                        CreatedAt = utcNow
+                    };
+                    context.Fields.Add(field);
+                    fieldsByKey[key] = field;
+                    result.FieldsCreated++;
+                }
+                else
+                {
+                    field.Name = string.IsNullOrWhiteSpace(field.Name) ? ToPascalIdentifier(column.ColumnName) : field.Name;
+                    field.DataType = mappedType;
+                    field.Required = required;
+                    field.MaxLength = maxLength;
+                    field.Precision = precision;
+                    field.Scale = scale;
+                    field.DefaultValue = defaultValue;
+                    field.IsPrimaryKey = column.IsPrimaryKey;
+                    field.IsIdentity = column.IsIdentity;
+                    field.IsUnique = column.IsUnique;
+                    field.SortOrder = column.ColumnOrder;
+                    field.UpdatedAt = utcNow;
+                    result.FieldsUpdated++;
+                }
+            }
+
+            context.SaveChanges();
+            return result;
+        }
+
+        private static List<string> LoadRuntimeTables(SystemBaseContext context, string schemaName)
+        {
+            const string sql = @"
+SELECT t.name AS TableName
+FROM sys.tables t
+INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+WHERE s.name = @schema
+ORDER BY t.name;";
+
+            var tables = new List<string>();
+            ExecuteReader(context, sql, cmd =>
+            {
+                AddParameter(cmd, "@schema", schemaName);
+            }, reader =>
+            {
+                while (reader.Read())
+                    tables.Add(reader.GetString(0));
+            });
+            return tables;
+        }
+
+        private static List<RuntimeColumnInfo> LoadRuntimeColumns(SystemBaseContext context, string schemaName)
+        {
+            const string sql = @"
+SELECT
+    t.name AS TableName,
+    c.name AS ColumnName,
+    ty.name AS SqlType,
+    c.max_length AS MaxLengthBytes,
+    c.[precision] AS PrecisionValue,
+    c.scale AS ScaleValue,
+    c.is_nullable AS IsNullable,
+    c.is_identity AS IsIdentity,
+    CASE WHEN EXISTS (
+        SELECT 1
+        FROM sys.indexes i
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        WHERE i.object_id = t.object_id
+          AND i.is_primary_key = 1
+          AND ic.column_id = c.column_id
+    ) THEN 1 ELSE 0 END AS IsPrimaryKey,
+    CASE WHEN EXISTS (
+        SELECT 1
+        FROM sys.indexes i
+        INNER JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+        WHERE i.object_id = t.object_id
+          AND i.is_unique = 1
+          AND i.is_primary_key = 0
+          AND ic.column_id = c.column_id
+    ) THEN 1 ELSE 0 END AS IsUnique,
+    dc.definition AS DefaultDefinition,
+    c.column_id AS ColumnOrder
+FROM sys.tables t
+INNER JOIN sys.schemas s ON s.schema_id = t.schema_id
+INNER JOIN sys.columns c ON c.object_id = t.object_id
+INNER JOIN sys.types ty ON ty.user_type_id = c.user_type_id
+LEFT JOIN sys.default_constraints dc ON dc.object_id = c.default_object_id
+WHERE s.name = @schema
+ORDER BY t.name, c.column_id;";
+
+            var columns = new List<RuntimeColumnInfo>();
+            ExecuteReader(context, sql, cmd =>
+            {
+                AddParameter(cmd, "@schema", schemaName);
+            }, reader =>
+            {
+                while (reader.Read())
+                {
+                    columns.Add(new RuntimeColumnInfo
+                    {
+                        TableName = reader.GetString(0),
+                        ColumnName = reader.GetString(1),
+                        SqlType = reader.GetString(2),
+                        MaxLengthBytes = reader.GetInt16(3),
+                        PrecisionValue = reader.GetByte(4),
+                        ScaleValue = reader.GetByte(5),
+                        IsNullable = reader.GetBoolean(6),
+                        IsIdentity = reader.GetBoolean(7),
+                        IsPrimaryKey = reader.GetInt32(8) == 1,
+                        IsUnique = reader.GetInt32(9) == 1,
+                        DefaultDefinition = reader.IsDBNull(10) ? null : reader.GetString(10),
+                        ColumnOrder = reader.GetInt32(11)
+                    });
+                }
+            });
+            return columns;
+        }
+
+        private static void ExecuteReader(
+            SystemBaseContext context,
+            string sql,
+            Action<IDbCommand> bindParameters,
+            Action<IDataReader> onRead)
+        {
+            var connection = context.Database.GetDbConnection();
+            var openHere = connection.State != ConnectionState.Open;
+            if (openHere)
+                connection.Open();
+
+            try
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = sql;
+                command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+                bindParameters(command);
+                using var reader = command.ExecuteReader();
+                onRead(reader);
+            }
+            finally
+            {
+                if (openHere)
+                    connection.Close();
+            }
+        }
+
+        private static void AddParameter(IDbCommand command, string name, object value)
+        {
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = name;
+            parameter.Value = value;
+            command.Parameters.Add(parameter);
+        }
+
+        private static string BuildFieldKey(int entityId, string? columnName)
+        {
+            return $"{entityId}:{(columnName ?? string.Empty).Trim().ToLowerInvariant()}";
+        }
+
+        private static string ToPascalIdentifier(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return "Item";
+
+            var parts = Regex.Split(value.Trim(), @"[^A-Za-z0-9]+")
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .ToList();
+
+            if (parts.Count == 0)
+                return "Item";
+
+            var output = string.Concat(parts.Select(p =>
+            {
+                if (p.Length == 1)
+                    return p.ToUpperInvariant();
+                return char.ToUpperInvariant(p[0]) + p[1..];
+            }));
+
+            return char.IsDigit(output[0]) ? $"N{output}" : output;
+        }
+
+        private static string ToDisplayName(string value)
+        {
+            var pascal = ToPascalIdentifier(value);
+            return Regex.Replace(pascal, "([a-z0-9])([A-Z])", "$1 $2");
+        }
+
+        private static string MapSqlTypeToFieldType(string? sqlType)
+        {
+            var normalized = (sqlType ?? string.Empty).Trim().ToLowerInvariant();
+            return normalized switch
+            {
+                "int" or "bigint" or "smallint" or "tinyint" => "int",
+                "decimal" or "numeric" or "money" or "smallmoney" or "float" or "real" => "decimal",
+                "bit" => "bool",
+                "date" or "datetime" or "datetime2" or "smalldatetime" or "datetimeoffset" or "time" => "datetime",
+                "uniqueidentifier" => "guid",
+                _ => "string"
+            };
+        }
+
+        private static int? CalculateMaxLength(string sqlType, short maxLengthBytes)
+        {
+            if (maxLengthBytes < 0)
+                return null;
+
+            var normalized = (sqlType ?? string.Empty).Trim().ToLowerInvariant();
+            var stringTypes = new HashSet<string>
+            {
+                "char", "varchar", "text", "nchar", "nvarchar", "ntext"
+            };
+
+            if (!stringTypes.Contains(normalized))
+                return null;
+
+            if (normalized.StartsWith("n"))
+                return maxLengthBytes / 2;
+
+            return maxLengthBytes;
+        }
+
+        private static string? NormalizeDefaultDefinition(string? definition)
+        {
+            if (string.IsNullOrWhiteSpace(definition))
+                return null;
+
+            var value = definition.Trim();
+            while (value.StartsWith("(") && value.EndsWith(")") && value.Length >= 2)
+            {
+                value = value[1..^1].Trim();
+            }
+
+            return value;
+        }
+
+        private sealed class RuntimeColumnInfo
+        {
+            public string TableName { get; set; } = string.Empty;
+            public string ColumnName { get; set; } = string.Empty;
+            public string SqlType { get; set; } = string.Empty;
+            public short MaxLengthBytes { get; set; }
+            public byte PrecisionValue { get; set; }
+            public byte ScaleValue { get; set; }
+            public bool IsNullable { get; set; }
+            public bool IsIdentity { get; set; }
+            public bool IsPrimaryKey { get; set; }
+            public bool IsUnique { get; set; }
+            public string? DefaultDefinition { get; set; }
+            public int ColumnOrder { get; set; }
+        }
+
+        private sealed class MetadataSyncResult
+        {
+            public int EntitiesCreated { get; set; }
+            public int EntitiesUpdated { get; set; }
+            public int FieldsCreated { get; set; }
+            public int FieldsUpdated { get; set; }
         }
 
         private (bool Ok, string Output, string Error) RunDotnetRestore(string workingDirectory)

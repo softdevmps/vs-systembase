@@ -56,6 +56,7 @@ CRUD + publicar:
 - `DELETE /api/v1/sistemas/{id}`
 - `POST /api/v1/sistemas/{id}/publicar`
 - `POST /api/v1/sistemas/{id}/export`
+- `POST /api/v1/sistemas/{id}/sql/execute` (solo DEV/admin, schema `sys_{slug}`, sincroniza metadata de entidades/campos por defecto)
 
 ### 4.2 Entidades y campos
 - `GET /api/v1/sistemas/{systemId}/entidades`
@@ -165,6 +166,7 @@ Ruta: `/sistemas`
 Ruta: `/sistemas/{id}`
 - ABM de entidades y campos.
 - Panel de relaciones (FK).
+- Consola SQL de bootstrap en pestaña **Datos** (solo DEV/admin).
 - Boton "Datos" para abrir runtime.
 - Boton **Publicar DB** ahora vive en la pestaña **Datos**.
 - Pestañas: Datos / Backend / Herramientas / Frontend.

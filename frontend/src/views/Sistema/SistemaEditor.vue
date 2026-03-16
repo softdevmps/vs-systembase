@@ -235,6 +235,69 @@
           </v-col>
         </v-row>
 
+        <v-row class="mt-4">
+          <v-col cols="12">
+            <v-card elevation="2" class="card">
+              <v-card-title class="d-flex align-center justify-space-between">
+                <div class="d-flex align-center">
+                  <v-icon class="mr-2" color="primary">mdi-console</v-icon>
+                  <span class="text-h6 font-weight-medium">Consola SQL (bootstrap)</span>
+                </div>
+                <div class="d-flex ga-2">
+                  <v-btn
+                    variant="text"
+                    color="secondary"
+                    size="small"
+                    @click="sqlConsole.script = sqlScriptTemplate"
+                  >
+                    Cargar plantilla
+                  </v-btn>
+                  <v-btn variant="text" color="secondary" size="small" @click="limpiarSqlConsole">
+                    Limpiar
+                  </v-btn>
+                  <v-btn
+                    color="deep-orange"
+                    size="small"
+                    :loading="sqlConsole.running"
+                    @click="ejecutarSqlConsole"
+                  >
+                    <v-icon left>mdi-play</v-icon>
+                    Ejecutar SQL
+                  </v-btn>
+                </div>
+              </v-card-title>
+
+              <v-divider />
+
+              <v-card-text>
+                <v-alert type="warning" variant="tonal" class="mb-4">
+                  Solo disponible en <span class="mono">Development</span> y para <span class="mono">admin</span>.
+                  El script debe operar sobre <span class="mono">{{ sqlTargetSchema }}</span>.
+                </v-alert>
+
+                <v-textarea
+                  v-model="sqlConsole.script"
+                  label="Script SQL"
+                  rows="10"
+                  density="compact"
+                  class="api-textarea"
+                  hint="Soporta multiples sentencias y separador GO."
+                  persistent-hint
+                />
+
+                <v-alert
+                  v-if="sqlConsole.resultMessage"
+                  :type="sqlConsole.resultType"
+                  variant="tonal"
+                  class="mt-4"
+                >
+                  {{ sqlConsole.resultMessage }}
+                </v-alert>
+              </v-card-text>
+            </v-card>
+          </v-col>
+        </v-row>
+
       </v-window-item>
 
       <v-window-item value="herramientas">
@@ -2130,6 +2193,12 @@ const apiConsole = ref({
   responseBody: '',
   responseHeaders: ''
 })
+const sqlConsole = ref({
+  script: '',
+  running: false,
+  resultType: 'info',
+  resultMessage: ''
+})
 const apiRouteSeleccionada = ref(null)
 const apiRouteFilterText = ref('')
 const apiRouteFilterMethod = ref('')
@@ -2338,6 +2407,36 @@ const portsFilePath = computed(() => 'systems/ports.json')
 const baseFrontendPort = 5173
 const frontendPort = computed(() => baseFrontendPort + (Number.isFinite(systemId) ? systemId : 0))
 const frontendBaseUrl = computed(() => `http://localhost:${frontendPort.value}`)
+const sqlTargetSchema = computed(() => {
+  const slug = (sistema.value?.slug || '').trim().toLowerCase()
+  return slug ? `sys_${slug}` : 'sys_<slug>'
+})
+const sqlScriptTemplate = computed(() => {
+  const schema = sqlTargetSchema.value
+  return `IF OBJECT_ID('[${schema}].[Recurso]', 'U') IS NULL
+BEGIN
+    CREATE TABLE [${schema}].[Recurso] (
+        [Id] INT IDENTITY(1,1) NOT NULL,
+        [Codigo] NVARCHAR(80) NOT NULL,
+        [Descripcion] NVARCHAR(200) NULL,
+        [Activo] BIT NOT NULL CONSTRAINT [DF_${schema}_Recurso_Activo] DEFAULT (1),
+        [CreatedAt] DATETIME2 NOT NULL CONSTRAINT [DF_${schema}_Recurso_CreatedAt] DEFAULT (SYSUTCDATETIME()),
+        CONSTRAINT [PK_${schema}_Recurso] PRIMARY KEY ([Id])
+    );
+END
+GO
+
+IF NOT EXISTS (
+    SELECT 1
+    FROM sys.indexes
+    WHERE name = 'UX_${schema}_Recurso_Codigo'
+      AND object_id = OBJECT_ID('[${schema}].[Recurso]')
+)
+BEGIN
+    CREATE UNIQUE INDEX [UX_${schema}_Recurso_Codigo]
+    ON [${schema}].[Recurso] ([Codigo]);
+END`
+})
 
 const backendHealthLabel = computed(() => {
   if (backendHealth.status === 'online') return 'Online'
@@ -2673,6 +2772,47 @@ async function publicarSistema() {
       error?.response?.data?.Message ||
       'Error al publicar el sistema.'
     window.alert(message)
+  }
+}
+
+function limpiarSqlConsole() {
+  sqlConsole.value.script = ''
+  sqlConsole.value.resultMessage = ''
+  sqlConsole.value.resultType = 'info'
+}
+
+async function ejecutarSqlConsole() {
+  const script = sqlConsole.value.script?.trim()
+  if (!script) {
+    sqlConsole.value.resultType = 'warning'
+    sqlConsole.value.resultMessage = 'Pega un script SQL antes de ejecutar.'
+    return
+  }
+
+  const ok = window.confirm(
+    `Ejecutar script SQL en ${sqlTargetSchema.value}?\n\nSolo usar para bootstrap controlado.`
+  )
+  if (!ok) return
+
+  sqlConsole.value.running = true
+  sqlConsole.value.resultMessage = ''
+
+  try {
+    const { data } = await sistemaService.ejecutarSql(systemId, script)
+    const message = data?.message || data?.Message || 'Script SQL ejecutado.'
+    sqlConsole.value.resultType = 'success'
+    sqlConsole.value.resultMessage = message
+    await cargarEntidades()
+    await cargarRelaciones()
+  } catch (error) {
+    const message =
+      error?.response?.data?.message ||
+      error?.response?.data?.Message ||
+      'Error ejecutando script SQL.'
+    sqlConsole.value.resultType = 'error'
+    sqlConsole.value.resultMessage = message
+  } finally {
+    sqlConsole.value.running = false
   }
 }
 
@@ -3410,6 +3550,7 @@ onMounted(async () => {
   const savedBase = localStorage.getItem('backendConsoleBaseUrl')
   apiConsole.value.baseUrl = savedBase || backendBaseUrl.value
   await cargarSistema()
+  sqlConsole.value.script = sqlScriptTemplate.value
   await cargarEntidades()
   await cargarRelaciones()
   await cargarBackendConfig()
