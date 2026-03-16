@@ -53,6 +53,7 @@ namespace Backend
                 public const string Eliminar = "api/v1/sistemas/{id}";
                 public const string Publicar = "api/v1/sistemas/{id}/publicar";
                 public const string Exportar = "api/v1/sistemas/{id}/export";
+                public const string EjecutarSql = "api/v1/sistemas/{id}/sql/execute";
                 public const string GenerarBackend = "api/v1/sistemas/{id}/generar-backend";
                 public const string GenerarFrontend = "api/v1/sistemas/{id}/generar-frontend";
                 public const string IniciarBackend = "api/v1/sistemas/{id}/backend/start";

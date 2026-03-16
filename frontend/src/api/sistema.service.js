@@ -38,6 +38,10 @@ export default {
     return api.post(`/sistemas/${id}/export?mode=workspace&overwrite=${flag}`);
   },
 
+  ejecutarSql(id, script, importMetadata = true) {
+    return api.post(`/sistemas/${id}/sql/execute`, { script, importMetadata });
+  },
+
   generarBackend(id, overwrite = false) {
     const flag = overwrite ? 'true' : 'false'
     return api.post(`/sistemas/${id}/generar-backend?overwrite=${flag}`);
