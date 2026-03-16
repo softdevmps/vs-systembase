@@ -23,5 +23,10 @@ export default {
 
   editar(systemId, id, data) {
     return api.put(`/sistemas/${systemId}/entidades/${id}`, data);
+  },
+
+  eliminar(systemId, id, dropTable = false) {
+    const flag = dropTable ? 'true' : 'false'
+    return api.delete(`/sistemas/${systemId}/entidades/${id}?dropTable=${flag}`);
   }
 };

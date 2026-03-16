@@ -65,6 +65,7 @@ CRUD + publicar:
 - `GET /api/v1/sistemas/{systemId}/entidades/by-name/{name}`
 - `GET /api/v1/sistemas/{systemId}/entidades/{entityId}/campos`
 - `POST /api/v1/sistemas/{systemId}/entidades/{entityId}/campos`
+- `DELETE /api/v1/sistemas/{systemId}/entidades/{id}?dropTable=true|false` (opcionalmente elimina tabla runtime `sys_{slug}.[TableName]`)
 
 ### 4.3 Relaciones
 Se usan para FK y combos en runtime:
@@ -167,6 +168,7 @@ Ruta: `/sistemas/{id}`
 - ABM de entidades y campos.
 - Panel de relaciones (FK).
 - Consola SQL de bootstrap en pestaña **Datos** (solo DEV/admin).
+- Accion de eliminar entidad con opcion de borrar tambien la tabla runtime.
 - Boton "Datos" para abrir runtime.
 - Boton **Publicar DB** ahora vive en la pestaña **Datos**.
 - Pestañas: Datos / Backend / Herramientas / Frontend.

@@ -243,7 +243,7 @@ namespace Backend.Controllers
                 var message = $"Script SQL ejecutado. Batches: {executed}.";
                 if (metadata != null)
                 {
-                    message += $" Metadata: entidades +{metadata.EntitiesCreated}/{metadata.EntitiesUpdated}, campos +{metadata.FieldsCreated}/{metadata.FieldsUpdated}.";
+                    message += $" Metadata: entidades +{metadata.EntitiesCreated}/{metadata.EntitiesUpdated}, campos +{metadata.FieldsCreated}/{metadata.FieldsUpdated}, relaciones +{metadata.RelationsCreated}/{metadata.RelationsUpdated}.";
                 }
 
                 trx.Commit();
@@ -864,6 +864,64 @@ namespace Backend.Controllers
                 }
             }
 
+            var existingRelations = context.Relations
+                .Where(r => r.SystemId == systemId)
+                .ToList();
+
+            var relationsByKey = existingRelations.ToDictionary(
+                r => BuildRelationKey(r.SourceEntityId, r.TargetEntityId, r.ForeignKey),
+                r => r
+            );
+
+            var runtimeRelations = LoadRuntimeRelations(context, schemaName);
+            foreach (var relation in runtimeRelations)
+            {
+                if (!syncedEntities.TryGetValue(relation.SourceTableName.ToLowerInvariant(), out var sourceEntity))
+                    continue;
+                if (!syncedEntities.TryGetValue(relation.TargetTableName.ToLowerInvariant(), out var targetEntity))
+                    continue;
+
+                var key = BuildRelationKey(sourceEntity.Id, targetEntity.Id, relation.ForeignKeyColumn);
+                if (!relationsByKey.TryGetValue(key, out var existingRelation))
+                {
+                    var created = new Relations
+                    {
+                        SystemId = systemId,
+                        SourceEntityId = sourceEntity.Id,
+                        TargetEntityId = targetEntity.Id,
+                        RelationType = "ManyToOne",
+                        ForeignKey = relation.ForeignKeyColumn,
+                        CascadeDelete = relation.CascadeDelete,
+                        CreatedAt = utcNow
+                    };
+                    context.Relations.Add(created);
+                    relationsByKey[key] = created;
+                    result.RelationsCreated++;
+                }
+                else
+                {
+                    var changed = false;
+                    if (!string.Equals(existingRelation.RelationType, "ManyToOne", StringComparison.OrdinalIgnoreCase))
+                    {
+                        existingRelation.RelationType = "ManyToOne";
+                        changed = true;
+                    }
+                    if (!string.Equals(existingRelation.ForeignKey, relation.ForeignKeyColumn, StringComparison.OrdinalIgnoreCase))
+                    {
+                        existingRelation.ForeignKey = relation.ForeignKeyColumn;
+                        changed = true;
+                    }
+                    if (existingRelation.CascadeDelete != relation.CascadeDelete)
+                    {
+                        existingRelation.CascadeDelete = relation.CascadeDelete;
+                        changed = true;
+                    }
+
+                    if (changed)
+                        result.RelationsUpdated++;
+                }
+            }
+
             context.SaveChanges();
             return result;
         }
@@ -956,6 +1014,52 @@ ORDER BY t.name, c.column_id;";
             return columns;
         }
 
+        private static List<RuntimeRelationInfo> LoadRuntimeRelations(SystemBaseContext context, string schemaName)
+        {
+            const string sql = @"
+SELECT
+    src_t.name AS SourceTableName,
+    src_c.name AS SourceColumnName,
+    tgt_t.name AS TargetTableName,
+    CAST(CASE WHEN fk.delete_referential_action = 1 THEN 1 ELSE 0 END AS BIT) AS CascadeDelete
+FROM sys.foreign_keys fk
+INNER JOIN sys.tables src_t ON src_t.object_id = fk.parent_object_id
+INNER JOIN sys.schemas src_s ON src_s.schema_id = src_t.schema_id
+INNER JOIN sys.tables tgt_t ON tgt_t.object_id = fk.referenced_object_id
+INNER JOIN sys.schemas tgt_s ON tgt_s.schema_id = tgt_t.schema_id
+INNER JOIN (
+    SELECT
+        constraint_object_id,
+        MIN(parent_column_id) AS ParentColumnId,
+        COUNT(*) AS ColumnCount
+    FROM sys.foreign_key_columns
+    GROUP BY constraint_object_id
+) fkc ON fkc.constraint_object_id = fk.object_id AND fkc.ColumnCount = 1
+INNER JOIN sys.columns src_c ON src_c.object_id = src_t.object_id AND src_c.column_id = fkc.ParentColumnId
+WHERE src_s.name = @schema
+  AND tgt_s.name = @schema
+ORDER BY src_t.name, src_c.name;";
+
+            var relations = new List<RuntimeRelationInfo>();
+            ExecuteReader(context, sql, cmd =>
+            {
+                AddParameter(cmd, "@schema", schemaName);
+            }, reader =>
+            {
+                while (reader.Read())
+                {
+                    relations.Add(new RuntimeRelationInfo
+                    {
+                        SourceTableName = reader.GetString(0),
+                        ForeignKeyColumn = reader.GetString(1),
+                        TargetTableName = reader.GetString(2),
+                        CascadeDelete = reader.GetBoolean(3)
+                    });
+                }
+            });
+            return relations;
+        }
+
         private static void ExecuteReader(
             SystemBaseContext context,
             string sql,
@@ -994,6 +1098,11 @@ ORDER BY t.name, c.column_id;";
         private static string BuildFieldKey(int entityId, string? columnName)
         {
             return $"{entityId}:{(columnName ?? string.Empty).Trim().ToLowerInvariant()}";
+        }
+
+        private static string BuildRelationKey(int sourceEntityId, int targetEntityId, string? foreignKey)
+        {
+            return $"{sourceEntityId}:{targetEntityId}:{(foreignKey ?? string.Empty).Trim().ToLowerInvariant()}";
         }
 
         private static string ToPascalIdentifier(string value)
@@ -1088,12 +1197,22 @@ ORDER BY t.name, c.column_id;";
             public int ColumnOrder { get; set; }
         }
 
+        private sealed class RuntimeRelationInfo
+        {
+            public string SourceTableName { get; set; } = string.Empty;
+            public string ForeignKeyColumn { get; set; } = string.Empty;
+            public string TargetTableName { get; set; } = string.Empty;
+            public bool CascadeDelete { get; set; }
+        }
+
         private sealed class MetadataSyncResult
         {
             public int EntitiesCreated { get; set; }
             public int EntitiesUpdated { get; set; }
             public int FieldsCreated { get; set; }
             public int FieldsUpdated { get; set; }
+            public int RelationsCreated { get; set; }
+            public int RelationsUpdated { get; set; }
         }
 
         private (bool Ok, string Output, string Error) RunDotnetRestore(string workingDirectory)

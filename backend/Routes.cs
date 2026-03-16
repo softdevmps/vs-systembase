@@ -74,6 +74,7 @@ namespace Backend
                 public const string ObtenerPorNombre = "api/v1/sistemas/{systemId}/entidades/by-name/{name}";
                 public const string Crear = "api/v1/sistemas/{systemId}/entidades";
                 public const string Editar = "api/v1/sistemas/{systemId}/entidades/{id}";
+                public const string Eliminar = "api/v1/sistemas/{systemId}/entidades/{id}";
             }
 
             public static class Campos

@@ -124,6 +124,21 @@
                         </v-btn>
                       </template>
                     </v-tooltip>
+
+                    <v-tooltip text="Eliminar">
+                      <template #activator="{ props }">
+                        <v-btn
+                          v-bind="props"
+                          icon
+                          size="small"
+                          color="red"
+                          variant="text"
+                          @click="eliminarEntidad(item)"
+                        >
+                          <v-icon>mdi-delete</v-icon>
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
                   </div>
                 </template>
                 </v-data-table>
@@ -2260,7 +2275,7 @@ const headersEntidades = [
   { title: 'Nombre', key: 'name' },
   { title: 'TableName', key: 'tableName' },
   { title: 'Activo', key: 'isActive' },
-  { title: 'Acciones', key: 'actions', sortable: false, width: 140 }
+  { title: 'Acciones', key: 'actions', sortable: false, width: 180 }
 ]
 
 const headersCampos = [
@@ -2724,6 +2739,42 @@ function nuevaEntidad() {
 function editarEntidad(item) {
   entidadSeleccionadaEdicion.value = item
   mostrarEntidadDialog.value = true
+}
+
+async function eliminarEntidad(item) {
+  const entityLabel = item?.displayName || item?.name || item?.tableName || `#${item?.id}`
+  const ok = window.confirm(`Eliminar entidad "${entityLabel}"?`)
+  if (!ok) return
+
+  const tableLabel = item?.tableName || item?.name || 'tabla_runtime'
+  const dropTable = window.confirm(
+    `Tambien eliminar la tabla fisica [${sqlTargetSchema.value}].[${tableLabel}]?\n\nAceptar = si, Cancelar = no`
+  )
+
+  try {
+    const { data } = await entidadService.eliminar(systemId, item.id, dropTable)
+    const message = data?.message || data?.Message || 'Entidad eliminada.'
+    window.alert(message)
+    if (entidadSeleccionada.value?.id === item.id) {
+      entidadSeleccionada.value = null
+      campos.value = []
+    }
+    await cargarEntidades()
+    await cargarRelaciones()
+  } catch (error) {
+    const raw = error?.response?.data
+    const rawText =
+      typeof raw === 'string'
+        ? raw
+        : raw && typeof raw === 'object'
+          ? (raw.message || raw.Message || '')
+          : ''
+    const message =
+      rawText ||
+      (error?.response?.status ? `HTTP ${error.response.status}` : '') ||
+      'Error al eliminar entidad.'
+    window.alert(message)
+  }
 }
 
 function verDatos(item) {
