@@ -63,5 +63,27 @@ namespace Backend.Controllers
             var ok = EntidadesGestor.Editar(systemId, id, request);
             return ok ? Ok() : NotFound();
         }
+
+        [HttpDelete(Routes.v1.Entidades.Eliminar)]
+        public IActionResult Eliminar(int systemId, int id, [FromQuery] bool dropTable = false)
+        {
+            var result = EntidadesGestor.Eliminar(systemId, id, dropTable);
+            if (!result.Ok)
+            {
+                if (result.NotFound)
+                    return NotFound();
+
+                return BadRequest(new
+                {
+                    message = result.Error ?? "No se pudo eliminar la entidad."
+                });
+            }
+
+            return Ok(new
+            {
+                message = result.Message,
+                runtimeTableDropped = result.RuntimeTableDropped
+            });
+        }
     }
 }
