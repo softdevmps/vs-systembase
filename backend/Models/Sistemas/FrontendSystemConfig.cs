@@ -2,7 +2,8 @@ namespace Backend.Models.Sistemas
 {
     public class FrontendSystemConfig
     {
-        public string AppTitle { get; set; } = "SystemBase";
+        public string AppTitle { get; set; } = "Sistema";
+        public string Tagline { get; set; } = "Tu plataforma configurable para gestionar datos en tiempo real.";
         public bool ShowSearch { get; set; } = true;
         public bool ShowFilters { get; set; } = true;
         public int DefaultItemsPerPage { get; set; } = 10;

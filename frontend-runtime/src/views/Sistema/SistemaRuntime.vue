@@ -579,31 +579,76 @@ const uiMode = computed(() => config.value?.system?.uiMode || 'enterprise')
 const locale = computed(() => config.value?.system?.locale || 'es-AR')
 const currency = computed(() => config.value?.system?.currency || 'ARS')
 
+const lightThemeDefaults = {
+  primary: '#1d4ed8',
+  secondary: '#0ea5e9',
+  accent: '#f97316',
+  primarySoft: 'rgba(29,78,216,0.12)',
+  background: '#f8fafc',
+  surface: '#ffffff',
+  muted: '#64748b',
+  border: 'rgba(15,23,42,0.12)',
+  borderSoft: 'rgba(15,23,42,0.08)',
+  radius: 16,
+  shadow: '0 12px 30px rgba(15, 23, 42, 0.12)',
+  fontBody: "Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  fontDisplay: "'Space Grotesk', Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  gradient: 'linear-gradient(135deg, rgba(29,78,216,0.16), rgba(14,165,233,0.08) 45%, rgba(248,250,252,0.95))',
+  patternOpacity: 0.06,
+  headerBg: 'rgba(255,255,255,0.9)',
+  text: '#0f172a',
+  textSoft: '#334155'
+}
+
+const darkThemeDefaults = {
+  primary: '#1d4ed8',
+  secondary: '#0ea5e9',
+  accent: '#f97316',
+  primarySoft: 'rgba(59,130,246,0.18)',
+  background: '#0b1120',
+  surface: '#0f172a',
+  muted: '#94a3b8',
+  border: 'rgba(148,163,184,0.28)',
+  borderSoft: 'rgba(148,163,184,0.16)',
+  radius: 16,
+  shadow: '0 12px 30px rgba(15, 23, 42, 0.35)',
+  fontBody: "Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  fontDisplay: "'Space Grotesk', Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
+  gradient: 'linear-gradient(135deg, rgba(59,130,246,0.18), rgba(15,23,42,0.9) 55%)',
+  patternOpacity: 0.12,
+  headerBg: 'rgba(15,23,42,0.85)',
+  text: '#e2e8f0',
+  textSoft: '#94a3b8'
+}
+
 const themeStyle = computed(() => {
   const system = config.value?.system || {}
   const theme = config.value?.theme || {}
   const themeDark = config.value?.themeDark || {}
+  const defaults = isDark.value ? darkThemeDefaults : lightThemeDefaults
   const activeTheme = isDark.value ? themeDark : theme
-  const brand = activeTheme?.brand || theme?.brand || {}
+  const baseBrand = theme?.brand || {}
+  const darkBrand = themeDark?.brand || {}
+  const brand = isDark.value ? { ...baseBrand, ...darkBrand } : baseBrand
   return {
-    '--sb-primary': brand.primary || system.primaryColor || '#1d4ed8',
-    '--sb-secondary': brand.secondary || system.secondaryColor || '#0ea5e9',
-    '--sb-accent': brand.accent || '#f97316',
-    '--sb-primary-soft': activeTheme.primarySoft || theme.primarySoft || 'rgba(29,78,216,0.12)',
-    '--sb-bg': activeTheme.background || theme.background || '#f8fafc',
-    '--sb-surface': activeTheme.surface || theme.surface || '#ffffff',
-    '--sb-muted': activeTheme.muted || theme.muted || '#64748b',
-    '--sb-border': activeTheme.border || theme.border || 'rgba(15,23,42,0.12)',
-    '--sb-border-soft': activeTheme.borderSoft || theme.borderSoft || 'rgba(15,23,42,0.08)',
-    '--sb-radius': `${activeTheme.radius ?? theme.radius ?? 16}px`,
-    '--sb-shadow': activeTheme.shadow || theme.shadow || '0 12px 30px rgba(15, 23, 42, 0.12)',
-    '--sb-font': activeTheme.fontBody || theme.fontBody || system.fontFamily || "Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
-    '--sb-font-display': activeTheme.fontDisplay || theme.fontDisplay || "'Space Grotesk', Manrope, system-ui, -apple-system, 'Segoe UI', sans-serif",
-    '--sb-gradient': activeTheme.gradient || theme.gradient || 'linear-gradient(135deg, rgba(29,78,216,0.16), rgba(14,165,233,0.08) 45%, rgba(248,250,252,0.95))',
-    '--sb-pattern-opacity': activeTheme.patternOpacity ?? theme.patternOpacity ?? 0.06,
-    '--sb-header-bg': activeTheme.headerBg || theme.headerBg || 'rgba(255,255,255,0.9)',
-    '--sb-text': activeTheme.text || theme.text || '#0f172a',
-    '--sb-text-soft': activeTheme.textSoft || theme.textSoft || '#334155'
+    '--sb-primary': brand.primary || system.primaryColor || defaults.primary,
+    '--sb-secondary': brand.secondary || system.secondaryColor || defaults.secondary,
+    '--sb-accent': brand.accent || defaults.accent,
+    '--sb-primary-soft': activeTheme.primarySoft || defaults.primarySoft,
+    '--sb-bg': activeTheme.background || defaults.background,
+    '--sb-surface': activeTheme.surface || defaults.surface,
+    '--sb-muted': activeTheme.muted || defaults.muted,
+    '--sb-border': activeTheme.border || defaults.border,
+    '--sb-border-soft': activeTheme.borderSoft || defaults.borderSoft,
+    '--sb-radius': `${activeTheme.radius ?? theme.radius ?? defaults.radius}px`,
+    '--sb-shadow': activeTheme.shadow || defaults.shadow,
+    '--sb-font': activeTheme.fontBody || theme.fontBody || system.fontFamily || defaults.fontBody,
+    '--sb-font-display': activeTheme.fontDisplay || theme.fontDisplay || defaults.fontDisplay,
+    '--sb-gradient': activeTheme.gradient || defaults.gradient,
+    '--sb-pattern-opacity': activeTheme.patternOpacity ?? defaults.patternOpacity,
+    '--sb-header-bg': activeTheme.headerBg || defaults.headerBg,
+    '--sb-text': activeTheme.text || defaults.text,
+    '--sb-text-soft': activeTheme.textSoft || defaults.textSoft
   }
 })
 
@@ -1569,7 +1614,7 @@ onBeforeUnmount(() => {
 }
 
 .summary-card {
-  background: rgba(255, 255, 255, 0.96);
+  background: color-mix(in srgb, var(--sb-surface) 96%, transparent);
 }
 
 .summary-grid {
@@ -1629,7 +1674,7 @@ onBeforeUnmount(() => {
 }
 
 .row-selected {
-  background: rgba(37, 99, 235, 0.08);
+  background: var(--sb-primary-soft);
 }
 
 .map-embed iframe {
@@ -1672,7 +1717,7 @@ onBeforeUnmount(() => {
   min-width: 28px;
   height: 28px;
   border-radius: 10px;
-  background: rgba(148, 163, 184, 0.12);
+  background: color-mix(in srgb, var(--sb-border) 55%, transparent);
 }
 
 .actions-cell :deep(.v-icon) {
@@ -1680,7 +1725,7 @@ onBeforeUnmount(() => {
 }
 
 .actions-cell :deep(.v-btn:hover) {
-  background: rgba(59, 130, 246, 0.18);
+  background: var(--sb-primary-soft);
 }
 
 .cta-button {
@@ -1697,8 +1742,8 @@ onBeforeUnmount(() => {
 }
 
 .cta-button.ghost {
-  color: var(--sb-primary);
-  border: 1px solid color-mix(in srgb, var(--sb-primary) 25%, transparent);
-  background: rgba(255, 255, 255, 0.7);
+  color: var(--sb-text);
+  border: 1px solid color-mix(in srgb, var(--sb-border) 70%, transparent);
+  background: color-mix(in srgb, var(--sb-surface) 88%, transparent);
 }
 </style>

@@ -468,9 +468,13 @@ namespace Backend.Controllers
             logBuffer.Add("info", "Iniciando frontend (npm run dev)...");
 
             var nodeModules = Path.Combine(frontendPath, "node_modules");
-            if (!Directory.Exists(nodeModules))
+            if (NeedsFrontendInstall(frontendPath, nodeModules))
             {
-                logBuffer.Add("info", "Instalando dependencias (npm install)...");
+                if (Directory.Exists(nodeModules))
+                    logBuffer.Add("info", "Dependencias incompletas detectadas. Reinstalando (npm install)...");
+                else
+                    logBuffer.Add("info", "Instalando dependencias (npm install)...");
+
                 var install = RunNpmInstall(frontendPath);
                 if (!install.Ok)
                 {
@@ -1287,6 +1291,30 @@ ORDER BY src_t.name, src_c.name;";
             {
                 return (false, string.Empty, ex.Message);
             }
+        }
+
+        private static bool NeedsFrontendInstall(string frontendPath, string nodeModulesPath)
+        {
+            if (!Directory.Exists(nodeModulesPath))
+                return true;
+
+            var binPath = Path.Combine(nodeModulesPath, ".bin");
+            if (!Directory.Exists(binPath))
+                return true;
+
+            var viteCandidates = new[]
+            {
+                Path.Combine(binPath, "vite"),
+                Path.Combine(binPath, "vite.cmd"),
+                Path.Combine(binPath, "vite.ps1")
+            };
+
+            var hasVite = viteCandidates.Any(System.IO.File.Exists);
+            if (!hasVite)
+                return true;
+
+            var packageJsonPath = Path.Combine(frontendPath, "package.json");
+            return !System.IO.File.Exists(packageJsonPath);
         }
 
         private static void TryStopTrackedProcess(ConcurrentDictionary<int, Process> processes, int id)
