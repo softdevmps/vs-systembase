@@ -22,7 +22,7 @@
           </div>
           <div class="metric-card">
             <span>Base</span>
-            <strong>SystemBase · CRUD · API</strong>
+            <strong>{{ platformLabel }}</strong>
           </div>
         </div>
 
@@ -104,9 +104,10 @@ const password = ref('')
 const error = ref('')
 const loading = ref(false)
 const router = useRouter()
-const appTitle = computed(() => frontendConfig?.system?.appTitle || 'SystemBase')
+const appTitle = computed(() => frontendConfig?.system?.appTitle || 'Sistema')
 const uiModeLabel = computed(() => frontendConfig?.system?.uiMode || 'Enterprise')
 const tagline = computed(() => frontendConfig?.system?.tagline || 'Tu plataforma configurable para gestionar datos en tiempo real.')
+const platformLabel = computed(() => `${appTitle.value} · CRUD · API`)
 
 async function login() {
   error.value = ''

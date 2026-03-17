@@ -137,7 +137,7 @@ namespace Backend.Negocio.Gestores
 
         private static FrontendSystemConfig LoadSystemConfig(SystemBaseContext context, int systemId, int moduleId)
         {
-            var defaults = new FrontendSystemConfig();
+            var defaults = BuildDefaultSystemConfig(context, systemId);
             var module = context.SystemModules
                 .FirstOrDefault(sm => sm.SystemId == systemId && sm.ModuleId == moduleId);
 
@@ -145,7 +145,11 @@ namespace Backend.Negocio.Gestores
                 return defaults;
 
             var data = TryDeserialize<FrontendSystemConfig>(module.ConfigJson);
-            return data ?? defaults;
+            if (data == null)
+                return defaults;
+
+            NormalizeSystemConfig(data, defaults);
+            return data;
         }
 
         private static SystemModules EnsureSystemModule(SystemBaseContext context, int systemId, int moduleId)
@@ -182,6 +186,51 @@ namespace Backend.Negocio.Gestores
             context.Modules.Add(module);
             context.SaveChanges();
             return module.Id;
+        }
+
+        private static FrontendSystemConfig BuildDefaultSystemConfig(SystemBaseContext context, int systemId)
+        {
+            var defaults = new FrontendSystemConfig();
+            var system = context.Systems
+                .AsNoTracking()
+                .FirstOrDefault(s => s.Id == systemId);
+
+            if (system == null)
+                return defaults;
+
+            var systemName = system.Name?.Trim();
+            if (!string.IsNullOrWhiteSpace(systemName))
+                defaults.AppTitle = systemName;
+
+            var systemTagline = system.Description?.Trim();
+            if (!string.IsNullOrWhiteSpace(systemTagline))
+                defaults.Tagline = systemTagline;
+
+            return defaults;
+        }
+
+        private static void NormalizeSystemConfig(FrontendSystemConfig config, FrontendSystemConfig defaults)
+        {
+            config.AppTitle = ResolveSystemTitle(config.AppTitle, defaults.AppTitle);
+
+            if (string.IsNullOrWhiteSpace(config.Tagline))
+                config.Tagline = defaults.Tagline;
+        }
+
+        private static string ResolveSystemTitle(string? configuredTitle, string fallbackTitle)
+        {
+            var title = (configuredTitle ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(title))
+                return fallbackTitle;
+
+            var isGenericTitle = title.Equals("SystemBase", StringComparison.OrdinalIgnoreCase)
+                || title.Equals("Sistema", StringComparison.OrdinalIgnoreCase);
+
+            var hasSpecificFallback = !string.IsNullOrWhiteSpace(fallbackTitle)
+                && !fallbackTitle.Equals("SystemBase", StringComparison.OrdinalIgnoreCase)
+                && !fallbackTitle.Equals("Sistema", StringComparison.OrdinalIgnoreCase);
+
+            return isGenericTitle && hasSpecificFallback ? fallbackTitle : title;
         }
 
         private static FrontendEntityConfig BuildDefaultEntityConfig(Entities entity, List<Fields> fields)

@@ -41,6 +41,10 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 frontend/.cache/
+systems/**/frontend/node_modules/
+systems/**/frontend/dist/
+systems/**/frontend/.vite/
+systems/**/frontend/.cache/
 
 # =====================
 # Frontend logs
