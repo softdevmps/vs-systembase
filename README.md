@@ -175,6 +175,7 @@ Instalar `ffmpeg` en el host y verificar que esté disponible en `PATH`.
 
 - `main`: fábrica SystemBase (base del generador).
 - `mapeo`: sistema mapeo + ajustes específicos.
+- `opsbase`: sistema opsbase + nuevos requerimientos en preparación.
 
 Recomendado:
 
@@ -185,4 +186,5 @@ Recomendado:
 
 - `docs/estado-actual.md`
 - `docs/estado-mapeo.md`
+- `docs/estado-opsbase.md`
 - `systems/ports.json`

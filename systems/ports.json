@@ -1,27 +1,34 @@
 {
-  "generatedAt": "2026-02-13T00:16:36.359502Z",
+  "generatedAt": "2026-03-16T15:11:14.470133Z",
   "basePort": 5032,
   "systems": [
     {
-      "id": 1,
-      "slug": "systembase-core",
-      "name": "SystemBase Core",
-      "port": 5033,
-      "baseUrl": "http://localhost:5033"
-    },
-    {
       "id": 2,
       "slug": "inventario",
-      "name": "Sistema de inventario",
+      "name": "Sistema de Inventario",
       "port": 5034,
       "baseUrl": "http://localhost:5034"
     },
     {
       "id": 3,
       "slug": "mapeo",
-      "name": "Sistema de mapeo",
+      "name": "Sistema de Mapeo",
       "port": 5035,
       "baseUrl": "http://localhost:5035"
+    },
+    {
+      "id": 4,
+      "slug": "aibase",
+      "name": "Sistema AIBase",
+      "port": 5036,
+      "baseUrl": "http://localhost:5036"
+    },
+    {
+      "id": 1004,
+      "slug": "opsbase",
+      "name": "Sistema OpsBase",
+      "port": 6036,
+      "baseUrl": "http://localhost:6036"
     }
   ]
 }
