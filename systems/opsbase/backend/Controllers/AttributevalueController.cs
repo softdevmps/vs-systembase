@@ -12,6 +12,9 @@ namespace Backend.Controllers
         [HttpGet(Routes.v1.Attributevalue.Obtener)]
         public IActionResult Obtener()
         {
+            var denial = RequirePermission("ops.attributevalue.view");
+            if (denial != null) return denial;
+
             var items = AttributevalueGestor.ObtenerTodos(null, null, null);
             return Ok(items);
         }
@@ -20,6 +23,9 @@ namespace Backend.Controllers
         [HttpGet(Routes.v1.Attributevalue.ObtenerPorId)]
         public IActionResult ObtenerPorId(int id)
         {
+            var denial = RequirePermission("ops.attributevalue.view");
+            if (denial != null) return denial;
+
             var item = AttributevalueGestor.ObtenerPorId(id);
             if (item == null)
                 return NotFound();
@@ -31,6 +37,9 @@ namespace Backend.Controllers
         [HttpPost(Routes.v1.Attributevalue.Crear)]
         public IActionResult Crear([FromBody] AttributevalueCreateRequest request)
         {
+            var denial = RequirePermission("ops.attributevalue.create");
+            if (denial != null) return denial;
+
             var result = AttributevalueGestor.Crear(request);
             if (!result.Ok)
                 return BadRequest(result.Error);
@@ -42,6 +51,9 @@ namespace Backend.Controllers
         [HttpPut(Routes.v1.Attributevalue.Editar)]
         public IActionResult Editar(int id, [FromBody] AttributevalueUpdateRequest request)
         {
+            var denial = RequirePermission("ops.attributevalue.update");
+            if (denial != null) return denial;
+
             var result = AttributevalueGestor.Editar(id, request);
             if (!result.Ok)
                 return BadRequest(result.Error);
@@ -53,6 +65,9 @@ namespace Backend.Controllers
         [HttpDelete(Routes.v1.Attributevalue.Eliminar)]
         public IActionResult Eliminar(int id)
         {
+            var denial = RequirePermission("ops.attributevalue.delete");
+            if (denial != null) return denial;
+
             var ok = AttributevalueGestor.Eliminar(id);
             if (!ok)
                 return NotFound();

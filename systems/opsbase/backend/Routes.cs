@@ -16,6 +16,27 @@ namespace Backend
                 public const string Ping = "api/v1/dev/ping";
             }
 
+            public static class Security
+            {
+                public const string MyPermissions = "api/v1/security/me/permissions";
+                public const string Can = "api/v1/security/me/can/{permissionCode}";
+            }
+
+            public static class OpsFlow
+            {
+                public const string CrearRecepcion = "api/v1/ops-flow/recepcion";
+                public const string CrearDespacho = "api/v1/ops-flow/despacho";
+            }
+
+            public static class OpsDashboard
+            {
+                public const string DepositosMapa = "api/v1/ops-dashboard/depositos/mapa";
+                public const string DepositoContexto = "api/v1/ops-dashboard/depositos/{locationId}/contexto";
+                public const string CrearDeposito = "api/v1/ops-dashboard/depositos";
+                public const string EditarDeposito = "api/v1/ops-dashboard/depositos/{locationId}";
+                public const string EliminarDeposito = "api/v1/ops-dashboard/depositos/{locationId}";
+            }
+
             public static class Attributedefinition
             {
                 public const string Obtener = "api/v1/attribute-definition";
@@ -65,6 +86,7 @@ namespace Backend
             {
                 public const string Obtener = "api/v1/operation-audit";
                 public const string ObtenerPorId = "api/v1/operation-audit/{id}";
+                public const string TimelineByResourceInstance = "api/v1/operation-audit/timeline/resource-instance/{resourceInstanceId}";
                 public const string Crear = "api/v1/operation-audit";
                 public const string Editar = "api/v1/operation-audit/{id}";
                 public const string Eliminar = "api/v1/operation-audit/{id}";

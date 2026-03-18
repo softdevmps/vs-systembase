@@ -43,9 +43,15 @@ namespace Backend.Negocio.Gestores
         {
             using var conn = Db.Open();
             if (!ExistsByValue(conn, "sys_opsbase", "ResourceInstance", "Id", request.Resourceinstanceid, null, null)) return (false, "ResourceInstance inexistente (ResourceInstanceId)");
-            if (ExistsByValue(conn, "sys_opsbase", "StockBalance", "ResourceInstanceId", request.Resourceinstanceid, null, null)) return (false, "Valor duplicado en ResourceInstanceId");
             if (!ExistsByValue(conn, "sys_opsbase", "Location", "Id", request.Locationid, null, null)) return (false, "Location inexistente (LocationId)");
-            if (ExistsByValue(conn, "sys_opsbase", "StockBalance", "LocationId", request.Locationid, null, null)) return (false, "Valor duplicado en LocationId");
+            if (ExistsByPair(conn, request.Resourceinstanceid, request.Locationid, null)) return (false, "Ya existe un StockBalance para ese recurso y ubicacion.");
+            if (request.Stockreal < 0) return (false, "StockReal no puede ser negativo.");
+            if (request.Stockreservado < 0) return (false, "StockReservado no puede ser negativo.");
+            if (request.Stockreservado > request.Stockreal) return (false, "StockReservado no puede ser mayor a StockReal.");
+
+            var stockDisponible = request.Stockreal - request.Stockreservado;
+            var createdAt = request.Createdat == default ? DateTime.UtcNow : request.Createdat;
+            var updatedAt = request.Updatedat == default ? DateTime.UtcNow : request.Updatedat;
 
             var sql = "INSERT INTO [sys_opsbase].[StockBalance] ([ResourceInstanceId], [LocationId], [StockReal], [StockReservado], [StockDisponible], [CreatedAt], [UpdatedAt]) VALUES (@ResourceInstanceId, @LocationId, @StockReal, @StockReservado, @StockDisponible, @CreatedAt, @UpdatedAt);";
             using var cmd = new SqlCommand(sql, conn);
@@ -53,9 +59,9 @@ namespace Backend.Negocio.Gestores
             cmd.Parameters.AddWithValue("@LocationId", request.Locationid);
             cmd.Parameters.AddWithValue("@StockReal", request.Stockreal);
             cmd.Parameters.AddWithValue("@StockReservado", request.Stockreservado);
-            cmd.Parameters.AddWithValue("@StockDisponible", request.Stockdisponible);
-            cmd.Parameters.AddWithValue("@CreatedAt", request.Createdat);
-            cmd.Parameters.AddWithValue("@UpdatedAt", request.Updatedat);
+            cmd.Parameters.AddWithValue("@StockDisponible", stockDisponible);
+            cmd.Parameters.AddWithValue("@CreatedAt", createdAt);
+            cmd.Parameters.AddWithValue("@UpdatedAt", updatedAt);
             cmd.ExecuteNonQuery();
             return (true, null);
         }
@@ -64,18 +70,25 @@ namespace Backend.Negocio.Gestores
         {
             using var conn = Db.Open();
             if (!ExistsByValue(conn, "sys_opsbase", "ResourceInstance", "Id", request.Resourceinstanceid, null, null)) return (false, "ResourceInstance inexistente (ResourceInstanceId)");
-            if (ExistsByValue(conn, "sys_opsbase", "StockBalance", "ResourceInstanceId", request.Resourceinstanceid, "Id", id)) return (false, "Valor duplicado en ResourceInstanceId");
             if (!ExistsByValue(conn, "sys_opsbase", "Location", "Id", request.Locationid, null, null)) return (false, "Location inexistente (LocationId)");
-            if (ExistsByValue(conn, "sys_opsbase", "StockBalance", "LocationId", request.Locationid, "Id", id)) return (false, "Valor duplicado en LocationId");
+            if (ExistsByPair(conn, request.Resourceinstanceid, request.Locationid, id)) return (false, "Ya existe un StockBalance para ese recurso y ubicacion.");
+            if (request.Stockreal < 0) return (false, "StockReal no puede ser negativo.");
+            if (request.Stockreservado < 0) return (false, "StockReservado no puede ser negativo.");
+            if (request.Stockreservado > request.Stockreal) return (false, "StockReservado no puede ser mayor a StockReal.");
+
+            var stockDisponible = request.Stockreal - request.Stockreservado;
+            var createdAt = request.Createdat == default ? DateTime.UtcNow : request.Createdat;
+            var updatedAt = request.Updatedat == default ? DateTime.UtcNow : request.Updatedat;
+
             var sql = "UPDATE [sys_opsbase].[StockBalance] SET [ResourceInstanceId] = @ResourceInstanceId, [LocationId] = @LocationId, [StockReal] = @StockReal, [StockReservado] = @StockReservado, [StockDisponible] = @StockDisponible, [CreatedAt] = @CreatedAt, [UpdatedAt] = @UpdatedAt WHERE [Id] = @id";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@ResourceInstanceId", request.Resourceinstanceid);
             cmd.Parameters.AddWithValue("@LocationId", request.Locationid);
             cmd.Parameters.AddWithValue("@StockReal", request.Stockreal);
             cmd.Parameters.AddWithValue("@StockReservado", request.Stockreservado);
-            cmd.Parameters.AddWithValue("@StockDisponible", request.Stockdisponible);
-            cmd.Parameters.AddWithValue("@CreatedAt", request.Createdat);
-            cmd.Parameters.AddWithValue("@UpdatedAt", request.Updatedat);
+            cmd.Parameters.AddWithValue("@StockDisponible", stockDisponible);
+            cmd.Parameters.AddWithValue("@CreatedAt", createdAt);
+            cmd.Parameters.AddWithValue("@UpdatedAt", updatedAt);
             cmd.Parameters.AddWithValue("@id", id);
 
             var rows = cmd.ExecuteNonQuery();
@@ -118,6 +131,21 @@ namespace Backend.Negocio.Gestores
             cmd.Parameters.AddWithValue("@val", value);
             if (!string.IsNullOrWhiteSpace(idColumn))
                 cmd.Parameters.AddWithValue("@id", idValue!);
+
+            return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
+        }
+
+        private static bool ExistsByPair(SqlConnection conn, int resourceInstanceId, int locationId, int? excludeId)
+        {
+            var sql = "SELECT COUNT(1) FROM [sys_opsbase].[StockBalance] WHERE [ResourceInstanceId] = @resourceInstanceId AND [LocationId] = @locationId";
+            if (excludeId != null)
+                sql += " AND [Id] <> @excludeId";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@resourceInstanceId", resourceInstanceId);
+            cmd.Parameters.AddWithValue("@locationId", locationId);
+            if (excludeId != null)
+                cmd.Parameters.AddWithValue("@excludeId", excludeId.Value);
 
             return Convert.ToInt32(cmd.ExecuteScalar()) > 0;
         }

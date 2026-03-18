@@ -12,6 +12,9 @@ namespace Backend.Controllers
         [HttpGet(Routes.v1.Movementline.Obtener)]
         public IActionResult Obtener()
         {
+            var denial = RequirePermission("ops.movementline.view");
+            if (denial != null) return denial;
+
             var items = MovementlineGestor.ObtenerTodos(null, null, null);
             return Ok(items);
         }
@@ -20,6 +23,9 @@ namespace Backend.Controllers
         [HttpGet(Routes.v1.Movementline.ObtenerPorId)]
         public IActionResult ObtenerPorId(int id)
         {
+            var denial = RequirePermission("ops.movementline.view");
+            if (denial != null) return denial;
+
             var item = MovementlineGestor.ObtenerPorId(id);
             if (item == null)
                 return NotFound();
@@ -31,7 +37,11 @@ namespace Backend.Controllers
         [HttpPost(Routes.v1.Movementline.Crear)]
         public IActionResult Crear([FromBody] MovementlineCreateRequest request)
         {
-            var result = MovementlineGestor.Crear(request);
+            var denial = RequirePermission("ops.movementline.create");
+            if (denial != null) return denial;
+
+            var actor = UsuarioToken().Usuario;
+            var result = MovementlineGestor.Crear(request, actor);
             if (!result.Ok)
                 return BadRequest(result.Error);
 
@@ -42,7 +52,11 @@ namespace Backend.Controllers
         [HttpPut(Routes.v1.Movementline.Editar)]
         public IActionResult Editar(int id, [FromBody] MovementlineUpdateRequest request)
         {
-            var result = MovementlineGestor.Editar(id, request);
+            var denial = RequirePermission("ops.movementline.update");
+            if (denial != null) return denial;
+
+            var actor = UsuarioToken().Usuario;
+            var result = MovementlineGestor.Editar(id, request, actor);
             if (!result.Ok)
                 return BadRequest(result.Error);
 
@@ -53,9 +67,17 @@ namespace Backend.Controllers
         [HttpDelete(Routes.v1.Movementline.Eliminar)]
         public IActionResult Eliminar(int id)
         {
-            var ok = MovementlineGestor.Eliminar(id);
-            if (!ok)
-                return NotFound();
+            var denial = RequirePermission("ops.movementline.delete");
+            if (denial != null) return denial;
+
+            var actor = UsuarioToken().Usuario;
+            var result = MovementlineGestor.Eliminar(id, actor);
+            if (!result.Ok)
+            {
+                if (string.Equals(result.Error, "No encontrado", StringComparison.OrdinalIgnoreCase))
+                    return NotFound();
+                return BadRequest(result.Error);
+            }
 
             return Ok();
         }

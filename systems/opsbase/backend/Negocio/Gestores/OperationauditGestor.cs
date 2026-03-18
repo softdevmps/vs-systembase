@@ -39,6 +39,50 @@ namespace Backend.Negocio.Gestores
             return MapToResponse(reader);
         }
 
+        public static List<OperationauditResponse> ObtenerTimelinePorResourceInstance(int resourceInstanceId)
+        {
+            using var conn = Db.Open();
+            const string sql = @"
+SELECT oa.[Id], oa.[OperationName], oa.[EntityName], oa.[EntityId], oa.[Result], oa.[Message], oa.[Actor], oa.[CorrelationId], oa.[PayloadJson], oa.[ExecutedAt]
+FROM [sys_opsbase].[OperationAudit] oa
+WHERE
+    (
+        oa.[EntityName] = 'ResourceInstance'
+        AND oa.[EntityId] = @resourceInstanceId
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM [sys_opsbase].[MovementLine] ml
+        WHERE ml.[ResourceInstanceId] = @resourceInstanceId
+          AND (
+              (oa.[EntityName] = 'MovementLine' AND oa.[EntityId] = ml.[Id])
+              OR (oa.[EntityName] = 'Movement' AND oa.[EntityId] = ml.[MovementId])
+          )
+    )
+    OR EXISTS (
+        SELECT 1
+        FROM [sys_opsbase].[StockBalance] sb
+        WHERE sb.[ResourceInstanceId] = @resourceInstanceId
+          AND oa.[EntityName] = 'StockBalance'
+          AND oa.[EntityId] = sb.[Id]
+    )
+    OR TRY_CONVERT(INT, JSON_VALUE(oa.[PayloadJson], '$.resourceinstanceid')) = @resourceInstanceId
+    OR TRY_CONVERT(INT, JSON_VALUE(oa.[PayloadJson], '$.resourceInstanceId')) = @resourceInstanceId
+ORDER BY oa.[ExecutedAt] DESC, oa.[Id] DESC;";
+
+            using var cmd = new SqlCommand(sql, conn);
+            cmd.Parameters.AddWithValue("@resourceInstanceId", resourceInstanceId);
+
+            using var reader = cmd.ExecuteReader();
+            var list = new List<OperationauditResponse>();
+            while (reader.Read())
+            {
+                list.Add(MapToResponse(reader));
+            }
+
+            return list;
+        }
+
         public static (bool Ok, string? Error) Crear(OperationauditCreateRequest request)
         {
             using var conn = Db.Open();

@@ -45,8 +45,11 @@
                       :hint="field.helpText || undefined"
                       persistent-hint
                       :maxlength="field.maxLength || undefined"
-                      :type="resolveInputType(field) === 'number' ? 'number' : resolveInputType(field) === 'date' ? 'date' : resolveInputType(field) === 'datetime' ? 'datetime-local' : undefined"
-                      clearable
+                      :type="fieldTypeAttr(field)"
+                      :items="fieldItems(field)"
+                      item-title="title"
+                      item-value="value"
+                      :clearable="fieldIsClearable(field)"
                       :density="modalDensity"
                       :variant="inputVariant"
                       :rules="rulesFor(field)"
@@ -77,8 +80,11 @@
                       :hint="field.helpText || undefined"
                       persistent-hint
                       :maxlength="field.maxLength || undefined"
-                      :type="resolveInputType(field) === 'number' ? 'number' : resolveInputType(field) === 'date' ? 'date' : resolveInputType(field) === 'datetime' ? 'datetime-local' : undefined"
-                      clearable
+                      :type="fieldTypeAttr(field)"
+                      :items="fieldItems(field)"
+                      item-title="title"
+                      item-value="value"
+                      :clearable="fieldIsClearable(field)"
                       :density="modalDensity"
                       :variant="inputVariant"
                       :rules="rulesFor(field)"
@@ -106,8 +112,11 @@
                   :hint="field.helpText || undefined"
                   persistent-hint
                   :maxlength="field.maxLength || undefined"
-                  :type="resolveInputType(field) === 'number' ? 'number' : resolveInputType(field) === 'date' ? 'date' : resolveInputType(field) === 'datetime' ? 'datetime-local' : undefined"
-                  clearable
+                  :type="fieldTypeAttr(field)"
+                  :items="fieldItems(field)"
+                  item-title="title"
+                  item-value="value"
+                  :clearable="fieldIsClearable(field)"
                   :density="modalDensity"
                   :variant="inputVariant"
                   :rules="rulesFor(field)"
@@ -226,11 +235,24 @@ export default {
 
     editableFields() {
       if (!this.fields) return []
-      return this.fields.filter(f => {
+      const filtered = this.fields.filter(f => {
         if (f.showInForm === false) return false
         if (f.isIdentity) return false
         if (this.isEdit && f.isPrimaryKey) return false
         return true
+      })
+      return [...filtered].sort((a, b) => {
+        const sectionA = Number.isFinite(Number(a?.sectionOrder)) ? Number(a.sectionOrder) : 999
+        const sectionB = Number.isFinite(Number(b?.sectionOrder)) ? Number(b.sectionOrder) : 999
+        if (sectionA !== sectionB) return sectionA - sectionB
+
+        const formA = Number.isFinite(Number(a?.formOrder)) ? Number(a.formOrder) : 999
+        const formB = Number.isFinite(Number(b?.formOrder)) ? Number(b.formOrder) : 999
+        if (formA !== formB) return formA - formB
+
+        const labelA = String(a?.label || a?.name || a?.columnName || '')
+        const labelB = String(b?.label || b?.name || b?.columnName || '')
+        return labelA.localeCompare(labelB, 'es')
       })
     },
 
@@ -258,11 +280,7 @@ export default {
     record: {
       immediate: true,
       handler(value) {
-        if (value) {
-          this.form = { ...value }
-        } else {
-          this.form = {}
-        }
+        this.form = this.buildFormState(value)
       }
     }
   },
@@ -270,6 +288,7 @@ export default {
   methods: {
     resolveInputType(field) {
       if (field.inputType) return field.inputType
+      if (Array.isArray(field.options) && field.options.length > 0) return 'select'
       const data = String(field.dataType || '').toLowerCase()
       if (data.includes('date') && data.includes('time')) return 'datetime'
       if (data.includes('date')) return 'date'
@@ -280,16 +299,41 @@ export default {
 
     resolveComponent(field) {
       const type = this.resolveInputType(field)
+      if (type === 'select') return 'v-select'
       if (type === 'textarea') return 'v-textarea'
       if (type === 'checkbox') return 'v-checkbox'
       if (type === 'switch') return 'v-switch'
       return 'v-text-field'
     },
 
+    fieldTypeAttr(field) {
+      const type = this.resolveInputType(field)
+      if (type === 'number') return 'number'
+      if (type === 'date') return 'date'
+      if (type === 'datetime') return 'datetime-local'
+      return undefined
+    },
+
+    fieldItems(field) {
+      return Array.isArray(field?.options) ? field.options : []
+    },
+
+    fieldIsClearable(field) {
+      const type = this.resolveInputType(field)
+      if (type === 'checkbox' || type === 'switch') return false
+      return !field.required
+    },
+
+    hasValue(value) {
+      if (value === null || value === undefined) return false
+      if (typeof value === 'string') return value.trim() !== ''
+      return true
+    },
+
     rulesFor(field) {
       const rules = []
       if (field.required) {
-        rules.push(v => !!v || 'Campo requerido')
+        rules.push(v => this.hasValue(v) || 'Campo requerido')
       }
       if (field.pattern) {
         rules.push(v => {
@@ -334,7 +378,41 @@ export default {
     },
 
     cerrar() {
+      this.pendingSave = false
+      this.confirmDialog = false
       this.model = false
+    },
+
+    buildFormState(record) {
+      const base = record ? { ...record } : {}
+      for (const field of this.editableFields) {
+        const key = field?.columnName
+        if (!key) continue
+        if (base[key] !== undefined) continue
+        if (field.defaultValue !== undefined) {
+          base[key] = field.defaultValue
+        }
+      }
+      return base
+    },
+
+    normalizePayload(input) {
+      const payload = { ...input }
+      for (const field of this.fields || []) {
+        const key = field?.columnName
+        if (!key || payload[key] === undefined) continue
+        const type = this.resolveInputType(field)
+        const raw = payload[key]
+        if (raw === '') {
+          payload[key] = null
+          continue
+        }
+        if (type === 'number' && raw != null) {
+          const num = Number(raw)
+          payload[key] = Number.isFinite(num) ? num : null
+        }
+      }
+      return payload
     },
 
     async guardar() {
@@ -350,11 +428,12 @@ export default {
 
     async confirmSaveAction() {
       this.confirmDialog = false
+      this.pendingSave = false
       await this.persistSave()
     },
 
     async persistSave() {
-      const payload = { ...this.form }
+      const payload = this.normalizePayload(this.form)
       const pkName = this.pkField?.columnName || this.pkField?.name
       if (this.isDuplicate && pkName) {
         delete payload[pkName]
@@ -372,7 +451,9 @@ export default {
         this.$emit('guardado')
         this.cerrar()
       } catch (error) {
-        const message = error?.response?.data?.message || error?.message || 'Error al guardar.'
+        this.pendingSave = false
+        const responseData = error?.response?.data
+        const message = (typeof responseData === 'string' && responseData) || responseData?.message || error?.message || 'Error al guardar.'
         window.alert(message)
       }
     }

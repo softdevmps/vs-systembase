@@ -24,10 +24,112 @@
           <v-icon left>mdi-microphone</v-icon>
           Grabar audio
         </v-btn>
-        <v-btn class="cta-button primary" :disabled="!entidadSeleccionada" @click="nuevoRegistro">
+        <v-btn class="cta-button primary" :disabled="!canCreateRecords" @click="nuevoRegistro">
           <v-icon left>mdi-plus</v-icon>
           Nuevo registro
         </v-btn>
+      </v-col>
+    </v-row>
+
+    <v-row v-if="showModuleNavigation" class="mb-4">
+      <v-col cols="12">
+        <v-card elevation="2" class="card module-nav-card">
+          <v-card-text class="py-3">
+            <div class="module-nav-head">
+              <span class="text-caption text-medium-emphasis">Modulo actual</span>
+              <strong>{{ currentGroupTitle }}</strong>
+            </div>
+            <div class="module-nav-entities">
+              <v-chip
+                v-for="ent in currentGroupEntities"
+                :key="ent.entityId || ent.name"
+                size="small"
+                :color="isCurrentEntity(ent) ? 'primary' : undefined"
+                :variant="isCurrentEntity(ent) ? 'flat' : 'tonal'"
+                @click="irEntidad(ent)"
+              >
+                <v-icon start size="16">{{ entidadMenuIcon(ent) }}</v-icon>
+                {{ entidadLabel(ent) }}
+              </v-chip>
+            </div>
+            <div class="module-flow">
+              <span class="text-caption text-medium-emphasis">Flujo sugerido</span>
+              <div class="module-flow-buttons">
+                <v-btn
+                  v-for="group in flowGroups"
+                  :key="group.id"
+                  size="x-small"
+                  :variant="group.id === currentGroupId ? 'flat' : 'text'"
+                  color="primary"
+                  @click="irGrupo(group.id)"
+                >
+                  {{ group.title }}
+                </v-btn>
+              </div>
+            </div>
+          </v-card-text>
+        </v-card>
+      </v-col>
+    </v-row>
+
+    <v-row v-if="showOpsFlowPanel" class="mb-4">
+      <v-col cols="12">
+        <v-card elevation="2" class="card ops-flow-card">
+          <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+            <div class="d-flex align-center">
+              <v-icon class="mr-2" color="primary">mdi-transit-transfer</v-icon>
+              <span class="text-h6">Flujo operativo rápido</span>
+            </div>
+            <div class="d-flex ga-2 flex-wrap">
+              <v-btn
+                v-if="opsRoutes.movement"
+                size="small"
+                variant="text"
+                color="primary"
+                @click="irRuta(opsRoutes.movement)"
+              >
+                Movimientos
+              </v-btn>
+              <v-btn
+                v-if="opsRoutes.movementLine"
+                size="small"
+                variant="text"
+                color="primary"
+                @click="irRuta(opsRoutes.movementLine)"
+              >
+                Líneas
+              </v-btn>
+              <v-btn
+                v-if="opsRoutes.stockBalance"
+                size="small"
+                variant="text"
+                color="primary"
+                @click="irRuta(opsRoutes.stockBalance)"
+              >
+                Stock
+              </v-btn>
+            </div>
+          </v-card-title>
+          <v-divider />
+          <v-card-text>
+            <div class="ops-flow-actions">
+              <v-btn
+                v-for="type in opsQuickTypes"
+                :key="type"
+                class="cta-button ghost"
+                variant="tonal"
+                color="primary"
+                @click="abrirOperacionGuiada(type)"
+              >
+                <v-icon left>mdi-plus-circle-outline</v-icon>
+                {{ prettifyLabel(type) }}
+              </v-btn>
+            </div>
+            <div class="text-caption text-medium-emphasis mt-3">
+              Crea movimiento + línea y opcionalmente confirma en un solo paso.
+            </div>
+          </v-card-text>
+        </v-card>
       </v-col>
     </v-row>
 
@@ -194,22 +296,68 @@
                     <div class="actions-cell actions-grid">
                       <v-tooltip text="Editar">
                         <template #activator="{ props }">
-                          <v-btn v-bind="props" icon size="x-small" color="primary" variant="text" @click="editarRegistro(item.raw || item)">
+                          <v-btn
+                            v-bind="props"
+                            icon
+                            size="x-small"
+                            color="primary"
+                            variant="text"
+                            :disabled="!canEditItem(item.raw || item)"
+                            @click.stop="editarRegistro(item.raw || item)"
+                          >
                             <v-icon>mdi-pencil</v-icon>
+                          </v-btn>
+                        </template>
+                      </v-tooltip>
+                      <v-tooltip v-if="canConfirmMovement(item.raw || item)" text="Confirmar movimiento">
+                        <template #activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon
+                            size="x-small"
+                            color="green"
+                            variant="text"
+                            :loading="isConfirmingMovement(item.raw || item)"
+                            :disabled="isConfirmingMovement(item.raw || item)"
+                            @click.stop="confirmarMovimiento(item.raw || item)"
+                          >
+                            <v-icon>mdi-check-circle</v-icon>
                           </v-btn>
                         </template>
                       </v-tooltip>
                       <v-tooltip v-if="enableDuplicate" text="Duplicar">
                         <template #activator="{ props }">
-                          <v-btn v-bind="props" icon size="x-small" color="blue" variant="text" @click="duplicarRegistro(item.raw || item)">
+                          <v-btn
+                            v-bind="props"
+                            icon
+                            size="x-small"
+                            color="blue"
+                            variant="text"
+                            :disabled="!canDuplicateItem(item.raw || item)"
+                            @click.stop="duplicarRegistro(item.raw || item)"
+                          >
                             <v-icon>mdi-content-copy</v-icon>
                           </v-btn>
                         </template>
                       </v-tooltip>
                       <v-tooltip text="Copiar datos">
                         <template #activator="{ props }">
-                          <v-btn v-bind="props" icon size="x-small" color="indigo" variant="text" @click="copiarRegistro(item.raw || item)">
+                          <v-btn v-bind="props" icon size="x-small" color="indigo" variant="text" @click.stop="copiarRegistro(item.raw || item)">
                             <v-icon>mdi-clipboard-text-outline</v-icon>
+                          </v-btn>
+                        </template>
+                      </v-tooltip>
+                      <v-tooltip v-if="showTraceAction" text="Ver trazabilidad">
+                        <template #activator="{ props }">
+                          <v-btn
+                            v-bind="props"
+                            icon
+                            size="x-small"
+                            color="teal"
+                            variant="text"
+                            @click.stop="abrirTrazabilidad(item.raw || item)"
+                          >
+                            <v-icon>mdi-timeline-clock-outline</v-icon>
                           </v-btn>
                         </template>
                       </v-tooltip>
@@ -223,7 +371,7 @@
                             variant="text"
                             :loading="isRetrying(item.raw || item)"
                             :disabled="isRetrying(item.raw || item)"
-                            @click="reintentarJob(item.raw || item)"
+                            @click.stop="reintentarJob(item.raw || item)"
                           >
                             <v-icon>mdi-reload</v-icon>
                           </v-btn>
@@ -261,14 +409,22 @@
                       </v-tooltip>
                       <v-tooltip v-if="quickToggleField" :text="`Toggle ${quickToggleField.label || quickToggleField.name}`">
                         <template #activator="{ props }">
-                          <v-btn v-bind="props" icon size="x-small" color="teal" variant="text" @click="toggleQuickField(item.raw || item)">
+                          <v-btn v-bind="props" icon size="x-small" color="teal" variant="text" @click.stop="toggleQuickField(item.raw || item)">
                             <v-icon>mdi-toggle-switch</v-icon>
                           </v-btn>
                         </template>
                       </v-tooltip>
                       <v-tooltip text="Eliminar">
                         <template #activator="{ props }">
-                          <v-btn v-bind="props" icon size="x-small" color="red" variant="text" @click="eliminarRegistro(item.raw || item)">
+                          <v-btn
+                            v-bind="props"
+                            icon
+                            size="x-small"
+                            color="red"
+                            variant="text"
+                            :disabled="!canDeleteItem(item.raw || item)"
+                            @click.stop="eliminarRegistro(item.raw || item)"
+                          >
                             <v-icon>mdi-delete</v-icon>
                           </v-btn>
                         </template>
@@ -338,6 +494,138 @@
       :api-route="apiRoute"
       @guardado="cargarDatos"
     />
+
+    <v-dialog v-model="opsDialog" max-width="760">
+      <v-card class="sb-dialog">
+        <v-card-title class="sb-dialog-title">
+          <div class="sb-dialog-icon">
+            <v-icon color="primary">mdi-transit-transfer</v-icon>
+          </div>
+          <div>
+            <div class="sb-dialog-title-text">Nueva operación logística</div>
+            <div class="sb-dialog-subtitle">Crea movimiento, línea y confirmación opcional.</div>
+          </div>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="sb-dialog-body">
+          <v-alert v-if="opsError" type="error" variant="tonal" class="mb-3">
+            {{ opsError }}
+          </v-alert>
+
+          <v-row dense>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="opsForm.movementType"
+                :items="opsMovementTypeItems"
+                item-title="title"
+                item-value="value"
+                label="Tipo de movimiento"
+                :density="uiDensity"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="opsForm.referenceNo"
+                label="Referencia"
+                :density="uiDensity"
+                variant="outlined"
+                hint="Opcional; si no se completa se genera automáticamente."
+                persistent-hint
+              />
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="opsForm.sourceLocationId"
+                :items="opsLocationItems"
+                item-title="title"
+                item-value="value"
+                label="Ubicación origen"
+                :density="uiDensity"
+                variant="outlined"
+                :disabled="opsDisableSource"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="opsForm.targetLocationId"
+                :items="opsLocationItems"
+                item-title="title"
+                item-value="value"
+                label="Ubicación destino"
+                :density="uiDensity"
+                variant="outlined"
+                :disabled="opsDisableTarget"
+                clearable
+              />
+            </v-col>
+
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="opsForm.resourceInstanceId"
+                :items="opsResourceItems"
+                item-title="title"
+                item-value="value"
+                label="Recurso"
+                :density="uiDensity"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-text-field
+                v-model.number="opsForm.quantity"
+                type="number"
+                min="0.001"
+                step="0.001"
+                label="Cantidad"
+                :density="uiDensity"
+                variant="outlined"
+              />
+            </v-col>
+            <v-col cols="12" md="3">
+              <v-text-field
+                v-model.number="opsForm.unitCost"
+                type="number"
+                min="0"
+                step="0.01"
+                label="Costo unitario"
+                :density="uiDensity"
+                variant="outlined"
+                clearable
+              />
+            </v-col>
+
+            <v-col cols="12">
+              <v-textarea
+                v-model="opsForm.notes"
+                label="Notas"
+                :density="uiDensity"
+                variant="outlined"
+                rows="2"
+                auto-grow
+              />
+            </v-col>
+            <v-col cols="12">
+              <v-checkbox
+                v-model="opsForm.autoConfirm"
+                :density="uiDensity"
+                label="Confirmar automáticamente al guardar"
+                hide-details
+              />
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="sb-dialog-actions d-flex justify-end ga-2">
+          <v-btn class="sb-btn ghost" variant="text" @click="opsDialog = false">Cancelar</v-btn>
+          <v-btn class="sb-btn primary" color="primary" :loading="opsSubmitting" @click="guardarOperacionGuiada">
+            Ejecutar
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <v-dialog v-model="audioDialog" max-width="640">
       <v-card class="sb-dialog">
@@ -476,6 +764,55 @@
       </v-card>
     </v-dialog>
 
+    <v-dialog v-model="traceDialog" max-width="860">
+      <v-card class="sb-dialog">
+        <v-card-title class="sb-dialog-title">
+          <div class="sb-dialog-icon">
+            <v-icon color="teal">mdi-timeline-clock-outline</v-icon>
+          </div>
+          <div>
+            <div class="sb-dialog-title-text">Trazabilidad del recurso</div>
+            <div class="sb-dialog-subtitle">
+              {{ traceResourceLabel || 'Historial operacional' }}
+            </div>
+          </div>
+        </v-card-title>
+        <v-divider />
+        <v-card-text class="sb-dialog-body">
+          <v-alert v-if="traceError" type="error" variant="tonal" class="mb-3">
+            {{ traceError }}
+          </v-alert>
+          <div v-if="traceLoading" class="sb-skeleton" style="height: 120px;"></div>
+          <div v-else-if="!traceItems.length" class="text-caption text-medium-emphasis">
+            Sin eventos para este recurso.
+          </div>
+          <div v-else class="trace-list">
+            <div v-for="evt in traceItems" :key="evt.id" class="trace-item">
+              <div class="trace-item-head">
+                <v-chip size="small" :color="statusChipColor(evt.result)">
+                  {{ evt.result || 'evento' }}
+                </v-chip>
+                <strong>{{ evt.operationName }}</strong>
+                <span class="text-caption text-medium-emphasis">
+                  {{ evt.executedAt }}
+                </span>
+              </div>
+              <div class="trace-item-meta">
+                {{ evt.entityName }}#{{ evt.entityId ?? '-' }} · {{ evt.actor || 'system' }}
+              </div>
+              <div v-if="evt.message" class="trace-item-message">
+                {{ evt.message }}
+              </div>
+            </div>
+          </div>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="d-flex justify-end sb-dialog-actions">
+          <v-btn class="sb-btn ghost" variant="text" @click="traceDialog = false">Cerrar</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
     <v-snackbar v-model="toastOpen" :timeout="2200" :color="toastColor">
       {{ toastMessage }}
     </v-snackbar>
@@ -502,6 +839,162 @@ const isDark = computed(() => {
 })
 
 const config = ref(JSON.parse(JSON.stringify(frontendConfig || {})))
+const OPS_MOVEMENT_TYPES = ['ingreso', 'egreso', 'transferencia', 'ajuste', 'reserva', 'liberacion']
+const OPS_QUICK_TYPES = ['ingreso', 'transferencia', 'egreso', 'reserva', 'liberacion']
+const OPS_MOVEMENT_STATUSES = ['borrador', 'confirmado', 'anulado']
+const OPS_TRACK_MODES = ['none', 'serial', 'lote', 'serial_lote']
+const OPS_RESOURCE_STATES = ['activo', 'inactivo', 'bloqueado', 'cuarentena', 'reparacion', 'baja']
+const OPS_LOCATION_TYPES = ['nodo', 'deposito', 'sector', 'pasillo', 'estanteria', 'nivel', 'posicion']
+const OPS_ATTRIBUTE_TYPES = ['string', 'int', 'decimal', 'bool', 'datetime', 'json']
+const OPS_AUDIT_RESULTS = ['ok', 'error', 'warning']
+const RELATION_ROUTES = {
+  movement: 'movement',
+  resourceinstance: 'resource-instance',
+  location: 'location',
+  resourcedefinition: 'resource-definition',
+  attributedefinition: 'attribute-definition'
+}
+const OPS_GROUPS = [
+  { id: 'catalogo', title: 'Catalogo' },
+  { id: 'ubicaciones', title: 'Ubicaciones' },
+  { id: 'operaciones', title: 'Operaciones' },
+  { id: 'stock', title: 'Stock' },
+  { id: 'control', title: 'Control' },
+  { id: 'otros', title: 'Otros' }
+]
+const OPS_ENTITY_LABELS = {
+  attributedefinition: 'Definiciones de atributos',
+  attributevalue: 'Valores de atributos',
+  location: 'Ubicaciones',
+  movement: 'Movimientos',
+  movementline: 'Lineas de movimiento',
+  operationaudit: 'Auditoria operativa',
+  resourcedefinition: 'Definiciones de recursos',
+  resourceinstance: 'Instancias de recursos',
+  stockbalance: 'Saldos de stock'
+}
+const OPS_ENTITY_ICONS = {
+  attributedefinition: 'mdi-tag-outline',
+  attributevalue: 'mdi-form-textbox',
+  location: 'mdi-map-marker-radius-outline',
+  movement: 'mdi-swap-horizontal-bold',
+  movementline: 'mdi-format-list-bulleted',
+  operationaudit: 'mdi-timeline-alert-outline',
+  resourcedefinition: 'mdi-shape-plus-outline',
+  resourceinstance: 'mdi-cube-outline',
+  stockbalance: 'mdi-scale-balance'
+}
+const OPS_ENTITY_GROUPS = {
+  resourcedefinition: 'catalogo',
+  attributedefinition: 'catalogo',
+  attributevalue: 'catalogo',
+  resourceinstance: 'catalogo',
+  location: 'ubicaciones',
+  movement: 'operaciones',
+  movementline: 'operaciones',
+  stockbalance: 'stock',
+  operationaudit: 'control'
+}
+const OPS_ENTITY_ORDER = {
+  resourcedefinition: 10,
+  attributedefinition: 20,
+  attributevalue: 30,
+  resourceinstance: 40,
+  location: 50,
+  movement: 60,
+  movementline: 70,
+  stockbalance: 80,
+  operationaudit: 90
+}
+const OPS_SECTIONED_ENTITY_KEYS = new Set([
+  'resourcedefinition',
+  'attributedefinition',
+  'attributevalue',
+  'resourceinstance',
+  'location',
+  'movement',
+  'movementline',
+  'stockbalance',
+  'operationaudit'
+])
+const OPS_FIELD_LAYOUT = {
+  movement: {
+    movementtype: { section: 'Operacion', sectionOrder: 10, formOrder: 10 },
+    status: { section: 'Operacion', sectionOrder: 10, formOrder: 20 },
+    referenceno: { section: 'Operacion', sectionOrder: 10, formOrder: 30 },
+    notes: { section: 'Operacion', sectionOrder: 10, formOrder: 40 },
+    operationat: { section: 'Operacion', sectionOrder: 10, formOrder: 50 },
+    sourcelocationid: { section: 'Ubicaciones', sectionOrder: 20, formOrder: 10 },
+    targetlocationid: { section: 'Ubicaciones', sectionOrder: 20, formOrder: 20 },
+    createdby: { section: 'Control', sectionOrder: 30, formOrder: 10 }
+  },
+  movementline: {
+    movementid: { section: 'Referencias', sectionOrder: 10, formOrder: 10 },
+    resourceinstanceid: { section: 'Referencias', sectionOrder: 10, formOrder: 20 },
+    quantity: { section: 'Cantidades', sectionOrder: 20, formOrder: 10 },
+    unitcost: { section: 'Cantidades', sectionOrder: 20, formOrder: 20 },
+    serie: { section: 'Trazabilidad', sectionOrder: 30, formOrder: 10 },
+    lote: { section: 'Trazabilidad', sectionOrder: 30, formOrder: 20 }
+  },
+  resourcedefinition: {
+    codigo: { section: 'Identidad', sectionOrder: 10, formOrder: 10 },
+    nombre: { section: 'Identidad', sectionOrder: 10, formOrder: 20 },
+    descripcion: { section: 'Identidad', sectionOrder: 10, formOrder: 30 },
+    trackmode: { section: 'Seguimiento', sectionOrder: 20, formOrder: 10 },
+    isactive: { section: 'Estado', sectionOrder: 30, formOrder: 10 }
+  },
+  resourceinstance: {
+    resourcedefinitionid: { section: 'Identidad', sectionOrder: 10, formOrder: 10 },
+    codigointerno: { section: 'Identidad', sectionOrder: 10, formOrder: 20 },
+    estado: { section: 'Estado', sectionOrder: 20, formOrder: 10 },
+    isactive: { section: 'Estado', sectionOrder: 20, formOrder: 20 },
+    serie: { section: 'Trazabilidad', sectionOrder: 30, formOrder: 10 },
+    lote: { section: 'Trazabilidad', sectionOrder: 30, formOrder: 20 },
+    vencimiento: { section: 'Trazabilidad', sectionOrder: 30, formOrder: 30 }
+  },
+  location: {
+    codigo: { section: 'Identidad', sectionOrder: 10, formOrder: 10 },
+    nombre: { section: 'Identidad', sectionOrder: 10, formOrder: 20 },
+    tipo: { section: 'Identidad', sectionOrder: 10, formOrder: 30 },
+    parentlocationid: { section: 'Jerarquia', sectionOrder: 20, formOrder: 10 },
+    capacidad: { section: 'Capacidad', sectionOrder: 30, formOrder: 10 },
+    isactive: { section: 'Estado', sectionOrder: 40, formOrder: 10 }
+  },
+  stockbalance: {
+    resourceinstanceid: { section: 'Referencias', sectionOrder: 10, formOrder: 10 },
+    locationid: { section: 'Referencias', sectionOrder: 10, formOrder: 20 },
+    stockreal: { section: 'Saldos', sectionOrder: 20, formOrder: 10 },
+    stockreservado: { section: 'Saldos', sectionOrder: 20, formOrder: 20 },
+    stockdisponible: { section: 'Saldos', sectionOrder: 20, formOrder: 30 }
+  },
+  attributedefinition: {
+    resourcedefinitionid: { section: 'Referencias', sectionOrder: 10, formOrder: 10 },
+    codigo: { section: 'Definicion', sectionOrder: 20, formOrder: 10 },
+    nombre: { section: 'Definicion', sectionOrder: 20, formOrder: 20 },
+    datatype: { section: 'Definicion', sectionOrder: 20, formOrder: 30 },
+    isrequired: { section: 'Reglas', sectionOrder: 30, formOrder: 10 },
+    maxlength: { section: 'Reglas', sectionOrder: 30, formOrder: 20 },
+    sortorder: { section: 'Reglas', sectionOrder: 30, formOrder: 30 },
+    isactive: { section: 'Estado', sectionOrder: 40, formOrder: 10 }
+  },
+  attributevalue: {
+    resourceinstanceid: { section: 'Referencias', sectionOrder: 10, formOrder: 10 },
+    attributedefinitionid: { section: 'Referencias', sectionOrder: 10, formOrder: 20 },
+    valuestring: { section: 'Valor', sectionOrder: 20, formOrder: 10 },
+    valuenumber: { section: 'Valor', sectionOrder: 20, formOrder: 20 },
+    valuedatetime: { section: 'Valor', sectionOrder: 20, formOrder: 30 },
+    valuebool: { section: 'Valor', sectionOrder: 20, formOrder: 40 },
+    valuejson: { section: 'Valor', sectionOrder: 20, formOrder: 50 }
+  },
+  operationaudit: {
+    operationname: { section: 'Evento', sectionOrder: 10, formOrder: 10 },
+    entityname: { section: 'Contexto', sectionOrder: 20, formOrder: 10 },
+    entityid: { section: 'Contexto', sectionOrder: 20, formOrder: 20 },
+    actor: { section: 'Contexto', sectionOrder: 20, formOrder: 30 },
+    result: { section: 'Resultado', sectionOrder: 30, formOrder: 10 },
+    message: { section: 'Resultado', sectionOrder: 30, formOrder: 20 }
+  }
+}
 
 const registros = ref([])
 const loading = ref(false)
@@ -517,6 +1010,12 @@ const itemsPerPage = ref(10)
 const dialog = ref(false)
 const dialogMode = ref('create')
 const registroActual = ref(null)
+const opsDialog = ref(false)
+const opsSubmitting = ref(false)
+const opsError = ref('')
+const opsForm = ref(buildOpsForm())
+const opsLocationItems = ref([])
+const opsResourceItems = ref([])
 
 const audioDialog = ref(false)
 const audioRecording = ref(false)
@@ -537,7 +1036,24 @@ const audioPlayError = ref('')
 const audioPlayUrl = ref('')
 const audioPlayMime = ref('')
 const audioPlayItem = ref(null)
+const traceDialog = ref(false)
+const traceLoading = ref(false)
+const traceError = ref('')
+const traceItems = ref([])
+const traceResourceLabel = ref('')
 const retryingIds = ref({})
+const confirmingIds = ref({})
+const movementStatusById = ref({})
+const relationLookups = ref({
+  movement: {},
+  resourceinstance: {},
+  location: {},
+  resourcedefinition: {},
+  attributedefinition: {}
+})
+const permissionSet = ref(new Set())
+const permissionsLoaded = ref(false)
+const permissionsBypass = ref(false)
 const mapRecord = ref(null)
 const autoRefreshIntervalMs = computed(() => config.value?.system?.autoRefreshIntervalMs || 3000)
 const autoRefreshAlways = computed(() => config.value?.system?.autoRefreshAlways === true)
@@ -656,21 +1172,59 @@ const entities = computed(() => config.value?.entities || [])
 
 const runtimeEntities = computed(() => entities.value.filter(entity => entity.showInMenu !== false))
 
+function entityRouteKey(entity) {
+  return entity?.routeSlug || entity?.name || entity?.menuLabel || ''
+}
+
+function entityCanonicalKey(entity) {
+  return normalizeRouteKey(entityRouteKey(entity))
+}
+
 function entidadRoute(entidad) {
-  return toKebab(entidad?.routeSlug || entidad?.name || entidad?.menuLabel || 'item')
+  return toKebab(entityRouteKey(entidad) || 'item')
 }
 
 function entidadLabel(entidad) {
-  return entidad?.menuLabel || entidad?.displayName || entidad?.name || 'Entidad'
+  const key = entityCanonicalKey(entidad)
+  return OPS_ENTITY_LABELS[key] || entidad?.menuLabel || entidad?.displayName || entidad?.name || 'Entidad'
 }
 
 function entidadMenuIcon(entidad) {
-  return entidad?.menuIcon || 'mdi-table'
+  const key = entityCanonicalKey(entidad)
+  return OPS_ENTITY_ICONS[key] || entidad?.menuIcon || 'mdi-table'
 }
 
 const entitySlug = computed(() => route.params.entity || '')
 
+const groupedRuntimeEntities = computed(() => {
+  const grouped = {}
+  OPS_GROUPS.forEach(group => { grouped[group.id] = [] })
+  runtimeEntities.value.forEach(entity => {
+    const key = entityCanonicalKey(entity)
+    const groupId = OPS_ENTITY_GROUPS[key] || 'otros'
+    if (!grouped[groupId]) grouped[groupId] = []
+    grouped[groupId].push(entity)
+  })
+  Object.keys(grouped).forEach(groupId => {
+    grouped[groupId].sort((a, b) => {
+      const orderA = OPS_ENTITY_ORDER[entityCanonicalKey(a)] ?? 999
+      const orderB = OPS_ENTITY_ORDER[entityCanonicalKey(b)] ?? 999
+      if (orderA !== orderB) return orderA - orderB
+      return entidadLabel(a).localeCompare(entidadLabel(b), 'es')
+    })
+  })
+  return grouped
+})
+
 const entidadTitulo = computed(() => entidadSeleccionada.value ? entidadLabel(entidadSeleccionada.value) : 'Entidad')
+const currentEntityCanonicalKey = computed(() => entityCanonicalKey(entidadSeleccionada.value))
+const currentGroupId = computed(() => OPS_ENTITY_GROUPS[currentEntityCanonicalKey.value] || 'otros')
+const currentGroupTitle = computed(() => OPS_GROUPS.find(group => group.id === currentGroupId.value)?.title || 'Otros')
+const currentGroupEntities = computed(() => groupedRuntimeEntities.value[currentGroupId.value] || [])
+const flowGroups = computed(() => OPS_GROUPS
+  .filter(group => group.id !== 'otros')
+  .filter(group => (groupedRuntimeEntities.value[group.id] || []).length > 0))
+const showModuleNavigation = computed(() => hasOpsCore.value && Boolean(entidadSeleccionada.value))
 
 const campos = computed(() => entidadSeleccionada.value?.fields || [])
 
@@ -698,6 +1252,63 @@ const confirmDelete = computed(() => entidadSeleccionada.value?.confirmDelete !=
 const enableDuplicate = computed(() => entidadSeleccionada.value?.enableDuplicate !== false)
 
 const apiRoute = computed(() => (entidadSeleccionada.value ? entidadRoute(entidadSeleccionada.value) : ''))
+const currentEntityKey = computed(() => String(apiRoute.value || '').toLowerCase())
+const isMovementView = computed(() => currentEntityKey.value === 'movement')
+const isMovementLineView = computed(() => currentEntityKey.value === 'movement-line' || currentEntityKey.value === 'movementline')
+const isOperationAuditView = computed(() => currentEntityKey.value === 'operation-audit' || currentEntityKey.value === 'operationaudit')
+const isResourceInstanceView = computed(() => currentEntityKey.value === 'resource-instance' || currentEntityKey.value === 'resourceinstance')
+const isStockBalanceView = computed(() => currentEntityKey.value === 'stock-balance' || currentEntityKey.value === 'stockbalance')
+const hasOpsCore = computed(() => {
+  const keys = new Set(
+    entities.value.map(entity => normalizeRouteKey(entityRouteKey(entity)))
+  )
+  return keys.has('movement')
+    && keys.has('movementline')
+    && keys.has('resourceinstance')
+    && keys.has('stockbalance')
+})
+const showOpsFlowPanel = computed(() => {
+  if (!hasOpsCore.value) return false
+  if (!hasPermission('ops.movement.create') || !hasPermission('ops.movementline.create')) return false
+  return isMovementView.value || isMovementLineView.value || isStockBalanceView.value || isResourceInstanceView.value
+})
+const opsQuickTypes = computed(() => OPS_QUICK_TYPES)
+const opsMovementTypeItems = computed(() => toSelectOptions(OPS_MOVEMENT_TYPES))
+const opsDisableSource = computed(() => isSourceDisabledForType(opsForm.value.movementType))
+const opsDisableTarget = computed(() => isTargetDisabledForType(opsForm.value.movementType))
+const opsRoutes = computed(() => ({
+  movement: resolveEntityPath('movement'),
+  movementLine: resolveEntityPath('movementline'),
+  stockBalance: resolveEntityPath('stockbalance'),
+  resourceInstance: resolveEntityPath('resourceinstance')
+}))
+
+function permissionCode(entityKey, action) {
+  const normalizedEntity = normalizeRouteKey(entityKey || '')
+  const normalizedAction = normalizeRouteKey(action || '')
+  if (!normalizedEntity || !normalizedAction) return ''
+  return `ops.${normalizedEntity}.${normalizedAction}`
+}
+
+function hasPermission(code) {
+  if (!code) return true
+  if (permissionsBypass.value) return true
+  if (!permissionsLoaded.value) return true
+  if (!permissionSet.value || permissionSet.value.size === 0) return false
+  if (permissionSet.value.has('*')) return true
+  return permissionSet.value.has(code.toLowerCase())
+}
+
+function hasEntityPermission(action) {
+  return hasPermission(permissionCode(currentEntityCanonicalKey.value, action))
+}
+
+const canCreateRecords = computed(() => {
+  if (!entidadSeleccionada.value) return false
+  if (entidadSeleccionada.value.allowCreate === false) return false
+  if (isOperationAuditView.value) return false
+  return hasEntityPermission('create')
+})
 
 const isIncidentesView = computed(() => {
   if (!entidadSeleccionada.value) return false
@@ -724,6 +1335,7 @@ const showAudioPlayAction = computed(() => {
 })
 
 const showMapAction = computed(() => isIncidentesView.value)
+const showTraceAction = computed(() => isResourceInstanceView.value && hasPermission('ops.operationaudit.timeline'))
 
 const summaryItems = computed(() => {
   const items = []
@@ -829,7 +1441,7 @@ const filteredRegistros = computed(() => {
     const term = search.value.toLowerCase()
     items = items.filter(item => {
       return listFields.value.some(field => {
-        const value = item[field.columnName]
+        const value = readFieldValue(item, field.columnName)
         return value != null && value.toString().toLowerCase().includes(term)
       })
     })
@@ -838,7 +1450,7 @@ const filteredRegistros = computed(() => {
   if (filterField.value && filterValue.value) {
     const term = filterValue.value.toLowerCase()
     items = items.filter(item => {
-      const value = item[filterField.value]
+      const value = readFieldValue(item, filterField.value)
       return value != null && value.toString().toLowerCase().includes(term)
     })
   }
@@ -859,8 +1471,8 @@ const sortedRegistros = computed(() => {
   if (!sortKey) return items
 
   items.sort((a, b) => {
-    const va = a[sortKey]
-    const vb = b[sortKey]
+    const va = readFieldValue(a, sortKey)
+    const vb = readFieldValue(b, sortKey)
     if (va == null && vb == null) return 0
     if (va == null) return -1 * dir
     if (vb == null) return 1 * dir
@@ -898,6 +1510,385 @@ const headers = computed(() => {
   ]
 })
 
+function buildOpsForm(movementType = 'ingreso') {
+  return {
+    movementType,
+    sourceLocationId: null,
+    targetLocationId: null,
+    resourceInstanceId: null,
+    quantity: 1,
+    unitCost: null,
+    referenceNo: '',
+    notes: '',
+    autoConfirm: true
+  }
+}
+
+function coalesceNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const num = Number(value)
+  return Number.isFinite(num) ? num : null
+}
+
+function isSourceDisabledForType(movementType) {
+  const type = normalizeTextKey(movementType)
+  return type === 'ingreso'
+}
+
+function isTargetDisabledForType(movementType) {
+  const type = normalizeTextKey(movementType)
+  return type === 'egreso' || type === 'reserva' || type === 'liberacion'
+}
+
+function applyTypeShape(form) {
+  const type = normalizeTextKey(form.movementType)
+  if (isSourceDisabledForType(type)) form.sourceLocationId = null
+  if (isTargetDisabledForType(type)) form.targetLocationId = null
+}
+
+function resolveEntityPath(key) {
+  const target = normalizeRouteKey(key)
+  const entity = runtimeEntities.value.find(ent => normalizeRouteKey(entityRouteKey(ent)) === target)
+  return entity ? `/${entidadRoute(entity)}` : ''
+}
+
+function irRuta(path) {
+  if (!path) return
+  router.push(path)
+}
+
+async function loadOpsCatalog() {
+  const [locationsRes, resourcesRes] = await Promise.all([
+    runtimeApi.list('location'),
+    runtimeApi.list('resource-instance')
+  ])
+
+  const locations = Array.isArray(locationsRes?.data) ? locationsRes.data : []
+  const resources = Array.isArray(resourcesRes?.data) ? resourcesRes.data : []
+
+  opsLocationItems.value = locations
+    .filter(item => readFieldValue(item, 'IsActive') !== false)
+    .map(item => {
+      const id = readFieldValue(item, 'Id')
+      const code = readFieldValue(item, 'Codigo')
+      const name = readFieldValue(item, 'Nombre')
+      return {
+        value: id,
+        title: code && name ? `${code} · ${name}` : (code || name || `#${id}`)
+      }
+    })
+    .filter(item => item.value != null)
+
+  opsResourceItems.value = resources
+    .filter(item => readFieldValue(item, 'IsActive') !== false)
+    .map(item => {
+      const id = readFieldValue(item, 'Id')
+      const code = readFieldValue(item, 'CodigoInterno')
+      const state = readFieldValue(item, 'Estado')
+      return {
+        value: id,
+        title: code && state ? `${code} · ${state}` : (code || `#${id}`)
+      }
+    })
+    .filter(item => item.value != null)
+}
+
+function validateOpsForm(form) {
+  const type = normalizeTextKey(form.movementType)
+  if (!OPS_MOVEMENT_TYPES.includes(type)) return 'Tipo de movimiento inválido.'
+  if (form.resourceInstanceId == null) return 'Selecciona un recurso.'
+  const qty = coalesceNumber(form.quantity)
+  if (qty == null || qty <= 0) return 'La cantidad debe ser mayor a 0.'
+
+  const source = coalesceNumber(form.sourceLocationId)
+  const target = coalesceNumber(form.targetLocationId)
+
+  if (type === 'ingreso' && target == null) return 'Ingreso requiere ubicación destino.'
+  if ((type === 'egreso' || type === 'reserva' || type === 'liberacion') && source == null) {
+    return `${prettifyLabel(type)} requiere ubicación origen.`
+  }
+  if (type === 'transferencia') {
+    if (source == null || target == null) return 'Transferencia requiere origen y destino.'
+    if (String(source) === String(target)) return 'Origen y destino deben ser distintos.'
+  }
+  if (type === 'ajuste' && source == null && target == null) return 'Ajuste requiere origen o destino.'
+  if (type === 'ajuste' && source != null && target != null) return 'Ajuste debe indicar solo una ubicación.'
+  return ''
+}
+
+async function resolveMovementIdByReference(referenceNo) {
+  const { data } = await runtimeApi.list('movement')
+  const items = Array.isArray(data) ? data : []
+  const matches = items
+    .filter(item => String(readFieldValue(item, 'ReferenceNo') || '') === referenceNo)
+    .map(item => coalesceNumber(readFieldValue(item, 'Id')))
+    .filter(id => id != null)
+    .sort((a, b) => b - a)
+  return matches[0] ?? null
+}
+
+async function abrirOperacionGuiada(type = 'ingreso') {
+  if (!hasPermission('ops.movement.create') || !hasPermission('ops.movementline.create')) {
+    opsError.value = 'No tienes permisos para crear operaciones guiadas.'
+    return
+  }
+
+  opsError.value = ''
+  opsDialog.value = true
+  opsForm.value = buildOpsForm(type)
+  applyTypeShape(opsForm.value)
+  try {
+    await loadOpsCatalog()
+  } catch (err) {
+    opsError.value = extractApiErrorMessage(err, 'No se pudo cargar catálogo de ubicaciones/recursos.')
+  }
+}
+
+async function guardarOperacionGuiada() {
+  if (!hasPermission('ops.movement.create') || !hasPermission('ops.movementline.create')) {
+    opsError.value = 'No tienes permisos para crear operaciones guiadas.'
+    return
+  }
+
+  opsError.value = ''
+  applyTypeShape(opsForm.value)
+  const validationError = validateOpsForm(opsForm.value)
+  if (validationError) {
+    opsError.value = validationError
+    return
+  }
+
+  const source = coalesceNumber(opsForm.value.sourceLocationId)
+  const target = coalesceNumber(opsForm.value.targetLocationId)
+  const quantity = Number(opsForm.value.quantity)
+  const unitCost = coalesceNumber(opsForm.value.unitCost)
+  const now = new Date().toISOString()
+  const referenceNo = (opsForm.value.referenceNo || '').trim() || `OPS-${Date.now()}`
+
+  const movementPayload = {
+    movementtype: normalizeTextKey(opsForm.value.movementType),
+    status: 'borrador',
+    sourcelocationid: source,
+    targetlocationid: target,
+    referenceno: referenceNo,
+    notes: (opsForm.value.notes || '').trim() || null,
+    operationat: now,
+    createdby: 'runtime-ui',
+    createdat: now
+  }
+
+  opsSubmitting.value = true
+  try {
+    await runtimeApi.create('movement', movementPayload)
+    const movementId = await resolveMovementIdByReference(referenceNo)
+    if (movementId == null) {
+      throw new Error('Se creó el movimiento pero no se pudo resolver el Id.')
+    }
+
+    const movementLinePayload = {
+      movementid: movementId,
+      resourceinstanceid: coalesceNumber(opsForm.value.resourceInstanceId),
+      quantity,
+      unitcost: unitCost,
+      serie: null,
+      lote: null,
+      createdat: now
+    }
+    await runtimeApi.create('movement-line', movementLinePayload)
+
+    if (opsForm.value.autoConfirm) {
+      if (!hasPermission('ops.movement.confirm')) {
+        throw new Error('No tienes permiso para confirmar movimientos.')
+      }
+      const movementRes = await runtimeApi.get('movement', movementId)
+      const movement = movementRes?.data || {}
+      const confirmPayload = buildMovementUpdatePayload(movement, 'confirmado')
+      await runtimeApi.update('movement', movementId, confirmPayload)
+    }
+
+    opsDialog.value = false
+    showToast('Operación creada correctamente.', 'green')
+    if (apiRoute.value === 'movement' || apiRoute.value === 'movement-line' || apiRoute.value === 'stock-balance') {
+      await cargarDatos()
+    }
+  } catch (err) {
+    opsError.value = extractApiErrorMessage(err, 'No se pudo ejecutar la operación guiada.')
+  } finally {
+    opsSubmitting.value = false
+  }
+}
+
+function normalizeTextKey(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function readFieldValue(item, columnName) {
+  if (!item || typeof item !== 'object' || !columnName) return undefined
+  if (item[columnName] !== undefined) return item[columnName]
+  const target = normalizeTextKey(columnName)
+  const exactKey = Object.keys(item).find(k => normalizeTextKey(k) === target)
+  if (exactKey) return item[exactKey]
+  const compactTarget = target.replace(/[^a-z0-9]/g, '')
+  const looseKey = Object.keys(item).find(k => normalizeTextKey(k).replace(/[^a-z0-9]/g, '') === compactTarget)
+  return looseKey ? item[looseKey] : undefined
+}
+
+function prettifyLabel(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-ZÁÉÍÓÚÑ])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function toSelectOptions(values) {
+  return values.map(v => ({ title: prettifyLabel(v), value: v }))
+}
+
+function fieldOptionsFor(entityKey, fieldKey) {
+  if (entityKey === 'movement' && fieldKey === 'movementtype') return toSelectOptions(OPS_MOVEMENT_TYPES)
+  if (entityKey === 'movement' && fieldKey === 'status') return toSelectOptions(OPS_MOVEMENT_STATUSES)
+  if (entityKey === 'resourcedefinition' && fieldKey === 'trackmode') return toSelectOptions(OPS_TRACK_MODES)
+  if (entityKey === 'resourceinstance' && fieldKey === 'estado') return toSelectOptions(OPS_RESOURCE_STATES)
+  if (entityKey === 'location' && fieldKey === 'tipo') return toSelectOptions(OPS_LOCATION_TYPES)
+  if (entityKey === 'attributedefinition' && fieldKey === 'datatype') return toSelectOptions(OPS_ATTRIBUTE_TYPES)
+  if (entityKey === 'operationaudit' && fieldKey === 'result') return toSelectOptions(OPS_AUDIT_RESULTS)
+  return null
+}
+
+function shouldHideFieldInForm(entityKey, fieldKey) {
+  if (fieldKey === 'id') return true
+  if (fieldKey === 'correlationid') return true
+  if (fieldKey === 'payloadjson') return true
+  if (fieldKey === 'stockdisponible') return true
+  if (fieldKey.endsWith('createdat') || fieldKey.endsWith('updatedat') || fieldKey.endsWith('executedat')) return true
+  if (entityKey === 'operationaudit') return true
+  return false
+}
+
+function defaultFieldValue(entityKey, fieldKey, dataType) {
+  if (entityKey === 'movement' && fieldKey === 'status') return 'borrador'
+  if (entityKey === 'movement' && fieldKey === 'movementtype') return 'ingreso'
+  if (entityKey === 'resourcedefinition' && fieldKey === 'trackmode') return 'none'
+  if (entityKey === 'resourceinstance' && fieldKey === 'estado') return 'activo'
+  if (fieldKey === 'isactive') return true
+  if (String(dataType || '').toLowerCase().includes('bool')) return false
+  return undefined
+}
+
+function statusChipColor(value) {
+  const key = normalizeTextKey(value)
+  if (!key) return 'grey'
+  if (key === 'confirmado' || key === 'ok' || key === 'activo' || key === 'done') return 'green'
+  if (key === 'borrador' || key === 'pending' || key === 'processing' || key === 'running') return 'orange'
+  if (key === 'anulado' || key === 'error' || key === 'inactivo' || key === 'bloqueado') return 'red'
+  if (key === 'warning') return 'amber'
+  return 'blue-grey'
+}
+
+function fieldLabelOverride(entityKey, fieldKey, fallbackLabel) {
+  const byEntity = {
+    movement: {
+      movementtype: 'Tipo',
+      sourcelocationid: 'Origen',
+      targetlocationid: 'Destino',
+      referenceno: 'Ref.',
+      operationat: 'Fecha'
+    },
+    movementline: {
+      movementid: 'Movimiento',
+      resourceinstanceid: 'Recurso',
+      quantity: 'Cant.',
+      unitcost: 'Costo U.',
+      createdat: 'Fecha'
+    },
+    stockbalance: {
+      resourceinstanceid: 'Recurso',
+      locationid: 'Ubicacion',
+      stockreal: 'Real',
+      stockreservado: 'Reservado',
+      stockdisponible: 'Disponible'
+    },
+    attributedefinition: {
+      resourcedefinitionid: 'Recurso'
+    },
+    attributevalue: {
+      resourceinstanceid: 'Recurso',
+      attributedefinitionid: 'Atributo'
+    },
+    resourceinstance: {
+      resourcedefinitionid: 'Tipo recurso',
+      codigointerno: 'Codigo'
+    },
+    location: {
+      parentlocationid: 'Padre'
+    }
+  }
+  const entityLabels = byEntity[entityKey] || {}
+  if (entityLabels[fieldKey]) return entityLabels[fieldKey]
+  if (fieldKey.endsWith('id') && fieldKey !== 'id') {
+    return prettifyLabel(fieldKey.slice(0, -2))
+  }
+  return fallbackLabel
+}
+
+function normalizeRouteKey(value) {
+  return normalizeTextKey(value).replace(/[^a-z0-9]/g, '')
+}
+
+function resolveRelationKey(fieldKey) {
+  const key = normalizeTextKey(fieldKey)
+  if (!key) return null
+  if (key === 'movementid') return 'movement'
+  if (key === 'resourceinstanceid') return 'resourceinstance'
+  if (key === 'locationid' || key === 'sourcelocationid' || key === 'targetlocationid' || key === 'parentlocationid') return 'location'
+  if (key === 'resourcedefinitionid') return 'resourcedefinition'
+  if (key === 'attributedefinitionid') return 'attributedefinition'
+  return null
+}
+
+function relationKeyFromRoute(routeKey) {
+  const normalizedRoute = normalizeRouteKey(routeKey)
+  for (const [relationKey, route] of Object.entries(RELATION_ROUTES)) {
+    if (normalizeRouteKey(route) === normalizedRoute) return relationKey
+  }
+  return null
+}
+
+function relationLabelFor(relationKey, item, id) {
+  const fallback = `#${id}`
+  if (!item || typeof item !== 'object') return fallback
+  if (relationKey === 'movement') {
+    const ref = readFieldValue(item, 'ReferenceNo')
+    const type = readFieldValue(item, 'MovementType')
+    const status = readFieldValue(item, 'Status')
+    const base = ref || type || fallback
+    return status ? `${base} · ${status}` : base
+  }
+  if (relationKey === 'resourceinstance') {
+    const code = readFieldValue(item, 'CodigoInterno')
+    const serie = readFieldValue(item, 'Serie')
+    return code || serie || fallback
+  }
+  if (relationKey === 'location') {
+    const code = readFieldValue(item, 'Codigo')
+    const name = readFieldValue(item, 'Nombre')
+    return code || name || fallback
+  }
+  if (relationKey === 'resourcedefinition' || relationKey === 'attributedefinition') {
+    const code = readFieldValue(item, 'Codigo')
+    const name = readFieldValue(item, 'Nombre')
+    return code || name || fallback
+  }
+  return fallback
+}
+
+function getRelationDisplay(relationKey, id) {
+  if (!relationKey || id == null) return null
+  const lookup = relationLookups.value?.[relationKey] || {}
+  return lookup[id] || lookup[String(id)] || null
+}
+
 function normalizeConfig() {
   if (!config.value?.system) config.value.system = {}
   const sys = config.value.system
@@ -912,36 +1903,142 @@ function normalizeConfig() {
   if (!Array.isArray(config.value.entities)) config.value.entities = []
 
   config.value.entities.forEach(entity => {
+    const entityKey = entityCanonicalKey(entity)
+
     if (entity.showInMenu === undefined) entity.showInMenu = true
-    if (!entity.menuIcon) entity.menuIcon = 'mdi-table'
+    if (!entity.menuIcon || entity.menuIcon === 'mdi-table') {
+      entity.menuIcon = OPS_ENTITY_ICONS[entityKey] || entity.menuIcon || 'mdi-table'
+    }
+    if (
+      OPS_ENTITY_LABELS[entityKey] &&
+      (
+        !entity.menuLabel ||
+        normalizeTextKey(entity.menuLabel) === normalizeTextKey(entity.name || '') ||
+        normalizeTextKey(entity.menuLabel) === normalizeTextKey(entity.displayName || '')
+      )
+    ) {
+      entity.menuLabel = OPS_ENTITY_LABELS[entityKey]
+    }
     if (entity.routeSlug === undefined) entity.routeSlug = ''
     if (entity.listStickyHeader === undefined) entity.listStickyHeader = false
     if (entity.listShowTotals === undefined) entity.listShowTotals = true
     if (!entity.defaultSortDirection) entity.defaultSortDirection = 'asc'
     if (!entity.formLayout) entity.formLayout = 'single'
+    if (OPS_SECTIONED_ENTITY_KEYS.has(entityKey) && entity.formLayout === 'single') {
+      entity.formLayout = 'sections'
+    }
     if (entity.confirmSave === undefined) entity.confirmSave = true
     if (entity.confirmDelete === undefined) entity.confirmDelete = true
     if (entity.enableDuplicate === undefined) entity.enableDuplicate = true
-    if (!entity.messages) {
+    if (entity.allowCreate === undefined) entity.allowCreate = true
+    if (entity.allowEdit === undefined) entity.allowEdit = true
+    if (entity.allowDelete === undefined) entity.allowDelete = true
+
+    if (entityKey === 'movement') {
+      entity.menuIcon = entity.menuIcon || 'mdi-swap-horizontal'
       entity.messages = {
-        empty: 'No hay registros todavia.',
-        error: 'Ocurrio un error al procesar la solicitud.',
-        successCreate: 'Registro creado.',
-        successUpdate: 'Registro actualizado.',
-        successDelete: 'Registro eliminado.'
+        ...(entity.messages || {}),
+        confirmDelete: 'Eliminar movimiento? Si tiene lineas en borrador tambien se eliminaran.',
+        confirmSave: 'Guardar movimiento?',
+        error: 'No se pudo procesar el movimiento.'
       }
+    }
+
+    if (entityKey === 'movementline') {
+      entity.menuIcon = entity.menuIcon || 'mdi-format-list-bulleted-square'
+      entity.messages = {
+        ...(entity.messages || {}),
+        confirmDelete: 'Eliminar linea de movimiento?',
+        confirmSave: 'Guardar linea de movimiento?',
+        error: 'No se pudo procesar la linea de movimiento.'
+      }
+    }
+
+    if (entityKey === 'operationaudit') {
+      entity.allowCreate = false
+      entity.allowEdit = false
+      entity.allowDelete = false
+      entity.enableDuplicate = false
+      entity.confirmDelete = false
+      entity.confirmSave = false
+      entity.messages = {
+        ...(entity.messages || {}),
+        error: 'No se pudo cargar la auditoria.'
+      }
+    }
+
+    entity.messages = {
+      empty: 'No hay registros todavia.',
+      error: 'Ocurrio un error al procesar la solicitud.',
+      successCreate: 'Registro creado.',
+      successUpdate: 'Registro actualizado.',
+      successDelete: 'Registro eliminado.',
+      ...(entity.messages || {})
     }
     if (!Array.isArray(entity.fields)) entity.fields = []
     entity.fields.forEach(field => {
+      const fieldKey = normalizeTextKey(field.columnName || field.name)
+      const fieldDataType = String(field.dataType || '').toLowerCase()
+      const fieldLayout = OPS_FIELD_LAYOUT?.[entityKey]?.[fieldKey]
       if (field.placeholder === undefined) field.placeholder = ''
       if (field.helpText === undefined) field.helpText = ''
       if (field.inputType === undefined) field.inputType = ''
       if (field.section === undefined) field.section = 'General'
+      if (fieldLayout && (!field.section || field.section === 'General')) field.section = fieldLayout.section
+      if (field.sectionOrder === undefined || field.sectionOrder === null) {
+        field.sectionOrder = fieldLayout?.sectionOrder ?? 999
+      }
+      if (field.formOrder === undefined || field.formOrder === null) {
+        field.formOrder = fieldLayout?.formOrder ?? 999
+      }
       if (field.format === undefined) field.format = ''
       if (field.min === undefined) field.min = null
       if (field.max === undefined) field.max = null
       if (field.pattern === undefined) field.pattern = ''
       if (field.quickToggle === undefined) field.quickToggle = false
+      if (field.showInList === undefined) field.showInList = true
+      const baseLabel = prettifyLabel(field.columnName || field.name)
+      if (!field.label || field.label === field.name || field.label === field.columnName || field.label === baseLabel) {
+        field.label = fieldLabelOverride(entityKey, fieldKey, baseLabel)
+      }
+      if (field.showInForm === undefined) field.showInForm = true
+      if (shouldHideFieldInForm(entityKey, fieldKey)) {
+        field.showInForm = false
+      }
+      if (!field.options) {
+        field.options = fieldOptionsFor(entityKey, fieldKey)
+      }
+      if (!field.inputType && Array.isArray(field.options) && field.options.length > 0) {
+        field.inputType = 'select'
+      }
+      if (!field.inputType && fieldDataType.includes('datetime')) {
+        field.inputType = 'datetime'
+      }
+      if (!field.inputType && (fieldDataType.includes('date') || fieldKey.includes('vencimiento'))) {
+        field.inputType = 'date'
+      }
+      if (!field.inputType && (fieldDataType.includes('decimal') || fieldDataType.includes('int') || fieldDataType.includes('numeric') || fieldDataType.includes('float'))) {
+        field.inputType = 'number'
+      }
+      if (!field.inputType && (fieldDataType.includes('bool') || fieldDataType.includes('bit'))) {
+        field.inputType = 'checkbox'
+      }
+      if (!field.format && (fieldDataType.includes('datetime') || fieldDataType.includes('date') || fieldKey.endsWith('at'))) {
+        field.format = fieldDataType.includes('date') && !fieldDataType.includes('time') ? 'date' : 'datetime'
+      }
+      if (!field.format && (fieldKey === 'status' || fieldKey === 'estado' || fieldKey === 'result')) {
+        field.format = 'status-chip'
+      }
+      if (fieldKey === 'payloadjson' || fieldKey === 'correlationid') {
+        field.showInList = false
+      }
+      if ((fieldKey.endsWith('createdat') || fieldKey.endsWith('updatedat')) && entityKey !== 'operationaudit') {
+        field.showInList = false
+      }
+      if (field.defaultValue === undefined) {
+        const inferredDefault = defaultFieldValue(entityKey, fieldKey, fieldDataType)
+        if (inferredDefault !== undefined) field.defaultValue = inferredDefault
+      }
     })
   })
 }
@@ -970,6 +2067,54 @@ function irEntidad(entidad) {
   router.push(`/${slug}`)
 }
 
+function isCurrentEntity(entidad) {
+  if (!entidad) return false
+  return entityCanonicalKey(entidad) === currentEntityCanonicalKey.value
+}
+
+function irGrupo(groupId) {
+  const entitiesInGroup = groupedRuntimeEntities.value[groupId] || []
+  if (!entitiesInGroup.length) return
+  irEntidad(entitiesInGroup[0])
+}
+
+function buildRelationMap(relationKey, items) {
+  const map = {}
+  ;(items || []).forEach(item => {
+    const id = readFieldValue(item, 'Id')
+    if (id == null) return
+    map[id] = relationLabelFor(relationKey, item, id)
+  })
+  return map
+}
+
+async function loadRelationLookup(relationKey, force = false) {
+  const route = RELATION_ROUTES[relationKey]
+  if (!route) return
+  const current = relationLookups.value?.[relationKey] || {}
+  if (!force && Object.keys(current).length > 0) return
+  try {
+    const { data } = await runtimeApi.list(route)
+    const items = Array.isArray(data) ? data : (data?.items || [])
+    relationLookups.value = {
+      ...relationLookups.value,
+      [relationKey]: buildRelationMap(relationKey, items)
+    }
+  } catch {
+    // Lookup opcional; no bloquea el runtime.
+  }
+}
+
+async function ensureRelationLookups(force = false) {
+  const keys = new Set()
+  for (const field of listFields.value) {
+    const relationKey = resolveRelationKey(field?.columnName || field?.name)
+    if (relationKey) keys.add(relationKey)
+  }
+  if (!keys.size) return
+  await Promise.all(Array.from(keys).map(key => loadRelationLookup(key, force)))
+}
+
 async function cargarDatos(options = {}) {
   if (!entidadSeleccionada.value) return
   const silent = options.silent === true
@@ -981,6 +2126,23 @@ async function cargarDatos(options = {}) {
     const { data } = await runtimeApi.list(apiRoute.value)
     const items = Array.isArray(data) ? data : (data?.items || [])
     registros.value = items.map(item => normalizeRecord(item))
+    const currentRelationKey = relationKeyFromRoute(apiRoute.value)
+    if (currentRelationKey) {
+      relationLookups.value = {
+        ...relationLookups.value,
+        [currentRelationKey]: buildRelationMap(currentRelationKey, registros.value)
+      }
+    }
+    await ensureRelationLookups()
+    if (isMovementView.value) {
+      movementStatusById.value = Object.fromEntries(
+        registros.value
+          .map(row => [getRecordId(row), getStatusValue(row)])
+          .filter(([id]) => id != null)
+      )
+    } else if (isMovementLineView.value) {
+      await ensureMovementStatusCache()
+    }
     if (isIncidentesView.value) {
       const currentId = mapRecord.value ? getRecordId(mapRecord.value) : null
       if (currentId != null) {
@@ -995,7 +2157,7 @@ async function cargarDatos(options = {}) {
     }
   } catch (err) {
     if (!silent) {
-      error.value = entityMessages.value.error
+      error.value = extractApiErrorMessage(err, entityMessages.value.error)
     }
   } finally {
     if (!silent) {
@@ -1007,31 +2169,172 @@ async function cargarDatos(options = {}) {
 function normalizeRecord(record) {
   if (!record || typeof record !== 'object') return record
   const copy = { ...record }
-  const keyMap = new Map(Object.keys(copy).map(k => [k.toLowerCase(), k]))
   campos.value.forEach(field => {
     const key = field.columnName
     if (!key) return
     if (copy[key] === undefined) {
-      const matchKey = keyMap.get(String(key).toLowerCase())
-      if (matchKey) copy[key] = copy[matchKey]
+      const value = readFieldValue(copy, key)
+      if (value !== undefined) copy[key] = value
     }
   })
   return copy
 }
 
+function extractApiErrorMessage(err, fallback = 'Ocurrio un error al procesar la solicitud.') {
+  const payload = err?.response?.data
+  if (typeof payload === 'string' && payload.trim()) return payload
+  if (payload?.message) return payload.message
+  if (payload?.error) return payload.error
+  if (err?.message) return err.message
+  return fallback
+}
+
+function buildDefaultRecord() {
+  const record = {}
+  for (const field of campos.value) {
+    const key = field?.columnName
+    if (!key || field.showInForm === false || field.isPrimaryKey || field.isIdentity) continue
+    if (field.defaultValue !== undefined) {
+      record[key] = field.defaultValue
+    }
+  }
+  return record
+}
+
+async function ensureMovementStatusCache(force = false) {
+  if (!isMovementLineView.value && !force) return
+  if (!force && Object.keys(movementStatusById.value).length) return
+  try {
+    const { data } = await runtimeApi.list('movement')
+    const items = Array.isArray(data) ? data : (data?.items || [])
+    const map = {}
+    items.forEach(item => {
+      const id = readFieldValue(item, 'Id')
+      if (id == null) return
+      map[id] = getStatusValue(item)
+    })
+    movementStatusById.value = map
+  } catch {
+    // Mantener silencioso para no bloquear listados.
+  }
+}
+
+function getMovementStatusFromLine(item) {
+  if (!item || typeof item !== 'object') return ''
+  const movementId = readFieldValue(item, 'MovementId')
+  if (movementId == null) return ''
+  return normalizeTextKey(movementStatusById.value[movementId])
+}
+
+function isMovementCancelled(item) {
+  return getStatusValue(item) === 'anulado'
+}
+
+function isMovementConfirmed(item) {
+  return getStatusValue(item) === 'confirmado'
+}
+
+function isMovementDraft(item) {
+  return getStatusValue(item) === 'borrador'
+}
+
+function isMovementLineLocked(item) {
+  const status = getMovementStatusFromLine(item)
+  return status === 'confirmado' || status === 'anulado'
+}
+
+function canEditItem(item) {
+  if (!entidadSeleccionada.value || !item) return false
+  if (entidadSeleccionada.value.allowEdit === false) return false
+  if (!hasEntityPermission('update')) return false
+  if (isMovementView.value && (isMovementConfirmed(item) || isMovementCancelled(item))) return false
+  if (isMovementLineView.value && isMovementLineLocked(item)) return false
+  return true
+}
+
+function canDeleteItem(item) {
+  if (!entidadSeleccionada.value || !item) return false
+  if (entidadSeleccionada.value.allowDelete === false) return false
+  if (!hasEntityPermission('delete')) return false
+  if (isMovementView.value && isMovementConfirmed(item)) return false
+  if (isMovementLineView.value && isMovementLineLocked(item)) return false
+  return true
+}
+
+function canDuplicateItem(item) {
+  if (!enableDuplicate.value || !canCreateRecords.value || !item) return false
+  if (isMovementView.value && isMovementConfirmed(item)) return false
+  if (isMovementLineView.value && isMovementLineLocked(item)) return false
+  return true
+}
+
+function canConfirmMovement(item) {
+  if (!isMovementView.value || !item) return false
+  if (!hasPermission('ops.movement.confirm')) return false
+  return isMovementDraft(item)
+}
+
+function isConfirmingMovement(item) {
+  const id = getRecordId(item)
+  return id != null && Boolean(confirmingIds.value[id])
+}
+
+function buildMovementUpdatePayload(item, nextStatus) {
+  const payload = { ...item }
+  payload.MovementType = readFieldValue(item, 'MovementType') ?? payload.MovementType
+  payload.Status = nextStatus
+  payload.SourceLocationId = readFieldValue(item, 'SourceLocationId') ?? null
+  payload.TargetLocationId = readFieldValue(item, 'TargetLocationId') ?? null
+  payload.ReferenceNo = readFieldValue(item, 'ReferenceNo') ?? null
+  payload.Notes = readFieldValue(item, 'Notes') ?? null
+  payload.OperationAt = readFieldValue(item, 'OperationAt') ?? null
+  payload.CreatedBy = readFieldValue(item, 'CreatedBy') ?? null
+  payload.CreatedAt = readFieldValue(item, 'CreatedAt') ?? null
+  return payload
+}
+
+async function confirmarMovimiento(item) {
+  if (!canConfirmMovement(item)) return
+  if (!pkField.value) return
+
+  const id = readFieldValue(item, pkField.value.columnName)
+  if (id == null) return
+
+  const ok = window.confirm('Confirmar movimiento? Esta accion aplica stock y no permite editar lineas luego.')
+  if (!ok) return
+
+  confirmingIds.value = { ...confirmingIds.value, [id]: true }
+  try {
+    const payload = buildMovementUpdatePayload(item, 'confirmado')
+    await runtimeApi.update(apiRoute.value, id, payload)
+    showToast('Movimiento confirmado.', 'green')
+    await cargarDatos()
+    await ensureMovementStatusCache(true)
+  } catch (err) {
+    window.alert(extractApiErrorMessage(err, entityMessages.value.error))
+  } finally {
+    const next = { ...confirmingIds.value }
+    delete next[id]
+    confirmingIds.value = next
+  }
+}
+
 function nuevoRegistro() {
+  if (!canCreateRecords.value) return
   dialogMode.value = 'create'
-  registroActual.value = null
+  registroActual.value = buildDefaultRecord()
   dialog.value = true
 }
 
 function editarRegistro(item) {
+  if (!canEditItem(item)) return
   dialogMode.value = 'edit'
   registroActual.value = { ...item }
   dialog.value = true
 }
 
 function duplicarRegistro(item) {
+  if (!canDuplicateItem(item)) return
   dialogMode.value = 'duplicate'
   registroActual.value = { ...item }
   dialog.value = true
@@ -1039,16 +2342,19 @@ function duplicarRegistro(item) {
 
 async function eliminarRegistro(item) {
   if (!pkField.value) return
+  if (!canDeleteItem(item)) return
   if (confirmDelete.value) {
     const ok = window.confirm(entityMessages.value.confirmDelete || 'Eliminar registro?')
     if (!ok) return
   }
 
   try {
-    await runtimeApi.remove(apiRoute.value, item[pkField.value.columnName])
+    const id = readFieldValue(item, pkField.value.columnName)
+    if (id == null) return
+    await runtimeApi.remove(apiRoute.value, id)
     await cargarDatos()
   } catch (err) {
-    window.alert(entityMessages.value.error)
+    window.alert(extractApiErrorMessage(err, entityMessages.value.error))
   }
 }
 
@@ -1070,6 +2376,50 @@ async function copiarRegistro(item) {
     fallbackCopy(text)
   } catch {
     fallbackCopy(text)
+  }
+}
+
+function normalizeTraceItem(item) {
+  const executedRaw = readFieldValue(item, 'ExecutedAt')
+  const executedDate = executedRaw ? new Date(executedRaw) : null
+  return {
+    id: readFieldValue(item, 'Id'),
+    operationName: readFieldValue(item, 'OperationName') || '-',
+    entityName: readFieldValue(item, 'EntityName') || '-',
+    entityId: readFieldValue(item, 'EntityId'),
+    result: normalizeTextKey(readFieldValue(item, 'Result')),
+    message: readFieldValue(item, 'Message') || '',
+    actor: readFieldValue(item, 'Actor') || '',
+    executedAt: executedDate && !Number.isNaN(executedDate.getTime())
+      ? executedDate.toLocaleString(locale.value)
+      : String(executedRaw || '')
+  }
+}
+
+function inferTraceResourceLabel(item) {
+  const code = readFieldValue(item, 'CodigoInterno')
+  const serie = readFieldValue(item, 'Serie')
+  const state = readFieldValue(item, 'Estado')
+  const base = code || serie || `#${getRecordId(item)}`
+  return state ? `${base} · ${state}` : base
+}
+
+async function abrirTrazabilidad(item) {
+  const id = getRecordId(item)
+  if (id == null) return
+  traceDialog.value = true
+  traceLoading.value = true
+  traceError.value = ''
+  traceItems.value = []
+  traceResourceLabel.value = inferTraceResourceLabel(item)
+  try {
+    const { data } = await runtimeApi.getResourceTimeline(id)
+    const rows = Array.isArray(data) ? data : (data?.items || [])
+    traceItems.value = rows.map(normalizeTraceItem)
+  } catch (err) {
+    traceError.value = extractApiErrorMessage(err, 'No se pudo cargar la trazabilidad.')
+  } finally {
+    traceLoading.value = false
   }
 }
 
@@ -1167,10 +2517,13 @@ function onAudioPlayError(event) {
 function getRecordId(item) {
   if (!item || typeof item !== 'object') return null
   const pk = pkField.value?.columnName
-  if (pk && item[pk] !== undefined) return item[pk]
-  if (item.id !== undefined) return item.id
-  const key = Object.keys(item).find(k => k.toLowerCase() === 'id')
-  return key ? item[key] : null
+  if (pk) {
+    const byPk = readFieldValue(item, pk)
+    if (byPk !== undefined) return byPk
+  }
+  const byId = readFieldValue(item, 'Id')
+  if (byId !== undefined) return byId
+  return null
 }
 
 function updateRegistroLocal(id, patch) {
@@ -1213,7 +2566,7 @@ async function reintentarJob(item) {
 function shouldShowProgress(item, col) {
   const key = String(col?.key || '').toLowerCase()
   if (key !== 'status' && key !== 'step') return false
-  const raw = item?.[col?.key]
+  const raw = readFieldValue(item, col?.key)
   const value = raw == null ? '' : raw.toString().toLowerCase()
   if (value === 'processing' || value === 'pending' || value === 'running' || value === 'queued') return true
   if (key === 'status' && isRetrying(item)) return true
@@ -1222,7 +2575,7 @@ function shouldShowProgress(item, col) {
 
 function getStatusValue(item) {
   if (!item || typeof item !== 'object') return ''
-  const raw = item.Status ?? item.status ?? item.Step ?? item.step ?? item.Estado ?? item.estado ?? ''
+  const raw = readFieldValue(item, 'Status') ?? readFieldValue(item, 'Step') ?? readFieldValue(item, 'Estado') ?? ''
   return raw == null ? '' : raw.toString().toLowerCase()
 }
 
@@ -1259,6 +2612,43 @@ function showToast(message, color = 'green') {
   })
 }
 
+async function cargarPermisos() {
+  permissionsLoaded.value = false
+  permissionsBypass.value = false
+  permissionSet.value = new Set()
+
+  try {
+    const { data } = await runtimeApi.getMyPermissions()
+    const rawPermissions = Array.isArray(data?.Permissions)
+      ? data.Permissions
+      : (Array.isArray(data?.permissions) ? data.permissions : [])
+
+    const normalized = new Set(
+      rawPermissions
+        .map(value => String(value || '').trim().toLowerCase())
+        .filter(Boolean)
+    )
+
+    const isAdmin = Boolean(data?.IsAdmin ?? data?.isAdmin)
+    const enabled = data?.Enabled ?? data?.enabled
+    if (isAdmin) normalized.add('*')
+
+    permissionSet.value = normalized
+    permissionsBypass.value = enabled === false
+  } catch (err) {
+    const status = err?.response?.status
+    if (status === 404) {
+      permissionSet.value = new Set(['*'])
+      permissionsBypass.value = true
+    } else {
+      permissionSet.value = new Set()
+      permissionsBypass.value = false
+    }
+  } finally {
+    permissionsLoaded.value = true
+  }
+}
+
 async function toggleQuickField(item) {
   if (!quickToggleField.value) return
   if (!pkField.value) return
@@ -1268,22 +2658,31 @@ async function toggleQuickField(item) {
   payload[key] = !payload[key]
 
   try {
-    await runtimeApi.update(apiRoute.value, item[pkField.value.columnName], payload)
+    const id = readFieldValue(item, pkField.value.columnName)
+    if (id == null) return
+    await runtimeApi.update(apiRoute.value, id, payload)
     await cargarDatos()
   } catch (err) {
-    window.alert(entityMessages.value.error)
+    window.alert(extractApiErrorMessage(err, entityMessages.value.error))
   }
 }
 
 function formattedCell(item, col) {
   const field = campos.value.find(f => f.columnName === col.key)
-  if (!field) return { text: item[col.key], isChip: false }
+  if (!field) return { text: readFieldValue(item, col.key), isChip: false }
 
-  let value = item[col.key]
+  let value = readFieldValue(item, col.key)
   const format = field.format
   const dataType = String(field.dataType || '').toLowerCase()
+  const relationKey = resolveRelationKey(field.columnName || field.name)
 
   if (value == null) return { text: '', isChip: false }
+
+  if (relationKey) {
+    const relation = getRelationDisplay(relationKey, value)
+    if (relation) return { text: relation, isChip: false }
+    return { text: `#${value}`, isChip: false }
+  }
 
   if (format === 'uppercase') {
     value = String(value).toUpperCase()
@@ -1297,17 +2696,21 @@ function formattedCell(item, col) {
     return { text: formatter.format(value), isChip: false }
   }
 
-  if (format === 'date' || dataType.includes('date')) {
-    const date = new Date(value)
-    if (!Number.isNaN(date.getTime())) {
-      return { text: date.toLocaleDateString(locale.value), isChip: false }
-    }
+  if (format === 'status-chip') {
+    return { text: value, isChip: true, color: statusChipColor(value) }
   }
 
-  if (format === 'datetime') {
+  if (format === 'datetime' || dataType.includes('datetime')) {
     const date = new Date(value)
     if (!Number.isNaN(date.getTime())) {
       return { text: date.toLocaleString(locale.value), isChip: false }
+    }
+  }
+
+  if (format === 'date' || (dataType.includes('date') && !dataType.includes('time') && !dataType.includes('datetime'))) {
+    const date = new Date(value)
+    if (!Number.isNaN(date.getTime())) {
+      return { text: date.toLocaleDateString(locale.value), isChip: false }
     }
   }
 
@@ -1536,6 +2939,11 @@ watch(
   () => resolverEntidad()
 )
 
+watch(
+  () => opsForm.value.movementType,
+  () => applyTypeShape(opsForm.value)
+)
+
 watch(autoRefreshEnabled, enabled => {
   if (enabled) startAutoRefresh()
   else stopAutoRefresh()
@@ -1549,11 +2957,12 @@ watch(audioPlayDialog, open => {
   if (!open) clearAudioPlayback()
 })
 
-onMounted(() => {
+onMounted(async () => {
   normalizeConfig()
   if (config.value?.system?.defaultItemsPerPage) {
     itemsPerPage.value = config.value.system.defaultItemsPerPage
   }
+  await cargarPermisos()
   resolverEntidad()
   if (autoRefreshEnabled.value) {
     startAutoRefresh()
@@ -1661,8 +3070,53 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.module-nav-card {
+  border: 1px solid var(--sb-border-soft);
+  background: color-mix(in srgb, var(--sb-surface) 95%, transparent);
+}
+
+.module-nav-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.module-nav-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.module-flow {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.module-flow-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ops-flow-card {
+  border: 1px solid var(--sb-border-soft);
+  background: color-mix(in srgb, var(--sb-surface) 92%, transparent);
+}
+
+.ops-flow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .table :deep(th) {
   font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0.02em;
 }
 
 .table :deep(th),
@@ -1671,6 +3125,17 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
   line-height: 1.2;
   vertical-align: middle;
+}
+
+.table :deep(tbody td) {
+  color: var(--sb-text);
+}
+
+.table :deep(th .v-data-table-header__content) {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
 }
 
 .row-selected {
@@ -1745,5 +3210,37 @@ onBeforeUnmount(() => {
   color: var(--sb-text);
   border: 1px solid color-mix(in srgb, var(--sb-border) 70%, transparent);
   background: color-mix(in srgb, var(--sb-surface) 88%, transparent);
+}
+
+.trace-list {
+  display: grid;
+  gap: 10px;
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.trace-item {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--sb-surface) 92%, transparent);
+}
+
+.trace-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.trace-item-meta {
+  margin-top: 4px;
+  font-size: 0.82rem;
+  color: var(--sb-text-soft);
+}
+
+.trace-item-message {
+  margin-top: 6px;
+  font-size: 0.9rem;
 }
 </style>

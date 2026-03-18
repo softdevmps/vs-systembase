@@ -1,100 +1,115 @@
 <template>
-  <v-container fluid class="home-dashboard">
-    <v-row class="mb-4">
-      <v-col cols="12">
-        <v-card class="card hero-card">
-          <div class="hero-content">
-            <div class="hero-text">
-              <div class="hero-icon">
-                <v-icon color="primary" size="26">mdi-chart-areaspline</v-icon>
-              </div>
-              <div>
-                <h1>Panel general</h1>
-                <p>Vista rápida del estado del sistema y la calidad de los datos.</p>
-              </div>
+  <v-container fluid class="ops-home">
+    <v-row class="mb-4 align-center">
+      <v-col>
+        <div class="hero-box">
+          <div class="hero-title-wrap">
+            <div class="hero-icon">
+              <v-icon color="primary" size="26">mdi-monitor-dashboard</v-icon>
             </div>
-            <div class="hero-actions">
-              <v-btn class="sb-btn ghost" variant="text" @click="goTo(incidentesRoute)">
-                Ver incidentes
-              </v-btn>
-              <v-btn class="sb-btn primary" @click="goTo(jobsRoute)">
-                Ver jobs
-              </v-btn>
+            <div>
+              <h1 class="hero-title">Centro operativo</h1>
+              <p class="hero-subtitle">Gestión real de operación: pendientes, stock, trazabilidad y flujo.</p>
             </div>
           </div>
-        </v-card>
+          <div class="hero-actions">
+            <v-btn variant="tonal" color="primary" @click="goTo(kardexRoute)">
+              <v-icon start>mdi-notebook-outline</v-icon>
+              Ver Kardex
+            </v-btn>
+            <v-btn variant="tonal" color="primary" @click="goTo(depositosRoute)">
+              <v-icon start>mdi-map-marker-multiple-outline</v-icon>
+              Red logística
+            </v-btn>
+            <v-btn variant="tonal" color="primary" @click="goTo(trazabilidadRoute)">
+              <v-icon start>mdi-timeline-clock-outline</v-icon>
+              Trazabilidad
+            </v-btn>
+            <v-btn color="primary" @click="goTo(recepcionRoute)">
+              <v-icon start>mdi-plus-circle-outline</v-icon>
+              Nueva recepción
+            </v-btn>
+            <v-btn variant="tonal" color="primary" @click="goTo(despachoRoute)">
+              <v-icon start>mdi-truck-fast-outline</v-icon>
+              Nuevo despacho
+            </v-btn>
+            <v-btn variant="text" color="primary" :loading="loading" @click="loadData">
+              <v-icon start>mdi-refresh</v-icon>
+              Actualizar
+            </v-btn>
+          </div>
+        </div>
       </v-col>
     </v-row>
 
+    <v-alert v-if="error" type="error" variant="tonal" class="mb-4">{{ error }}</v-alert>
+
     <v-row dense>
-      <v-col v-for="card in statCards" :key="card.label" cols="12" sm="6" md="4" lg="2">
-        <v-card class="card stat-card">
-          <div class="stat-icon">
-            <v-icon :color="card.color || 'primary'">{{ card.icon }}</v-icon>
+      <v-col v-for="card in kpiCards" :key="card.label" cols="12" sm="6" md="4" lg="2">
+        <v-card class="kpi-card">
+          <div class="kpi-head">
+            <span class="kpi-label">{{ card.label }}</span>
+            <v-icon :color="card.color || 'primary'" size="18">{{ card.icon }}</v-icon>
           </div>
-          <div>
-            <div class="stat-label">{{ card.label }}</div>
-            <div class="stat-value">{{ card.value }}</div>
-          </div>
+          <div class="kpi-value">{{ card.value }}</div>
         </v-card>
       </v-col>
     </v-row>
 
     <v-row class="mt-4" dense>
-      <v-col cols="12" md="5">
-        <v-card class="card">
-          <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2" color="primary">mdi-map-marker-check-outline</v-icon>
-            Calidad de ubicaciones
+      <v-col cols="12" md="7">
+        <v-card class="panel-card">
+          <v-card-title class="panel-title">
+            <v-icon class="mr-2" color="orange">mdi-timer-sand</v-icon>
+            Cola operativa (movimientos en borrador)
           </v-card-title>
           <v-divider />
-          <v-card-text>
-            <div class="progress-row">
-              <span>Con coordenadas</span>
-              <span>{{ coordsWith }} / {{ totalIncidentes }}</span>
-            </div>
-            <v-progress-linear :model-value="coordsRatio" color="green" height="8" rounded />
-
-            <div class="progress-row mt-3">
-              <span>Sin coordenadas</span>
-              <span>{{ coordsWithout }}</span>
-            </div>
-            <v-progress-linear :model-value="100 - coordsRatio" color="orange" height="8" rounded />
-
-            <div class="progress-row mt-3">
-              <span>Confianza promedio</span>
-              <span>{{ avgConfidenceLabel }}</span>
-            </div>
-            <v-progress-linear :model-value="avgConfidence * 100" color="primary" height="8" rounded />
-          </v-card-text>
+          <v-data-table
+            class="ops-table"
+            :headers="draftHeaders"
+            :items="draftMovements"
+            :loading="loading"
+            :items-per-page="5"
+            no-data-text="No hay movimientos en borrador."
+          >
+            <template #item.movementType="{ item }">
+              <v-chip size="small" :color="movementTypeColor(item.movementType)">
+                {{ pretty(item.movementType) }}
+              </v-chip>
+            </template>
+            <template #item.operationAt="{ item }">
+              {{ formatDate(item.operationAt) }}
+            </template>
+            <template #item.actions="{ item }">
+              <v-btn size="x-small" variant="text" color="primary" @click="goTo(`${movementListRoute}?focus=${item.id}`)">
+                Abrir
+              </v-btn>
+            </template>
+          </v-data-table>
         </v-card>
       </v-col>
 
-      <v-col cols="12" md="7">
-        <v-card class="card">
-          <v-card-title class="d-flex align-center justify-space-between">
-            <div class="d-flex align-center">
-              <v-icon class="mr-2" color="primary">mdi-clock-outline</v-icon>
-              Actividad reciente
-            </div>
-            <span class="text-caption text-medium-emphasis">{{ lastUpdatedLabel }}</span>
+      <v-col cols="12" md="5">
+        <v-card class="panel-card">
+          <v-card-title class="panel-title">
+            <v-icon class="mr-2" color="teal">mdi-warehouse</v-icon>
+            Stock por ubicación
           </v-card-title>
           <v-divider />
           <v-card-text>
-            <div v-if="loading" class="sb-skeleton" style="height: 120px;"></div>
-            <div v-else-if="recentIncidentes.length === 0" class="text-caption text-medium-emphasis">
-              No hay incidentes recientes.
+            <div v-if="locationStockRows.length === 0" class="text-caption text-medium-emphasis">
+              Sin datos de stock.
             </div>
-            <div v-else class="recent-list">
-              <div v-for="item in recentIncidentes" :key="item.Id || item.id" class="recent-item">
-                <div class="recent-dot"></div>
+            <div v-else class="stock-list">
+              <div v-for="row in locationStockRows.slice(0, 6)" :key="row.locationId" class="stock-item">
                 <div>
-                  <div class="recent-title">
-                    {{ item.LugarNormalizado || item.LugarTexto || 'Sin lugar' }}
-                  </div>
-                  <div class="recent-meta">
-                    {{ formatDate(item.FechaHora || item.CreatedAt) }} · {{ item.Descripcion || 'Sin descripción' }}
-                  </div>
+                  <div class="stock-title">{{ row.locationLabel }}</div>
+                  <div class="stock-meta">Items: {{ row.items }}</div>
+                </div>
+                <div class="stock-values">
+                  <span>Real: {{ formatNumber(row.stockReal) }}</span>
+                  <span>Disp: {{ formatNumber(row.stockDisponible) }}</span>
+                  <span>Res: {{ formatNumber(row.stockReservado) }}</span>
                 </div>
               </div>
             </div>
@@ -105,43 +120,87 @@
 
     <v-row class="mt-4" dense>
       <v-col cols="12" md="6">
-        <v-card class="card">
-          <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2" color="primary">mdi-waveform</v-icon>
-            Audio
+        <v-card class="panel-card">
+          <v-card-title class="panel-title d-flex justify-space-between align-center">
+            <div>
+              <v-icon class="mr-2" color="primary">mdi-transit-transfer</v-icon>
+              Flujo operativo
+            </div>
+            <v-btn size="small" variant="text" color="primary" @click="goTo(kardexRoute)">Ver trazabilidad</v-btn>
           </v-card-title>
           <v-divider />
-          <v-card-text class="split-stats">
-            <div>
-              <div class="stat-label">Audios cargados</div>
-              <div class="stat-value">{{ totalAudios }}</div>
-            </div>
-            <div>
-              <div class="stat-label">Duración total</div>
-              <div class="stat-value">{{ totalDurationLabel }}</div>
+          <v-card-text>
+            <div class="flow-grid">
+              <button class="flow-step" @click="goTo(resourceInstanceRoute)">
+                <span class="step-index">1</span>
+                <div>
+                  <strong>Recurso</strong>
+                  <p>Alta y estado del activo.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(depositosRoute)">
+                <span class="step-index">2</span>
+                <div>
+                  <strong>Depósitos</strong>
+                  <p>Mapa y contexto por nodo logístico.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(recepcionRoute)">
+                <span class="step-index">3</span>
+                <div>
+                  <strong>Recepción</strong>
+                  <p>Ingreso y confirmación de stock.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(despachoRoute)">
+                <span class="step-index">4</span>
+                <div>
+                  <strong>Despacho</strong>
+                  <p>Egreso/transferencia operativa.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(stockBalanceRoute)">
+                <span class="step-index">5</span>
+                <div>
+                  <strong>Stock</strong>
+                  <p>Validar saldo resultante.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(auditRoute)">
+                <span class="step-index">6</span>
+                <div>
+                  <strong>Auditoría</strong>
+                  <p>Trazabilidad end-to-end.</p>
+                </div>
+              </button>
             </div>
           </v-card-text>
         </v-card>
       </v-col>
+
       <v-col cols="12" md="6">
-        <v-card class="card">
-          <v-card-title class="d-flex align-center">
-            <v-icon class="mr-2" color="primary">mdi-cogs</v-icon>
-            Jobs
+        <v-card class="panel-card">
+          <v-card-title class="panel-title">
+            <v-icon class="mr-2" color="indigo">mdi-history</v-icon>
+            Auditoría reciente
           </v-card-title>
           <v-divider />
-          <v-card-text class="split-stats">
-            <div>
-              <div class="stat-label">En proceso</div>
-              <div class="stat-value">{{ jobsProcessing }}</div>
+          <v-card-text>
+            <div v-if="recentAudit.length === 0" class="text-caption text-medium-emphasis">
+              Sin eventos recientes.
             </div>
-            <div>
-              <div class="stat-label">Errores</div>
-              <div class="stat-value">{{ jobsError }}</div>
-            </div>
-            <div>
-              <div class="stat-label">Completados</div>
-              <div class="stat-value">{{ jobsDone }}</div>
+            <div v-else class="audit-list">
+              <div v-for="evt in recentAudit" :key="evt.id" class="audit-item">
+                <v-chip size="x-small" :color="statusColor(evt.result)">
+                  {{ evt.result || 'evento' }}
+                </v-chip>
+                <div class="audit-body">
+                  <strong>{{ evt.operationName }}</strong>
+                  <div class="text-caption text-medium-emphasis">
+                    {{ evt.entityName }}#{{ evt.entityId ?? '-' }} · {{ evt.actor || 'system' }} · {{ formatDate(evt.executedAt) }}
+                  </div>
+                </div>
+              </div>
             </div>
           </v-card-text>
         </v-card>
@@ -158,314 +217,456 @@ import frontendConfig from '../config/frontend-config.json'
 import { toKebab } from '../utils/slug'
 
 const router = useRouter()
-const loading = ref(true)
+const loading = ref(false)
 const error = ref('')
 
-const incidentes = ref([])
-const jobs = ref([])
-const audios = ref([])
+const movementRows = ref([])
+const movementLineRows = ref([])
+const stockRows = ref([])
+const resourceRows = ref([])
+const locationRows = ref([])
+const auditRows = ref([])
 
-const entities = frontendConfig?.entities || []
-
-const incidentesRoute = computed(() => {
-  const entity = entities.find(e => (e?.name || '').toLowerCase() === 'incidentes')
-  return `/${toKebab(entity?.routeSlug || entity?.name || 'incidentes')}`
-})
-
-const jobsRoute = computed(() => {
-  const entity = entities.find(e => (e?.name || '').toLowerCase().includes('incidentejobs'))
-  return `/${toKebab(entity?.routeSlug || entity?.name || 'incidente-jobs')}`
-})
-
-function goTo(route) {
-  router.push(route)
+function normalizeKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
 }
 
-function parseNumber(value) {
-  if (value == null) return null
+function readField(item, name) {
+  if (!item || typeof item !== 'object') return undefined
+  if (item[name] !== undefined) return item[name]
+  const target = normalizeKey(name)
+  const key = Object.keys(item).find(k => normalizeKey(k) === target)
+  return key ? item[key] : undefined
+}
+
+function toArray(data) {
+  return Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : [])
+}
+
+function toNumber(value) {
+  if (value == null || value === '') return null
   const num = Number(String(value).replace(',', '.'))
   return Number.isFinite(num) ? num : null
 }
 
-function parseDateValue(raw) {
-  if (!raw) return null
-  if (raw instanceof Date) {
-    const time = raw.getTime()
-    return Number.isNaN(time) ? null : time
-  }
-  if (typeof raw === 'number') {
-    if (!Number.isFinite(raw)) return null
-    return raw > 1e12 ? raw : raw * 1000
-  }
-  const str = String(raw).trim()
-  if (!str) return null
-
-  const direct = new Date(str)
-  if (!Number.isNaN(direct.getTime())) return direct.getTime()
-
-  const match = str.match(/(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})(?:[\s,]+(\d{1,2})(?::(\d{2}))?)?/)
-  if (!match) return null
-  const day = Number(match[1])
-  const month = Number(match[2])
-  let year = Number(match[3])
-  const hour = match[4] ? Number(match[4]) : 0
-  const minute = match[5] ? Number(match[5]) : 0
-  if (!Number.isFinite(day) || !Number.isFinite(month) || !Number.isFinite(year)) return null
-  if (year < 100) year += 2000
-  const parsed = new Date(year, month - 1, day, hour, minute)
-  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime()
+function pretty(value) {
+  return String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\b\w/g, c => c.toUpperCase())
 }
 
-function normalizeRecord(record) {
-  if (!record || typeof record !== 'object') return record
-  const copy = { ...record }
-  const keyMap = new Map(Object.keys(copy).map(k => [k.toLowerCase(), k]))
-  const ensure = name => {
-    if (copy[name] !== undefined) return
-    const matchKey = keyMap.get(String(name).toLowerCase())
-    if (matchKey) copy[name] = copy[matchKey]
-  }
-  ;[
-    'LugarNormalizado',
-    'LugarTexto',
-    'Descripcion',
-    'FechaHora',
-    'CreatedAt',
-    'UpdateAt',
-    'Lat',
-    'Lng',
-    'Confidence'
-  ].forEach(ensure)
-  return copy
+function formatNumber(value) {
+  const num = toNumber(value)
+  if (num == null) return '0'
+  return new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 }).format(num)
 }
-
-function hasCoords(item) {
-  const lat = parseNumber(item?.Lat ?? item?.lat)
-  const lng = parseNumber(item?.Lng ?? item?.lng)
-  return lat != null && lng != null
-}
-
-function getStatus(item) {
-  return (item?.Status ?? item?.status ?? item?.Step ?? item?.step ?? '').toString().toLowerCase()
-}
-
-const totalIncidentes = computed(() => incidentes.value.length)
-const coordsWith = computed(() => incidentes.value.filter(hasCoords).length)
-const coordsWithout = computed(() => Math.max(totalIncidentes.value - coordsWith.value, 0))
-const coordsRatio = computed(() => totalIncidentes.value ? Math.round((coordsWith.value / totalIncidentes.value) * 100) : 0)
-
-const avgConfidence = computed(() => {
-  const values = incidentes.value
-    .map(i => parseNumber(i?.Confidence ?? i?.confidence))
-    .filter(v => v != null)
-  if (!values.length) return 0
-  return values.reduce((a, b) => a + b, 0) / values.length
-})
-
-const avgConfidenceLabel = computed(() => avgConfidence.value ? `${avgConfidence.value.toFixed(2)}` : '—')
-
-const jobsProcessing = computed(() => jobs.value.filter(j => ['processing', 'pending', 'running', 'queued'].includes(getStatus(j))).length)
-const jobsError = computed(() => jobs.value.filter(j => getStatus(j) === 'error').length)
-const jobsDone = computed(() => jobs.value.filter(j => getStatus(j) === 'done').length)
-
-const totalAudios = computed(() => audios.value.length)
-const totalDuration = computed(() => audios.value
-  .map(a => parseNumber(a?.DurationSec ?? a?.durationSec))
-  .filter(v => v != null)
-  .reduce((a, b) => a + b, 0))
-
-const totalDurationLabel = computed(() => {
-  if (!totalDuration.value) return '—'
-  const minutes = Math.floor(totalDuration.value / 60)
-  const seconds = Math.round(totalDuration.value % 60)
-  return `${minutes}m ${seconds}s`
-})
-
-function getDateValue(item) {
-  const raw = item?.UpdateAt ?? item?.CreatedAt ?? item?.FechaHora ?? item?.updateAt ?? item?.createdAt ?? item?.fechaHora
-  return parseDateValue(raw)
-}
-
-function getSortValue(item) {
-  const dateValue = getDateValue(item)
-  if (dateValue) return dateValue
-  const idValue = parseNumber(item?.Id ?? item?.id)
-  return idValue ?? 0
-}
-
-const recentIncidentes = computed(() => {
-  return [...incidentes.value]
-    .sort((a, b) => getSortValue(b) - getSortValue(a))
-    .slice(0, 5)
-})
-
-const lastUpdatedLabel = computed(() => {
-  if (!incidentes.value.length) return '—'
-  const times = incidentes.value.map(getDateValue).filter(t => t != null)
-  if (!times.length) return '—'
-  return new Date(Math.max(...times)).toLocaleString('es-AR')
-})
-
-const statCards = computed(() => ([
-  { label: 'Incidentes', value: totalIncidentes.value, icon: 'mdi-alert-circle-outline' },
-  { label: 'Con coords', value: coordsWith.value, icon: 'mdi-map-marker', color: 'green' },
-  { label: 'Sin coords', value: coordsWithout.value, icon: 'mdi-map-marker-off-outline', color: 'orange' },
-  { label: 'Jobs activos', value: jobsProcessing.value, icon: 'mdi-timer-sand', color: 'orange' },
-  { label: 'Errores', value: jobsError.value, icon: 'mdi-alert-outline', color: 'red' },
-  { label: 'Audios', value: totalAudios.value, icon: 'mdi-waveform' }
-]))
 
 function formatDate(value) {
-  const parsed = parseDateValue(value)
-  if (!parsed) return ''
-  return new Date(parsed).toLocaleString('es-AR')
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('es-AR')
 }
 
-async function load() {
+function movementTypeColor(type) {
+  const key = normalizeKey(type)
+  if (key === 'ingreso') return 'green'
+  if (key === 'egreso') return 'red'
+  if (key === 'transferencia') return 'blue'
+  if (key === 'reserva') return 'orange'
+  if (key === 'liberacion') return 'teal'
+  return 'grey'
+}
+
+function statusColor(status) {
+  const key = normalizeKey(status)
+  if (key === 'ok' || key === 'confirmado') return 'green'
+  if (key === 'warning' || key === 'borrador') return 'orange'
+  if (key === 'error' || key === 'anulado') return 'red'
+  return 'grey'
+}
+
+function routeFor(entityKey, fallback) {
+  const entities = frontendConfig?.entities || []
+  const match = entities.find(entity => normalizeKey(entity?.routeSlug || entity?.name) === normalizeKey(entityKey))
+  return `/${toKebab(match?.routeSlug || match?.name || fallback)}`
+}
+
+const movementListRoute = computed(() => routeFor('movement', 'movement'))
+const recepcionRoute = computed(() => '/recepcion')
+const despachoRoute = computed(() => '/despacho')
+const depositosRoute = computed(() => '/depositos')
+const trazabilidadRoute = computed(() => '/trazabilidad')
+const movementLineRoute = computed(() => routeFor('movementline', 'movement-line'))
+const stockBalanceRoute = computed(() => routeFor('stockbalance', 'stock-balance'))
+const resourceInstanceRoute = computed(() => routeFor('resourceinstance', 'resource-instance'))
+const locationRoute = computed(() => routeFor('location', 'location'))
+const auditRoute = computed(() => routeFor('operationaudit', 'operation-audit'))
+const kardexRoute = computed(() => '/kardex')
+
+function goTo(path) {
+  if (!path) return
+  router.push(path)
+}
+
+const lineCountByMovement = computed(() => {
+  const map = {}
+  movementLineRows.value.forEach(row => {
+    const movementId = toNumber(readField(row, 'MovementId'))
+    if (movementId == null) return
+    map[movementId] = (map[movementId] || 0) + 1
+  })
+  return map
+})
+
+const locationMap = computed(() => {
+  const map = {}
+  locationRows.value.forEach(row => {
+    const id = toNumber(readField(row, 'Id'))
+    if (id == null) return
+    const code = readField(row, 'Codigo')
+    const name = readField(row, 'Nombre')
+    map[id] = code && name ? `${code} · ${name}` : (name || code || `#${id}`)
+  })
+  return map
+})
+
+const draftMovements = computed(() => {
+  return movementRows.value
+    .map(row => {
+      const id = toNumber(readField(row, 'Id'))
+      return {
+        id,
+        movementType: readField(row, 'MovementType') || '',
+        status: readField(row, 'Status') || '',
+        referenceNo: readField(row, 'ReferenceNo') || `MOV-${id ?? 'X'}`,
+        operationAt: readField(row, 'OperationAt') || readField(row, 'CreatedAt'),
+        createdBy: readField(row, 'CreatedBy') || 'system',
+        lineCount: id == null ? 0 : (lineCountByMovement.value[id] || 0)
+      }
+    })
+    .filter(row => normalizeKey(row.status) === 'borrador')
+    .sort((a, b) => new Date(b.operationAt || 0).getTime() - new Date(a.operationAt || 0).getTime())
+})
+
+const locationStockRows = computed(() => {
+  const grouped = {}
+  stockRows.value.forEach(row => {
+    const locationId = toNumber(readField(row, 'LocationId'))
+    if (locationId == null) return
+    if (!grouped[locationId]) {
+      grouped[locationId] = {
+        locationId,
+        locationLabel: locationMap.value[locationId] || `#${locationId}`,
+        items: 0,
+        stockReal: 0,
+        stockReservado: 0,
+        stockDisponible: 0
+      }
+    }
+    grouped[locationId].items += 1
+    grouped[locationId].stockReal += toNumber(readField(row, 'StockReal')) || 0
+    grouped[locationId].stockReservado += toNumber(readField(row, 'StockReservado')) || 0
+    grouped[locationId].stockDisponible += toNumber(readField(row, 'StockDisponible')) || 0
+  })
+
+  return Object.values(grouped).sort((a, b) => a.stockDisponible - b.stockDisponible)
+})
+
+const recentAudit = computed(() => {
+  return auditRows.value
+    .map(row => ({
+      id: toNumber(readField(row, 'Id')),
+      operationName: readField(row, 'OperationName') || '-',
+      entityName: readField(row, 'EntityName') || '-',
+      entityId: toNumber(readField(row, 'EntityId')),
+      actor: readField(row, 'Actor') || 'system',
+      result: String(readField(row, 'Result') || '').toLowerCase(),
+      executedAt: readField(row, 'ExecutedAt')
+    }))
+    .sort((a, b) => new Date(b.executedAt || 0).getTime() - new Date(a.executedAt || 0).getTime())
+    .slice(0, 8)
+})
+
+const stockTotals = computed(() => stockRows.value.reduce((acc, row) => {
+  acc.real += toNumber(readField(row, 'StockReal')) || 0
+  acc.reservado += toNumber(readField(row, 'StockReservado')) || 0
+  acc.disponible += toNumber(readField(row, 'StockDisponible')) || 0
+  return acc
+}, { real: 0, reservado: 0, disponible: 0 }))
+
+const confirmedToday = computed(() => {
+  const today = new Date()
+  return movementRows.value.filter(row => {
+    const status = normalizeKey(readField(row, 'Status'))
+    if (status !== 'confirmado') return false
+    const rawDate = readField(row, 'OperationAt') || readField(row, 'CreatedAt')
+    const date = new Date(rawDate)
+    return !Number.isNaN(date.getTime())
+      && date.getFullYear() === today.getFullYear()
+      && date.getMonth() === today.getMonth()
+      && date.getDate() === today.getDate()
+  }).length
+})
+
+const criticalStockCount = computed(() => stockRows.value.filter(row => {
+  const available = toNumber(readField(row, 'StockDisponible')) || 0
+  return available <= 0
+}).length)
+
+const kpiCards = computed(() => ([
+  { label: 'Recursos', value: resourceRows.value.length, icon: 'mdi-cube-outline' },
+  { label: 'Ubicaciones', value: locationRows.value.length, icon: 'mdi-map-marker-outline' },
+  { label: 'Mov. borrador', value: draftMovements.value.length, icon: 'mdi-timer-sand', color: 'orange' },
+  { label: 'Confirmados hoy', value: confirmedToday.value, icon: 'mdi-check-circle-outline', color: 'green' },
+  { label: 'Stock disponible', value: formatNumber(stockTotals.value.disponible), icon: 'mdi-scale-balance', color: 'teal' },
+  { label: 'Stock crítico', value: criticalStockCount.value, icon: 'mdi-alert-outline', color: criticalStockCount.value ? 'red' : 'green' }
+]))
+
+const draftHeaders = [
+  { title: 'Referencia', key: 'referenceNo' },
+  { title: 'Tipo', key: 'movementType' },
+  { title: 'Fecha', key: 'operationAt' },
+  { title: 'Usuario', key: 'createdBy' },
+  { title: 'Líneas', key: 'lineCount', align: 'end' },
+  { title: 'Acción', key: 'actions', sortable: false }
+]
+
+async function loadData() {
   loading.value = true
   error.value = ''
-  const results = await Promise.allSettled([
-    runtimeApi.list('incidentes'),
-    runtimeApi.list('incidente-jobs'),
-    runtimeApi.list('incidente-audio')
-  ])
 
-  const [incRes, jobRes, audioRes] = results
-  incidentes.value = incRes.status === 'fulfilled' ? (incRes.value?.data || []).map(normalizeRecord) : []
-  jobs.value = jobRes.status === 'fulfilled' ? (jobRes.value?.data || []).map(normalizeRecord) : []
-  audios.value = audioRes.status === 'fulfilled' ? (audioRes.value?.data || []).map(normalizeRecord) : []
-  if (results.some(r => r.status === 'rejected')) {
-    error.value = 'No se pudieron cargar algunos datos.'
+  try {
+    const [movementsRes, linesRes, stockRes, resourcesRes, locationsRes, auditRes] = await Promise.all([
+      runtimeApi.list('movement'),
+      runtimeApi.list('movement-line'),
+      runtimeApi.list('stock-balance'),
+      runtimeApi.list('resource-instance'),
+      runtimeApi.list('location'),
+      runtimeApi.list('operation-audit')
+    ])
+
+    movementRows.value = toArray(movementsRes?.data)
+    movementLineRows.value = toArray(linesRes?.data)
+    stockRows.value = toArray(stockRes?.data)
+    resourceRows.value = toArray(resourcesRes?.data)
+    locationRows.value = toArray(locationsRes?.data)
+    auditRows.value = toArray(auditRes?.data)
+  } catch (err) {
+    const payload = err?.response?.data
+    error.value = payload?.message || payload?.error || 'No se pudo cargar el centro operativo.'
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
-onMounted(load)
+onMounted(loadData)
 </script>
 
 <style scoped>
-.home-dashboard {
-  padding-bottom: 32px;
-}
-
-.hero-card {
-  padding: 20px 24px;
-}
-
-.hero-content {
+.hero-box {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   gap: 16px;
-}
-
-.hero-text {
-  display: flex;
-  gap: 14px;
   align-items: center;
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 16px;
+  padding: 16px;
+  background: color-mix(in srgb, var(--sb-surface) 96%, transparent);
 }
 
-.hero-text h1 {
-  margin: 0;
-  font-size: 1.4rem;
-}
-
-.hero-text p {
-  margin: 4px 0 0;
-  color: var(--sb-text-soft, var(--sb-muted));
+.hero-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .hero-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  background: var(--sb-primary-soft);
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--sb-primary-soft, rgba(37, 99, 235, 0.1));
+}
+
+.hero-title {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.hero-subtitle {
+  margin: 4px 0 0;
+  color: var(--sb-text-soft, #64748b);
 }
 
 .hero-actions {
   display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.kpi-card {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: color-mix(in srgb, var(--sb-surface) 94%, transparent);
+}
+
+.kpi-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.kpi-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--sb-text-soft, #64748b);
+}
+
+.kpi-value {
+  margin-top: 4px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.panel-card {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 16px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-title {
+  font-weight: 600;
+  color: var(--sb-text, #0f172a);
+}
+
+.stock-list,
+.audit-list {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.stock-item,
+.audit-item {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--sb-surface) 94%, transparent);
+}
+
+.stock-item {
+  display: flex;
+  justify-content: space-between;
   gap: 10px;
 }
 
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px;
-}
-
-.stat-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 12px;
-  background: var(--sb-primary-soft);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.stat-label {
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--sb-text-soft, var(--sb-muted));
-}
-
-.stat-value {
-  font-size: 1.2rem;
+.stock-title {
   font-weight: 600;
 }
 
-.progress-row {
+.stock-meta {
+  font-size: 0.8rem;
+  color: var(--sb-text-soft, #64748b);
+}
+
+.stock-values {
   display: flex;
-  justify-content: space-between;
-  font-size: 0.85rem;
-  color: var(--sb-text-soft, var(--sb-muted));
-  margin-bottom: 6px;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.82rem;
+  text-align: right;
 }
 
-.recent-list {
+.flow-grid {
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
-.recent-item {
+.flow-step {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 12px;
+  padding: 10px;
+  text-align: left;
   display: flex;
   gap: 10px;
+  background: color-mix(in srgb, var(--sb-surface) 96%, transparent);
+  cursor: pointer;
+}
+
+.flow-step:hover {
+  border-color: var(--sb-primary, #2563eb);
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.1)) 70%, var(--sb-surface));
+}
+
+.step-index {
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: var(--sb-primary-soft, rgba(37,99,235,0.1));
+  color: var(--sb-primary, #2563eb);
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.flow-step p {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  color: var(--sb-text-soft, #64748b);
+}
+
+.audit-item {
+  display: flex;
+  gap: 8px;
   align-items: flex-start;
 }
 
-.recent-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--sb-primary);
-  margin-top: 6px;
+.audit-body {
+  min-width: 0;
 }
 
-.recent-title {
+.ops-home :deep(.v-data-table),
+.ops-home :deep(.v-data-table .v-table__wrapper table) {
+  background: transparent;
+}
+
+.ops-home :deep(.v-data-table th),
+.ops-home :deep(.v-data-table td),
+.ops-home :deep(.v-data-table .v-data-table__td),
+.ops-home :deep(.v-data-table .v-data-table__th) {
+  color: var(--sb-text, #0f172a) !important;
+}
+
+.ops-home :deep(.v-data-table thead th) {
+  background: color-mix(in srgb, var(--sb-primary, #2563eb) 5%, transparent);
+  border-bottom: 1px solid var(--sb-border-soft);
   font-weight: 600;
 }
 
-.recent-meta {
-  font-size: 0.8rem;
-  color: var(--sb-text-soft, var(--sb-muted));
-}
-
-.split-stats {
-  display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
+.ops-home :deep(.v-data-table tbody tr:hover) {
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.1)) 70%, transparent);
 }
 
 @media (max-width: 960px) {
-  .hero-content {
+  .hero-box {
     flex-direction: column;
     align-items: flex-start;
   }
+
   .hero-actions {
     width: 100%;
     justify-content: flex-start;
