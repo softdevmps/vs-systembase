@@ -53,6 +53,25 @@
               </v-col>
               <v-col cols="12" md="6" lg="12">
                 <v-select
+                  v-model="form.rubroId"
+                  :items="rubroItems"
+                  item-title="title"
+                  item-value="value"
+                  label="Rubro"
+                  variant="outlined"
+                  density="comfortable"
+                >
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props">
+                      <template #prepend>
+                        <span class="rubro-dot" :style="{ backgroundColor: item.raw.colorHex || '#64748b' }" />
+                      </template>
+                    </v-list-item>
+                  </template>
+                </v-select>
+              </v-col>
+              <v-col cols="12" md="6" lg="12">
+                <v-select
                   v-model="form.parentLocationId"
                   :items="parentItems"
                   item-title="title"
@@ -164,6 +183,7 @@ const saving = ref(false)
 const error = ref('')
 const success = ref('')
 
+const rubros = ref([])
 const parentLocations = ref([])
 const mapResponse = ref({})
 
@@ -179,6 +199,7 @@ function buildDefaultForm() {
     codigo: '',
     nombre: '',
     tipo: 'deposito',
+    rubroId: null,
     parentLocationId: null,
     capacidad: null,
     isActive: true,
@@ -223,6 +244,21 @@ const parentItems = computed(() => parentLocations.value
     const name = readField(row, 'Nombre')
     const title = code && name ? `${code} · ${name}` : (name || code || `#${id}`)
     return { value: id, title }
+  })
+  .filter(item => item.value != null)
+  .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
+
+const rubroItems = computed(() => rubros.value
+  .map(row => {
+    const id = toNumber(readField(row, 'Id'))
+    const code = String(readField(row, 'Codigo') || '').trim()
+    const name = String(readField(row, 'Nombre') || '').trim()
+    const colorHex = String(readField(row, 'Colorhex') || '#64748b').trim()
+    return {
+      value: id,
+      title: code && name ? `${name} (${code})` : (name || code || `#${id}`),
+      colorHex
+    }
   })
   .filter(item => item.value != null)
   .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
@@ -325,6 +361,7 @@ function setCordobaCenter() {
 function validate() {
   if (!String(form.value.codigo || '').trim()) return 'Código es requerido.'
   if (!String(form.value.nombre || '').trim()) return 'Nombre es requerido.'
+  if (toNumber(form.value.rubroId) == null) return 'Rubro es requerido.'
   const lat = toNumber(form.value.lat)
   const lng = toNumber(form.value.lng)
   if (lat == null || lat < -90 || lat > 90) return 'Latitud inválida.'
@@ -346,6 +383,7 @@ async function submitCreate() {
     codigo: String(form.value.codigo || '').trim(),
     nombre: String(form.value.nombre || '').trim(),
     tipo: String(form.value.tipo || 'deposito').trim(),
+    rubroId: toNumber(form.value.rubroId),
     parentLocationId: toNumber(form.value.parentLocationId),
     capacidad: toNumber(form.value.capacidad),
     isActive: Boolean(form.value.isActive),
@@ -378,13 +416,18 @@ async function loadData() {
   error.value = ''
 
   try {
-    const [locationsRes, mapRes] = await Promise.all([
+    const [rubrosRes, locationsRes, mapRes] = await Promise.all([
+      runtimeApi.list('rubro'),
       runtimeApi.list('location'),
       runtimeApi.getOpsDepositosMapa()
     ])
 
+    rubros.value = toArray(rubrosRes?.data)
     parentLocations.value = toArray(locationsRes?.data)
     mapResponse.value = mapRes?.data || {}
+    if (toNumber(form.value.rubroId) == null && rubroItems.value.length === 1) {
+      form.value.rubroId = rubroItems.value[0].value
+    }
 
     await nextTick()
     ensureMap()
@@ -462,6 +505,14 @@ onBeforeUnmount(() => {
 .map-help {
   font-size: 0.82rem;
   color: var(--sb-text-soft, #64748b);
+}
+
+.rubro-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid rgba(15, 23, 42, 0.2);
 }
 
 .deposito-create-view :deep(.draft-pin-wrapper) {

@@ -13,6 +13,7 @@ namespace Backend.Models.OpsDashboard
         [System.ComponentModel.DataAnnotations.MaxLength(30)]
         public string Tipo { get; set; } = "deposito";
 
+        public int? RubroId { get; set; }
         public int? ParentLocationId { get; set; }
         public decimal? Capacidad { get; set; }
         public bool IsActive { get; set; } = true;

@@ -9,29 +9,25 @@
             </div>
             <div>
               <h1 class="hero-title">Centro operativo</h1>
-              <p class="hero-subtitle">Gestión real de operación: pendientes, stock, trazabilidad y flujo.</p>
+              <p class="hero-subtitle">Primero resuelve pendientes, luego ejecuta operación y finalmente valida trazabilidad.</p>
             </div>
           </div>
           <div class="hero-actions">
-            <v-btn variant="tonal" color="primary" @click="goTo(kardexRoute)">
-              <v-icon start>mdi-notebook-outline</v-icon>
-              Ver Kardex
+            <v-btn color="primary" @click="goTo(operacionesRoute)">
+              <v-icon start>mdi-transit-transfer</v-icon>
+              Iniciar operación
+            </v-btn>
+            <v-btn variant="tonal" color="warning" @click="goTo(pendientesRoute)">
+              <v-icon start>mdi-alert-circle-outline</v-icon>
+              Resolver pendientes
             </v-btn>
             <v-btn variant="tonal" color="primary" @click="goTo(depositosRoute)">
               <v-icon start>mdi-map-marker-multiple-outline</v-icon>
-              Red logística
+              Ver depósitos
             </v-btn>
-            <v-btn variant="tonal" color="primary" @click="goTo(trazabilidadRoute)">
-              <v-icon start>mdi-timeline-clock-outline</v-icon>
-              Trazabilidad
-            </v-btn>
-            <v-btn color="primary" @click="goTo(recepcionRoute)">
-              <v-icon start>mdi-plus-circle-outline</v-icon>
-              Nueva recepción
-            </v-btn>
-            <v-btn variant="tonal" color="primary" @click="goTo(despachoRoute)">
-              <v-icon start>mdi-truck-fast-outline</v-icon>
-              Nuevo despacho
+            <v-btn variant="tonal" color="primary" @click="goTo(kardexRoute)">
+              <v-icon start>mdi-notebook-outline</v-icon>
+              Ver movimientos
             </v-btn>
             <v-btn variant="text" color="primary" :loading="loading" @click="loadData">
               <v-icon start>mdi-refresh</v-icon>
@@ -123,54 +119,54 @@
         <v-card class="panel-card">
           <v-card-title class="panel-title d-flex justify-space-between align-center">
             <div>
-              <v-icon class="mr-2" color="primary">mdi-transit-transfer</v-icon>
+              <v-icon class="mr-2" color="primary">mdi-map-marker-path</v-icon>
               Flujo operativo
             </div>
-            <v-btn size="small" variant="text" color="primary" @click="goTo(kardexRoute)">Ver trazabilidad</v-btn>
+            <v-btn size="small" variant="text" color="primary" @click="goTo(operacionesRoute)">Abrir operaciones</v-btn>
           </v-card-title>
           <v-divider />
           <v-card-text>
             <div class="flow-grid">
-              <button class="flow-step" @click="goTo(resourceInstanceRoute)">
+              <button class="flow-step" @click="goTo('/home')">
                 <span class="step-index">1</span>
                 <div>
-                  <strong>Recurso</strong>
-                  <p>Alta y estado del activo.</p>
+                  <strong>Centro operativo</strong>
+                  <p>Ver prioridad diaria de trabajo.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(operacionesRoute)">
+                <span class="step-index">2</span>
+                <div>
+                  <strong>Operaciones</strong>
+                  <p>Recepcionar, despachar o trasladar.</p>
+                </div>
+              </button>
+              <button class="flow-step" @click="goTo(pendientesRoute)">
+                <span class="step-index">3</span>
+                <div>
+                  <strong>Pendientes</strong>
+                  <p>Corregir borradores e incidencias.</p>
                 </div>
               </button>
               <button class="flow-step" @click="goTo(depositosRoute)">
-                <span class="step-index">2</span>
-                <div>
-                  <strong>Depósitos</strong>
-                  <p>Mapa y contexto por nodo logístico.</p>
-                </div>
-              </button>
-              <button class="flow-step" @click="goTo(recepcionRoute)">
-                <span class="step-index">3</span>
-                <div>
-                  <strong>Recepción</strong>
-                  <p>Ingreso y confirmación de stock.</p>
-                </div>
-              </button>
-              <button class="flow-step" @click="goTo(despachoRoute)">
                 <span class="step-index">4</span>
                 <div>
-                  <strong>Despacho</strong>
-                  <p>Egreso/transferencia operativa.</p>
+                  <strong>Depósitos</strong>
+                  <p>Validar impacto por ubicación.</p>
                 </div>
               </button>
-              <button class="flow-step" @click="goTo(stockBalanceRoute)">
+              <button class="flow-step" @click="goTo(kardexRoute)">
                 <span class="step-index">5</span>
                 <div>
-                  <strong>Stock</strong>
-                  <p>Validar saldo resultante.</p>
+                  <strong>Movimientos</strong>
+                  <p>Control de kardex del turno.</p>
                 </div>
               </button>
-              <button class="flow-step" @click="goTo(auditRoute)">
+              <button class="flow-step" @click="goTo(trazabilidadRoute)">
                 <span class="step-index">6</span>
                 <div>
-                  <strong>Auditoría</strong>
-                  <p>Trazabilidad end-to-end.</p>
+                  <strong>Trazabilidad</strong>
+                  <p>Auditar historia completa.</p>
                 </div>
               </button>
             </div>
@@ -295,15 +291,10 @@ function routeFor(entityKey, fallback) {
 }
 
 const movementListRoute = computed(() => routeFor('movement', 'movement'))
-const recepcionRoute = computed(() => '/recepcion')
-const despachoRoute = computed(() => '/despacho')
+const operacionesRoute = computed(() => '/operaciones')
+const pendientesRoute = computed(() => '/pendientes')
 const depositosRoute = computed(() => '/depositos')
 const trazabilidadRoute = computed(() => '/trazabilidad')
-const movementLineRoute = computed(() => routeFor('movementline', 'movement-line'))
-const stockBalanceRoute = computed(() => routeFor('stockbalance', 'stock-balance'))
-const resourceInstanceRoute = computed(() => routeFor('resourceinstance', 'resource-instance'))
-const locationRoute = computed(() => routeFor('location', 'location'))
-const auditRoute = computed(() => routeFor('operationaudit', 'operation-audit'))
 const kardexRoute = computed(() => '/kardex')
 
 function goTo(path) {

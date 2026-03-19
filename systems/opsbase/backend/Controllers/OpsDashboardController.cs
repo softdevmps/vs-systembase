@@ -10,12 +10,12 @@ namespace Backend.Controllers
     {
         [Authorize]
         [HttpGet(Routes.v1.OpsDashboard.DepositosMapa)]
-        public IActionResult ObtenerDepositosMapa()
+        public IActionResult ObtenerDepositosMapa([FromQuery] int? rubroId = null)
         {
             var denial = RequireOpsDashboardViewPermissions();
             if (denial != null) return denial;
 
-            var data = OpsDashboardGestor.ObtenerDepositosMapa();
+            var data = OpsDashboardGestor.ObtenerDepositosMapa(rubroId);
             return Ok(data);
         }
 

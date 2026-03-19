@@ -13,6 +13,7 @@ namespace Backend.Models.Resourcedefinition
         [System.ComponentModel.DataAnnotations.Required]
         [System.ComponentModel.DataAnnotations.MaxLength(30)]
         public string Trackmode { get; set; }
+        public int? Rubroid { get; set; }
         [System.ComponentModel.DataAnnotations.Required]
         public bool Isactive { get; set; }
         [System.ComponentModel.DataAnnotations.Required]

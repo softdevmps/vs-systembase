@@ -101,6 +101,15 @@ namespace Backend
                 public const string Eliminar = "api/v1/resource-definition/{id}";
             }
 
+            public static class Rubro
+            {
+                public const string Obtener = "api/v1/rubro";
+                public const string ObtenerPorId = "api/v1/rubro/{id}";
+                public const string Crear = "api/v1/rubro";
+                public const string Editar = "api/v1/rubro/{id}";
+                public const string Eliminar = "api/v1/rubro/{id}";
+            }
+
             public static class Resourceinstance
             {
                 public const string Obtener = "api/v1/resource-instance";

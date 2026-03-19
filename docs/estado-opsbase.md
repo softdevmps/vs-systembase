@@ -333,3 +333,6 @@ Riesgo: Caida de performance por dinamismo.
 ## 19. Historial de cambios
 - 13/03/2026: Documento base creado.
 - 13/03/2026: Requisitos consolidados y normalizados para iniciar desarrollo.
+- 17/03/2026: Seguridad por permisos aplicada en API/runtime (`ops.*`) con bootstrap SQL en `docs/sql/opsbase-security-bootstrap.sql`.
+- 17/03/2026: Validacion vertical ampliada con scripts smoke de `logistica`, `policia` y `hospital`.
+- 17/03/2026: Flujo operativo real iniciado con `Recepcion guiada` (wizard frontend + endpoint transaccional `POST /api/v1/ops-flow/recepcion`).

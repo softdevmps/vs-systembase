@@ -4,9 +4,13 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import Home from '../views/Home.vue'
 import KardexView from '../views/Ops/KardexView.vue'
+import OperacionesView from '../views/Ops/OperacionesView.vue'
+import PendientesView from '../views/Ops/PendientesView.vue'
+import SetupInicialView from '../views/Ops/SetupInicialView.vue'
 import RecepcionView from '../views/Ops/RecepcionView.vue'
 import DespachoView from '../views/Ops/DespachoView.vue'
 import DepositosMapaView from '../views/Ops/DepositosMapaView.vue'
+import DepositosListadoView from '../views/Ops/DepositosListadoView.vue'
 import DepositoContextView from '../views/Ops/DepositoContextView.vue'
 import DepositoCreateView from '../views/Ops/DepositoCreateView.vue'
 import DepositoEditView from '../views/Ops/DepositoEditView.vue'
@@ -23,8 +27,12 @@ const routes = [
     component: MainLayout,
     children: [
       { path: 'home', component: Home },
+      { path: 'operaciones', component: OperacionesView },
+      { path: 'setup-inicial', component: SetupInicialView },
+      { path: 'pendientes', component: PendientesView },
       { path: 'kardex', component: KardexView },
       { path: 'depositos', component: DepositosMapaView },
+      { path: 'depositos/listado', component: DepositosListadoView },
       { path: 'depositos/nuevo', component: DepositoCreateView },
       { path: 'depositos/:locationId/editar', component: DepositoEditView },
       { path: 'depositos/:locationId', component: DepositoContextView },

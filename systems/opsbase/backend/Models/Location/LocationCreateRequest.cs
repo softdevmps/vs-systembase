@@ -11,6 +11,7 @@ namespace Backend.Models.Location
         [System.ComponentModel.DataAnnotations.Required]
         [System.ComponentModel.DataAnnotations.MaxLength(30)]
         public string Tipo { get; set; }
+        public int? Rubroid { get; set; }
         public int? Parentlocationid { get; set; }
         public decimal? Capacidad { get; set; }
         [System.ComponentModel.DataAnnotations.Required]

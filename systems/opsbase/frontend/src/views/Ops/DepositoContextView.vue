@@ -57,14 +57,59 @@
               <v-icon class="mr-2" color="primary">mdi-cube-outline</v-icon>
               Stock del depósito
             </div>
-            <v-chip size="small" variant="tonal">{{ stockItems.length }} ítems</v-chip>
+            <div class="d-flex align-center ga-2">
+              <v-chip size="small" variant="tonal">{{ filteredStockItems.length }} / {{ stockItems.length }} ítems</v-chip>
+              <v-btn size="small" color="primary" variant="tonal" @click="openNewStockDialog">
+                <v-icon start>mdi-plus</v-icon>
+                Nuevo ítem
+              </v-btn>
+            </div>
           </v-card-title>
           <v-divider />
+
+          <v-card-text class="pb-0">
+            <v-row dense>
+              <v-col cols="12" md="5">
+                <v-text-field
+                  v-model="stockSearch"
+                  label="Buscar recurso o instancia"
+                  variant="outlined"
+                  density="comfortable"
+                  clearable
+                  prepend-inner-icon="mdi-magnify"
+                />
+              </v-col>
+              <v-col cols="12" md="3">
+                <v-select
+                  v-model="stockEstadoFilter"
+                  :items="stockEstadoItems"
+                  label="Estado"
+                  variant="outlined"
+                  density="comfortable"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="12" md="2" class="d-flex align-center">
+                <v-switch
+                  v-model="stockOnlyCritical"
+                  label="Solo críticos"
+                  color="error"
+                  hide-details
+                  inset
+                />
+              </v-col>
+              <v-col cols="12" md="2" class="d-flex align-center justify-md-end">
+                <v-chip size="small" :color="stockCriticalCount > 0 ? 'red' : 'green'" variant="tonal">
+                  Críticos: {{ stockCriticalCount }}
+                </v-chip>
+              </v-col>
+            </v-row>
+          </v-card-text>
 
           <v-data-table
             class="ops-table"
             :headers="stockHeaders"
-            :items="stockItems"
+            :items="filteredStockItems"
             :loading="loading"
             :items-per-page="8"
             density="comfortable"
@@ -79,8 +124,26 @@
                 {{ formatNumber(item.stockDisponible) }}
               </v-chip>
             </template>
+            <template #item.estado="{ item }">
+              <v-chip size="x-small" :color="estadoColor(item.estado)" variant="tonal">
+                {{ pretty(item.estado) }}
+              </v-chip>
+            </template>
             <template #item.stockReal="{ item }">{{ formatNumber(item.stockReal) }}</template>
             <template #item.stockReservado="{ item }">{{ formatNumber(item.stockReservado) }}</template>
+            <template #item.updatedAt="{ item }">{{ formatDate(item.updatedAt) }}</template>
+            <template #item.actions="{ item }">
+              <div class="stock-actions">
+                <v-btn size="small" variant="tonal" color="primary" @click="openAdjustStockDialog(item)">
+                  <v-icon start size="16">mdi-tune-variant</v-icon>
+                  Ajustar
+                </v-btn>
+                <v-btn size="small" variant="text" color="error" @click="openDeleteStockDialog(item)">
+                  <v-icon start size="16">mdi-delete-outline</v-icon>
+                  Eliminar
+                </v-btn>
+              </div>
+            </template>
           </v-data-table>
         </v-card>
       </v-col>
@@ -101,7 +164,7 @@
           <v-card-text>
             <div class="mb-2"><strong>{{ locationLabel }}</strong></div>
             <div class="text-body-2 text-medium-emphasis mb-3">
-              Tipo: {{ location.tipo || 'n/a' }} · Capacidad: {{ formatNumber(location.capacidad) }}
+              Rubro: {{ location.rubroNombre || 'Sin rubro' }} · Tipo: {{ location.tipo || 'n/a' }} · Capacidad: {{ formatNumber(location.capacidad) }}
             </div>
 
             <v-alert v-if="location.coordinateMode !== 'db'" type="warning" variant="tonal" density="comfortable" class="mb-3">
@@ -236,6 +299,188 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-dialog v-model="stockAdjustDialog" max-width="760">
+      <v-card class="stock-dialog sb-dialog">
+        <div class="sb-dialog-title stock-dialog__header">
+          <div class="sb-dialog-icon">
+            <v-icon color="primary">mdi-tune-variant</v-icon>
+          </div>
+          <div>
+            <div class="sb-dialog-title-text">Ajustar stock del depósito</div>
+            <div class="sb-dialog-subtitle">{{ locationLabel }}</div>
+          </div>
+          <v-spacer />
+          <v-chip size="small" variant="tonal">{{ stockAdjustForm.instanceCode || 'Ítem' }}</v-chip>
+        </div>
+        <v-divider />
+        <v-card-text class="sb-dialog-body stock-dialog__body">
+          <v-alert v-if="stockError" type="error" variant="tonal" class="mb-3">{{ stockError }}</v-alert>
+
+          <div class="stock-resource-card mb-3">
+            <div class="table-name">{{ stockAdjustForm.resourceCode }} · {{ stockAdjustForm.resourceName }}</div>
+            <div class="table-sub">{{ stockAdjustForm.instanceCode }} · {{ stockAdjustForm.estado }}</div>
+          </div>
+
+          <v-row dense class="mb-1">
+            <v-col cols="12" md="4">
+              <div class="stock-metric">
+                <span>Real actual</span>
+                <strong>{{ formatNumber(stockAdjustForm.originalReal) }}</strong>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stock-metric">
+                <span>Reservado actual</span>
+                <strong>{{ formatNumber(stockAdjustForm.originalReservado) }}</strong>
+              </div>
+            </v-col>
+            <v-col cols="12" md="4">
+              <div class="stock-metric stock-metric--accent">
+                <span>Disponible actual</span>
+                <strong>{{ formatNumber((stockAdjustForm.originalReal || 0) - (stockAdjustForm.originalReservado || 0)) }}</strong>
+              </div>
+            </v-col>
+          </v-row>
+
+          <v-row dense>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model.number="stockAdjustForm.stockReal"
+                label="Stock real"
+                type="number"
+                min="0"
+                step="0.001"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model.number="stockAdjustForm.stockReservado"
+                label="Stock reservado"
+                type="number"
+                min="0"
+                step="0.001"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+            <v-col cols="12">
+              <div class="stock-result">
+                <v-icon size="18" color="primary">mdi-calculator-variant-outline</v-icon>
+                <span>Stock disponible resultante: <strong>{{ formatNumber(adjustedStockDisponible) }}</strong></span>
+              </div>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="sb-dialog-actions stock-dialog__actions d-flex justify-end ga-2">
+          <v-btn class="sb-btn ghost" variant="text" @click="stockAdjustDialog = false">Cancelar</v-btn>
+          <v-btn class="sb-btn primary" color="primary" :loading="stockSaving" @click="saveStockAdjust">
+            <v-icon start>mdi-content-save-outline</v-icon>
+            Guardar ajuste
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="stockCreateDialog" max-width="640">
+      <v-card class="stock-dialog">
+        <v-card-title class="d-flex align-center justify-space-between">
+          <div class="d-flex align-center">
+            <v-icon class="mr-2" color="primary">mdi-plus-box-outline</v-icon>
+            Alta de ítem en depósito
+          </div>
+          <v-chip size="small" variant="tonal">{{ locationLabel }}</v-chip>
+        </v-card-title>
+        <v-divider />
+        <v-card-text>
+          <v-alert v-if="stockError" type="error" variant="tonal" class="mb-3">{{ stockError }}</v-alert>
+          <v-row dense>
+            <v-col cols="12">
+              <v-select
+                v-model="stockCreateForm.resourceInstanceId"
+                :items="resourceInstanceItems"
+                item-title="title"
+                item-value="value"
+                label="Instancia de recurso"
+                variant="outlined"
+                density="comfortable"
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model.number="stockCreateForm.stockReal"
+                label="Stock real"
+                type="number"
+                min="0"
+                step="0.001"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model.number="stockCreateForm.stockReservado"
+                label="Stock reservado"
+                type="number"
+                min="0"
+                step="0.001"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+            <v-col cols="12">
+              <v-chip size="small" color="primary" variant="tonal">
+                Stock disponible inicial: {{ formatNumber(createdStockDisponible) }}
+              </v-chip>
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="d-flex justify-end ga-2">
+          <v-btn variant="text" @click="stockCreateDialog = false">Cancelar</v-btn>
+          <v-btn color="primary" :loading="stockSaving" @click="saveStockCreate">Crear ítem</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog v-model="stockDeleteDialog" max-width="560">
+      <v-card class="stock-dialog sb-dialog">
+        <div class="sb-dialog-title stock-dialog__header">
+          <div class="sb-dialog-icon stock-dialog__icon--danger">
+            <v-icon color="error">mdi-alert-outline</v-icon>
+          </div>
+          <div>
+            <div class="sb-dialog-title-text">Eliminar ítem de stock</div>
+            <div class="sb-dialog-subtitle">Esta acción impacta el saldo del depósito actual.</div>
+          </div>
+        </div>
+        <v-divider />
+        <v-card-text class="sb-dialog-body stock-dialog__body">
+          <v-alert v-if="stockError" type="error" variant="tonal" class="mb-3">{{ stockError }}</v-alert>
+          <div class="stock-resource-card mb-3">
+            <div class="table-name mb-1">
+            {{ stockDeleteTarget.resourceCode }} · {{ stockDeleteTarget.resourceName }}
+            </div>
+            <div class="table-sub">{{ stockDeleteTarget.instanceCode }} · {{ stockDeleteTarget.estado }}</div>
+          </div>
+          <v-alert type="warning" variant="tonal" density="comfortable">
+            Esta acción elimina el saldo de este recurso en el depósito actual.
+          </v-alert>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="sb-dialog-actions stock-dialog__actions d-flex justify-end ga-2">
+          <v-btn class="sb-btn ghost" variant="text" @click="stockDeleteDialog = false">Cancelar</v-btn>
+          <v-btn class="sb-btn danger" color="error" :loading="stockSaving" @click="confirmDeleteStock">
+            <v-icon start>mdi-delete-outline</v-icon>
+            Eliminar ítem
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -250,6 +495,42 @@ const router = useRouter()
 const loading = ref(false)
 const error = ref('')
 const response = ref({})
+const stockSearch = ref('')
+const stockEstadoFilter = ref(null)
+const stockOnlyCritical = ref(false)
+const stockAdjustDialog = ref(false)
+const stockCreateDialog = ref(false)
+const stockDeleteDialog = ref(false)
+const stockSaving = ref(false)
+const stockError = ref('')
+const resourceInstances = ref([])
+const stockDeleteTarget = ref({
+  stockBalanceId: null,
+  resourceCode: '',
+  resourceName: '',
+  instanceCode: '',
+  estado: ''
+})
+
+const stockAdjustForm = ref({
+  stockBalanceId: null,
+  resourceInstanceId: null,
+  resourceCode: '',
+  resourceName: '',
+  instanceCode: '',
+  estado: '',
+  originalReal: 0,
+  originalReservado: 0,
+  stockReal: 0,
+  stockReservado: 0,
+  createdAt: null
+})
+
+const stockCreateForm = ref({
+  resourceInstanceId: null,
+  stockReal: 0,
+  stockReservado: 0
+})
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -325,6 +606,14 @@ function directionColor(direction) {
   return 'grey'
 }
 
+function estadoColor(estado) {
+  const key = normalizeKey(estado)
+  if (key === 'activo') return 'green'
+  if (key === 'bloqueado' || key === 'cuarentena' || key === 'baja') return 'red'
+  if (key === 'inactivo' || key === 'reparacion') return 'orange'
+  return 'grey'
+}
+
 const location = computed(() => {
   const src = readField(response.value, 'Location') || {}
   return {
@@ -332,6 +621,10 @@ const location = computed(() => {
     codigo: readField(src, 'Codigo') || '—',
     nombre: readField(src, 'Nombre') || 'Sin nombre',
     tipo: readField(src, 'Tipo') || 'n/a',
+    rubroId: toNumber(readField(src, 'RubroId')),
+    rubroCodigo: readField(src, 'RubroCodigo') || '',
+    rubroNombre: readField(src, 'RubroNombre') || '',
+    rubroColorHex: readField(src, 'RubroColorHex') || '',
     capacidad: toNumber(readField(src, 'Capacidad')) || 0,
     coordinateMode: (readField(src, 'CoordinateMode') || 'db').toString().toLowerCase(),
     lat: toNumber(readField(src, 'Lat')),
@@ -361,8 +654,68 @@ const stockItems = computed(() => toArray(readField(response.value, 'StockItems'
   estado: readField(row, 'Estado') || '—',
   stockReal: toNumber(readField(row, 'StockReal')) || 0,
   stockReservado: toNumber(readField(row, 'StockReservado')) || 0,
-  stockDisponible: toNumber(readField(row, 'StockDisponible')) || 0
+  stockDisponible: toNumber(readField(row, 'StockDisponible')) || 0,
+  updatedAt: readField(row, 'UpdatedAt') || null
 })))
+
+const stockEstadoItems = computed(() => {
+  const unique = new Set()
+  stockItems.value.forEach(item => {
+    const estado = String(item.estado || '').trim()
+    if (estado) unique.add(estado)
+  })
+  return Array.from(unique).sort((a, b) => String(a).localeCompare(String(b), 'es'))
+})
+
+const stockCriticalCount = computed(() =>
+  stockItems.value.filter(item => (item.stockDisponible || 0) <= 0).length)
+
+const filteredStockItems = computed(() => {
+  const query = String(stockSearch.value || '').trim().toLowerCase()
+  const estado = String(stockEstadoFilter.value || '').trim().toLowerCase()
+  return stockItems.value.filter(item => {
+    if (stockOnlyCritical.value && (item.stockDisponible || 0) > 0) return false
+    if (estado && String(item.estado || '').trim().toLowerCase() !== estado) return false
+    if (!query) return true
+    return String(item.resourceCode || '').toLowerCase().includes(query) ||
+      String(item.resourceName || '').toLowerCase().includes(query) ||
+      String(item.instanceCode || '').toLowerCase().includes(query)
+  })
+})
+
+const resourceInstanceItems = computed(() => resourceInstances.value
+  .map(row => {
+    const id = toNumber(readField(row, 'Id'))
+    const code = readField(row, 'CodigoInterno') || `#${id}`
+    const estado = readField(row, 'Estado') || ''
+    const rubroId = toNumber(readField(row, 'RubroId'))
+    const rubroNombre = readField(row, 'RubroNombre') || ''
+    return {
+      value: id,
+      title: estado ? `${code} · ${estado}` : code,
+      rubroId,
+      rubroNombre
+    }
+  })
+  .filter(item => item.value != null)
+  .filter(item => {
+    if (location.value.rubroId == null) return true
+    if (item.rubroId == null) return true
+    return item.rubroId === location.value.rubroId
+  })
+  .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
+
+const adjustedStockDisponible = computed(() => {
+  const real = toNumber(stockAdjustForm.value.stockReal) ?? 0
+  const reservado = toNumber(stockAdjustForm.value.stockReservado) ?? 0
+  return real - reservado
+})
+
+const createdStockDisponible = computed(() => {
+  const real = toNumber(stockCreateForm.value.stockReal) ?? 0
+  const reservado = toNumber(stockCreateForm.value.stockReservado) ?? 0
+  return real - reservado
+})
 
 function normalizeMovementRow(row) {
   return {
@@ -403,9 +756,12 @@ const kpiCards = computed(() => [
 
 const stockHeaders = [
   { title: 'Recurso', key: 'resource', sortable: false },
+  { title: 'Estado', key: 'estado' },
   { title: 'Disp', key: 'stockDisponible', align: 'end' },
   { title: 'Real', key: 'stockReal', align: 'end' },
-  { title: 'Reservado', key: 'stockReservado', align: 'end' }
+  { title: 'Reservado', key: 'stockReservado', align: 'end' },
+  { title: 'Actualizado', key: 'updatedAt' },
+  { title: 'Acciones', key: 'actions', sortable: false, align: 'end' }
 ]
 
 const movementHeaders = [
@@ -450,13 +806,184 @@ async function loadData() {
 
   try {
     const locationId = Number(route.params.locationId)
-    const { data } = await runtimeApi.getOpsDepositoContext(locationId, 50)
+    const [contextRes, instancesRes] = await Promise.all([
+      runtimeApi.getOpsDepositoContext(locationId, 50),
+      runtimeApi.list('resource-instance')
+    ])
+    const data = contextRes?.data
     response.value = data || {}
+    resourceInstances.value = toArray(instancesRes?.data)
   } catch (err) {
     const payload = err?.response?.data
     error.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo cargar el contexto del depósito.')
   } finally {
     loading.value = false
+  }
+}
+
+function openAdjustStockDialog(item) {
+  if (!item?.stockBalanceId) return
+  stockError.value = ''
+  stockAdjustForm.value = {
+    stockBalanceId: item.stockBalanceId,
+    resourceInstanceId: item.resourceInstanceId,
+    resourceCode: item.resourceCode,
+    resourceName: item.resourceName,
+    instanceCode: item.instanceCode,
+    estado: item.estado,
+    originalReal: item.stockReal,
+    originalReservado: item.stockReservado,
+    stockReal: item.stockReal,
+    stockReservado: item.stockReservado,
+    createdAt: null
+  }
+  stockAdjustDialog.value = true
+}
+
+function openDeleteStockDialog(item) {
+  if (!item?.stockBalanceId) return
+  stockError.value = ''
+  stockDeleteTarget.value = {
+    stockBalanceId: item.stockBalanceId,
+    resourceCode: item.resourceCode,
+    resourceName: item.resourceName,
+    instanceCode: item.instanceCode,
+    estado: item.estado
+  }
+  stockDeleteDialog.value = true
+}
+
+function openNewStockDialog() {
+  stockError.value = ''
+  stockCreateForm.value = {
+    resourceInstanceId: null,
+    stockReal: 0,
+    stockReservado: 0
+  }
+  stockCreateDialog.value = true
+}
+
+async function saveStockAdjust() {
+  stockError.value = ''
+  const stockBalanceId = toNumber(stockAdjustForm.value.stockBalanceId)
+  const resourceInstanceId = toNumber(stockAdjustForm.value.resourceInstanceId)
+  const locationId = toNumber(location.value.id)
+  const stockReal = toNumber(stockAdjustForm.value.stockReal)
+  const stockReservado = toNumber(stockAdjustForm.value.stockReservado)
+
+  if (!stockBalanceId || !resourceInstanceId || !locationId) {
+    stockError.value = 'No se pudo resolver el ítem de stock.'
+    return
+  }
+  if (stockReal == null || stockReal < 0) {
+    stockError.value = 'Stock real inválido.'
+    return
+  }
+  if (stockReservado == null || stockReservado < 0) {
+    stockError.value = 'Stock reservado inválido.'
+    return
+  }
+  if (stockReservado > stockReal) {
+    stockError.value = 'Stock reservado no puede ser mayor a stock real.'
+    return
+  }
+
+  stockSaving.value = true
+  try {
+    const existingRes = await runtimeApi.get('stock-balance', stockBalanceId)
+    const existing = existingRes?.data || {}
+    const createdAt = readField(existing, 'CreatedAt') || readField(existing, 'Createdat') || new Date().toISOString()
+    const payload = {
+      resourceinstanceid: resourceInstanceId,
+      locationid: locationId,
+      stockreal: stockReal,
+      stockreservado: stockReservado,
+      stockdisponible: stockReal - stockReservado,
+      createdat: createdAt,
+      updatedat: new Date().toISOString()
+    }
+    await runtimeApi.update('stock-balance', stockBalanceId, payload)
+    stockAdjustDialog.value = false
+    await loadData()
+  } catch (err) {
+    const payload = err?.response?.data
+    stockError.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo guardar el ajuste de stock.')
+  } finally {
+    stockSaving.value = false
+  }
+}
+
+async function saveStockCreate() {
+  stockError.value = ''
+  const resourceInstanceId = toNumber(stockCreateForm.value.resourceInstanceId)
+  const locationId = toNumber(location.value.id)
+  const stockReal = toNumber(stockCreateForm.value.stockReal)
+  const stockReservado = toNumber(stockCreateForm.value.stockReservado)
+
+  if (!resourceInstanceId || !locationId) {
+    stockError.value = 'Selecciona instancia y depósito.'
+    return
+  }
+  if (stockReal == null || stockReal < 0) {
+    stockError.value = 'Stock real inválido.'
+    return
+  }
+  if (stockReservado == null || stockReservado < 0) {
+    stockError.value = 'Stock reservado inválido.'
+    return
+  }
+  if (stockReservado > stockReal) {
+    stockError.value = 'Stock reservado no puede ser mayor a stock real.'
+    return
+  }
+
+  stockSaving.value = true
+  try {
+    const now = new Date().toISOString()
+    await runtimeApi.create('stock-balance', {
+      resourceinstanceid: resourceInstanceId,
+      locationid: locationId,
+      stockreal: stockReal,
+      stockreservado: stockReservado,
+      stockdisponible: stockReal - stockReservado,
+      createdat: now,
+      updatedat: now
+    })
+    stockCreateDialog.value = false
+    await loadData()
+  } catch (err) {
+    const payload = err?.response?.data
+    stockError.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo crear el ítem de stock.')
+  } finally {
+    stockSaving.value = false
+  }
+}
+
+async function confirmDeleteStock() {
+  stockError.value = ''
+  const stockBalanceId = toNumber(stockDeleteTarget.value.stockBalanceId)
+  if (!stockBalanceId) {
+    stockError.value = 'No se pudo resolver el ítem a eliminar.'
+    return
+  }
+
+  stockSaving.value = true
+  try {
+    await runtimeApi.remove('stock-balance', stockBalanceId)
+    stockDeleteDialog.value = false
+    stockDeleteTarget.value = {
+      stockBalanceId: null,
+      resourceCode: '',
+      resourceName: '',
+      instanceCode: '',
+      estado: ''
+    }
+    await loadData()
+  } catch (err) {
+    const payload = err?.response?.data
+    stockError.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo eliminar el ítem de stock.')
+  } finally {
+    stockSaving.value = false
   }
 }
 
@@ -536,6 +1063,69 @@ watch(() => route.params.locationId, loadData, { immediate: true })
 
 .audit-body {
   min-width: 0;
+}
+
+.stock-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.stock-dialog__header {
+  align-items: center;
+}
+
+.stock-dialog__icon--danger {
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+}
+
+.stock-dialog__body {
+  display: grid;
+  gap: 12px;
+}
+
+.stock-resource-card {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.12)) 36%, transparent);
+}
+
+.stock-metric {
+  border: 1px solid var(--sb-border-soft);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 2px;
+}
+
+.stock-metric span {
+  font-size: 0.77rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sb-text-soft, #64748b);
+}
+
+.stock-metric strong {
+  font-size: 1rem;
+}
+
+.stock-metric--accent {
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.12)) 45%, transparent);
+}
+
+.stock-result {
+  border: 1px dashed color-mix(in srgb, var(--sb-primary) 35%, var(--sb-border-soft));
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.12)) 26%, transparent);
+}
+
+.stock-dialog__actions :deep(.v-btn) {
+  min-width: 132px;
 }
 
 .deposito-context-view :deep(.v-data-table th),

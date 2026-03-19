@@ -43,6 +43,7 @@ function prettyTitle(value) {
 }
 
 const ENTITY_LABELS = {
+  rubro: 'Rubros',
   attributedefinition: 'Definiciones de atributos',
   attributevalue: 'Valores de atributos',
   location: 'Ubicaciones',
@@ -55,6 +56,7 @@ const ENTITY_LABELS = {
 }
 
 const ENTITY_ICONS = {
+  rubro: 'mdi-shape-outline',
   attributedefinition: 'mdi-tag-outline',
   attributevalue: 'mdi-form-textbox',
   location: 'mdi-map-marker-radius-outline',
@@ -67,6 +69,7 @@ const ENTITY_ICONS = {
 }
 
 const ENTITY_ORDER = {
+  rubro: 5,
   resourcedefinition: 10,
   attributedefinition: 20,
   attributevalue: 30,
@@ -137,33 +140,101 @@ const menuItems = computed(() => {
     ]
   }
 
-  const catalogChildren = [
-    entityMenuItem('resourcedefinition', { icono: 'mdi-shape-plus-outline' }),
-    entityMenuItem('resourceinstance', { icono: 'mdi-cube-outline' }),
-    entityMenuItem('attributedefinition', { icono: 'mdi-tag-outline' }),
-    entityMenuItem('attributevalue', { icono: 'mdi-form-textbox' })
-  ].filter(Boolean)
-
-  const ubicacionesChildren = [
+  const operacionesChildren = [
     {
-      id: 'ops-depositos',
+      id: 'ops-setup-inicial',
+      titulo: 'Carga inicial',
+      icono: 'mdi-clipboard-plus-outline',
+      ruta: '/setup-inicial'
+    },
+    {
+      id: 'ops-operaciones-panel',
+      titulo: 'Panel de operaciones',
+      icono: 'mdi-view-dashboard-outline',
+      ruta: '/operaciones'
+    },
+    {
+      id: 'ops-recepcion',
+      titulo: 'Recepcionar',
+      icono: 'mdi-truck-delivery-outline',
+      ruta: '/recepcion'
+    },
+    {
+      id: 'ops-despacho',
+      titulo: 'Despachar / Trasladar',
+      icono: 'mdi-truck-fast-outline',
+      ruta: '/despacho'
+    },
+    {
+      id: 'ops-ajustar',
+      titulo: 'Ajustar stock',
+      icono: 'mdi-tune-variant',
+      ruta: '/operaciones?task=ajuste'
+    }
+  ]
+
+  const depositosChildren = [
+    {
+      id: 'ops-depositos-red',
       titulo: 'Red logística',
       icono: 'mdi-map-marker-multiple-outline',
       ruta: '/depositos'
     },
     {
-      id: 'ops-deposito-create',
+      id: 'ops-depositos-listado',
+      titulo: 'Listado de depósitos',
+      icono: 'mdi-format-list-bulleted-square',
+      ruta: '/depositos/listado'
+    },
+    {
+      id: 'ops-depositos-alta',
       titulo: 'Alta de depósito',
       icono: 'mdi-map-marker-plus-outline',
       ruta: '/depositos/nuevo'
-    },
-    entityMenuItem('location', { titulo: 'Ubicaciones base', icono: 'mdi-map-marker-radius-outline' })
+    }
+  ]
+
+  const administracionChildren = [
+    entityMenuItem('rubro', { titulo: 'Rubros', icono: 'mdi-shape-outline' }),
+    entityMenuItem('resourcedefinition', { titulo: 'Recursos', icono: 'mdi-shape-plus-outline' }),
+    entityMenuItem('resourceinstance', { titulo: 'Instancias', icono: 'mdi-cube-outline' }),
+    entityMenuItem('location', { titulo: 'Ubicaciones base', icono: 'mdi-map-marker-radius-outline' }),
+    entityMenuItem('movement', { titulo: 'Movimientos (ABM)', icono: 'mdi-swap-horizontal-bold' }),
+    entityMenuItem('movementline', { titulo: 'Líneas (ABM)', icono: 'mdi-format-list-bulleted' }),
+    entityMenuItem('stockbalance', { titulo: 'Saldos (ABM)', icono: 'mdi-archive-outline' }),
+    entityMenuItem('operationaudit', { titulo: 'Auditoría (ABM)', icono: 'mdi-shield-check-outline' }),
+    entityMenuItem('attributedefinition', { titulo: 'Def. atributos', icono: 'mdi-tag-outline' }),
+    entityMenuItem('attributevalue', { titulo: 'Valores atributos', icono: 'mdi-form-textbox' })
   ].filter(Boolean)
 
-  const operacionesChildren = [
+  return [
     {
-      id: 'ops-kardex',
-      titulo: 'Kardex',
+      id: 'ops-center-home',
+      titulo: 'Centro operativo',
+      icono: 'mdi-monitor-dashboard',
+      ruta: '/home'
+    },
+    {
+      id: 'ops-operaciones',
+      titulo: 'Operaciones',
+      icono: 'mdi-transit-transfer',
+      children: operacionesChildren
+    },
+    {
+      id: 'ops-pendientes',
+      titulo: 'Pendientes',
+      icono: 'mdi-alert-circle-outline',
+      ruta: '/pendientes'
+    },
+    {
+      id: 'ops-depositos',
+      titulo: 'Depósitos',
+      icono: 'mdi-warehouse',
+      children: depositosChildren
+    },
+    {
+      id: 'ops-movimientos',
+      titulo: 'Movimientos',
       icono: 'mdi-notebook-outline',
       ruta: '/kardex'
     },
@@ -174,65 +245,10 @@ const menuItems = computed(() => {
       ruta: '/trazabilidad'
     },
     {
-      id: 'ops-recepcion',
-      titulo: 'Recepción guiada',
-      icono: 'mdi-truck-delivery-outline',
-      ruta: '/recepcion'
-    },
-    {
-      id: 'ops-despacho',
-      titulo: 'Despacho guiado',
-      icono: 'mdi-truck-fast-outline',
-      ruta: '/despacho'
-    },
-    entityMenuItem('movement', { titulo: 'Movimientos', icono: 'mdi-swap-horizontal-bold' }),
-    entityMenuItem('movementline', { titulo: 'Líneas de movimiento', icono: 'mdi-format-list-bulleted' })
-  ].filter(Boolean)
-
-  const stockChildren = [
-    entityMenuItem('stockbalance', { titulo: 'Saldos de stock', icono: 'mdi-archive-outline' })
-  ].filter(Boolean)
-
-  const controlChildren = [
-    entityMenuItem('operationaudit', { titulo: 'Auditoría operativa', icono: 'mdi-shield-check-outline' })
-  ].filter(Boolean)
-
-  return [
-    {
-      id: 'ops-center',
-      titulo: 'Centro operativo',
-      icono: 'mdi-monitor-dashboard',
-      ruta: '/home'
-    },
-    {
-      id: 'catalogo',
-      titulo: 'Catálogo',
-      icono: 'mdi-shape-outline',
-      children: catalogChildren
-    },
-    {
-      id: 'ubicaciones',
-      titulo: 'Ubicaciones',
-      icono: 'mdi-map-marker-outline',
-      children: ubicacionesChildren
-    },
-    {
-      id: 'operaciones',
-      titulo: 'Operaciones',
-      icono: 'mdi-transit-transfer',
-      children: operacionesChildren
-    },
-    {
-      id: 'stock',
-      titulo: 'Stock',
-      icono: 'mdi-archive-outline',
-      children: stockChildren
-    },
-    {
-      id: 'control',
-      titulo: 'Control',
-      icono: 'mdi-shield-check-outline',
-      children: controlChildren
+      id: 'ops-admin',
+      titulo: 'Administración',
+      icono: 'mdi-cog-outline',
+      children: administracionChildren
     }
   ].filter(group => !group.children || group.children.length > 0)
 })

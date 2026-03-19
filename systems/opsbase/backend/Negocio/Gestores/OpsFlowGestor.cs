@@ -21,6 +21,7 @@ namespace Backend.Negocio.Gestores
                 : request.Referenceno.Trim();
 
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
             using var tx = conn.BeginTransaction();
 
             try
@@ -47,6 +48,14 @@ namespace Backend.Negocio.Gestores
                     return (false, "ResourceInstance inexistente o inactiva (ResourceInstanceId).", null);
                 }
 
+                var rubroValidation = ResolveAndValidateRubroForRecepcion(conn, tx, request);
+                if (!rubroValidation.Ok)
+                {
+                    tx.Rollback();
+                    return (false, rubroValidation.Error, null);
+                }
+
+                var rubroId = rubroValidation.RubroId;
                 var createdBy = string.IsNullOrWhiteSpace(actor) ? "runtime-ui" : actor.Trim();
 
                 const string sqlMovement = @"INSERT INTO [sys_opsbase].[Movement]
@@ -120,6 +129,7 @@ namespace Backend.Negocio.Gestores
                     {
                         movementId,
                         lineId,
+                        rubroId,
                         request.Resourceinstanceid,
                         request.Targetlocationid,
                         request.Quantity,
@@ -137,6 +147,7 @@ namespace Backend.Negocio.Gestores
                     Status = status,
                     Referenceno = referenceNo,
                     Operationat = operationAt,
+                    Rubroid = rubroId,
                     Quantity = request.Quantity,
                     Resourceinstanceid = request.Resourceinstanceid,
                     Targetlocationid = request.Targetlocationid
@@ -171,6 +182,7 @@ namespace Backend.Negocio.Gestores
                 : request.Referenceno.Trim();
 
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
             using var tx = conn.BeginTransaction();
 
             try
@@ -196,6 +208,14 @@ namespace Backend.Negocio.Gestores
                     return (false, "ResourceInstance inexistente o inactiva (ResourceInstanceId).", null);
                 }
 
+                var rubroValidation = ResolveAndValidateRubroForDespacho(conn, tx, request);
+                if (!rubroValidation.Ok)
+                {
+                    tx.Rollback();
+                    return (false, rubroValidation.Error, null);
+                }
+
+                var rubroId = rubroValidation.RubroId;
                 var createdBy = string.IsNullOrWhiteSpace(actor) ? "runtime-ui" : actor.Trim();
 
                 const string sqlMovement = @"INSERT INTO [sys_opsbase].[Movement]
@@ -270,6 +290,7 @@ namespace Backend.Negocio.Gestores
                     {
                         movementId,
                         lineId,
+                        rubroId,
                         movementType,
                         request.Resourceinstanceid,
                         request.Sourcelocationid,
@@ -290,6 +311,7 @@ namespace Backend.Negocio.Gestores
                     Status = status,
                     Referenceno = referenceNo,
                     Operationat = operationAt,
+                    Rubroid = rubroId,
                     Quantity = request.Quantity,
                     Resourceinstanceid = request.Resourceinstanceid,
                     Sourcelocationid = request.Sourcelocationid,
@@ -301,6 +323,96 @@ namespace Backend.Negocio.Gestores
                 try { tx.Rollback(); } catch { }
                 return (false, $"Error al crear despacho guiado: {ex.Message}", null);
             }
+        }
+
+        private static (bool Ok, string? Error, int RubroId) ResolveAndValidateRubroForRecepcion(
+            SqlConnection conn,
+            SqlTransaction tx,
+            RecepcionCreateRequest request)
+        {
+            var resourceRubroId = GetResourceRubroId(conn, tx, request.Resourceinstanceid);
+            if (!resourceRubroId.HasValue)
+                return (false, "El recurso seleccionado no tiene rubro asignado. Configuralo en el tipo de recurso.", 0);
+
+            var targetRubroId = GetLocationRubroId(conn, tx, request.Targetlocationid);
+            if (!targetRubroId.HasValue)
+                return (false, "La ubicación destino no tiene rubro asignado. Edita el depósito y definí su rubro.", 0);
+
+            var selectedRubroId = request.Rubroid ?? resourceRubroId.Value;
+            if (!RubroSchemaHelper.ExistsActiveRubro(conn, selectedRubroId, tx))
+                return (false, "Rubro inexistente o inactivo (RubroId).", 0);
+
+            if (selectedRubroId != resourceRubroId.Value)
+                return (false, "El recurso seleccionado no pertenece al rubro indicado.", 0);
+
+            if (selectedRubroId != targetRubroId.Value)
+                return (false, "El depósito destino pertenece a otro rubro.", 0);
+
+            return (true, null, selectedRubroId);
+        }
+
+        private static (bool Ok, string? Error, int RubroId) ResolveAndValidateRubroForDespacho(
+            SqlConnection conn,
+            SqlTransaction tx,
+            DespachoCreateRequest request)
+        {
+            var resourceRubroId = GetResourceRubroId(conn, tx, request.Resourceinstanceid);
+            if (!resourceRubroId.HasValue)
+                return (false, "El recurso seleccionado no tiene rubro asignado. Configuralo en el tipo de recurso.", 0);
+
+            var sourceRubroId = GetLocationRubroId(conn, tx, request.Sourcelocationid);
+            if (!sourceRubroId.HasValue)
+                return (false, "La ubicación origen no tiene rubro asignado. Edita el depósito y definí su rubro.", 0);
+
+            int? targetRubroId = null;
+            if (request.Targetlocationid.HasValue)
+            {
+                targetRubroId = GetLocationRubroId(conn, tx, request.Targetlocationid.Value);
+                if (!targetRubroId.HasValue)
+                    return (false, "La ubicación destino no tiene rubro asignado. Edita el depósito y definí su rubro.", 0);
+            }
+
+            var selectedRubroId = request.Rubroid ?? resourceRubroId.Value;
+            if (!RubroSchemaHelper.ExistsActiveRubro(conn, selectedRubroId, tx))
+                return (false, "Rubro inexistente o inactivo (RubroId).", 0);
+
+            if (selectedRubroId != resourceRubroId.Value)
+                return (false, "El recurso seleccionado no pertenece al rubro indicado.", 0);
+
+            if (selectedRubroId != sourceRubroId.Value)
+                return (false, "El depósito origen pertenece a otro rubro.", 0);
+
+            if (targetRubroId.HasValue && selectedRubroId != targetRubroId.Value)
+                return (false, "El depósito destino pertenece a otro rubro.", 0);
+
+            return (true, null, selectedRubroId);
+        }
+
+        private static int? GetResourceRubroId(SqlConnection conn, SqlTransaction tx, int resourceInstanceId)
+        {
+            const string sql = @"SELECT TOP 1 rd.[RubroId]
+FROM [sys_opsbase].[ResourceInstance] ri
+INNER JOIN [sys_opsbase].[ResourceDefinition] rd ON rd.[Id] = ri.[ResourceDefinitionId]
+WHERE ri.[Id] = @resourceInstanceId;";
+
+            using var cmd = new SqlCommand(sql, conn, tx);
+            cmd.Parameters.AddWithValue("@resourceInstanceId", resourceInstanceId);
+            var raw = cmd.ExecuteScalar();
+            if (raw == null || raw == DBNull.Value) return null;
+            return Convert.ToInt32(raw);
+        }
+
+        private static int? GetLocationRubroId(SqlConnection conn, SqlTransaction tx, int locationId)
+        {
+            const string sql = @"SELECT TOP 1 [RubroId]
+FROM [sys_opsbase].[Location]
+WHERE [Id] = @locationId;";
+
+            using var cmd = new SqlCommand(sql, conn, tx);
+            cmd.Parameters.AddWithValue("@locationId", locationId);
+            var raw = cmd.ExecuteScalar();
+            if (raw == null || raw == DBNull.Value) return null;
+            return Convert.ToInt32(raw);
         }
 
         private static string BuildReferenceNo(string prefix, DateTime operationAt)

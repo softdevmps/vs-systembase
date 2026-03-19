@@ -34,17 +34,71 @@
         <template #item.1>
           <v-card-text>
             <v-row dense>
+              <v-col cols="12" md="4">
+                <v-select
+                  v-model="form.rubroId"
+                  :items="rubroItems"
+                  item-title="title"
+                  item-value="value"
+                  label="Rubro"
+                  :loading="loadingCatalogs"
+                  variant="outlined"
+                  density="comfortable"
+                >
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props">
+                      <template #prepend>
+                        <span
+                          class="rubro-dot"
+                          :style="{ backgroundColor: item.raw.colorHex || '#64748b' }"
+                        />
+                      </template>
+                    </v-list-item>
+                  </template>
+                </v-select>
+              </v-col>
               <v-col cols="12" md="8">
                 <v-select
                   v-model="form.resourceInstanceId"
                   :items="resourceItems"
                   item-title="title"
                   item-value="value"
-                  label="Recurso"
+                  label="Recurso (instancia)"
                   :loading="loadingCatalogs"
                   variant="outlined"
                   density="comfortable"
-                />
+                >
+                  <template #selection="{ item }">
+                    <div class="resource-selection">
+                      <strong class="resource-selection-code">{{ item.raw.code || item.raw.title }}</strong>
+                      <span v-if="item.raw.definitionDisplay" class="resource-selection-subtitle">
+                        {{ item.raw.definitionDisplay }}
+                      </span>
+                    </div>
+                  </template>
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props" class="resource-item">
+                      <template #title>
+                        <div class="resource-option-title">
+                          <span>{{ item.raw.code || item.raw.title }}</span>
+                          <v-chip
+                            v-if="item.raw.status"
+                            size="x-small"
+                            variant="tonal"
+                            :color="statusColor(item.raw.status)"
+                          >
+                            {{ formatStatus(item.raw.status) }}
+                          </v-chip>
+                        </div>
+                      </template>
+                      <template #subtitle>
+                        <span class="resource-option-subtitle">
+                          {{ item.raw.definitionDisplay || 'Sin tipo de recurso' }}
+                        </span>
+                      </template>
+                    </v-list-item>
+                  </template>
+                </v-select>
               </v-col>
               <v-col cols="12" md="4">
                 <v-text-field
@@ -137,6 +191,7 @@
                   <v-card-title>Resumen</v-card-title>
                   <v-card-text>
                     <div class="summary-row"><span>Recurso</span><strong>{{ selectedResourceLabel || '—' }}</strong></div>
+                    <div class="summary-row"><span>Rubro</span><strong>{{ selectedRubroLabel || '—' }}</strong></div>
                     <div class="summary-row"><span>Cantidad</span><strong>{{ formatNumber(form.quantity) }}</strong></div>
                     <div class="summary-row"><span>Costo unitario</span><strong>{{ form.unitCost == null ? '—' : formatMoney(form.unitCost) }}</strong></div>
                     <div class="summary-row"><span>Ubicación destino</span><strong>{{ selectedLocationLabel || '—' }}</strong></div>
@@ -150,6 +205,12 @@
                   <v-card-title>Checks</v-card-title>
                   <v-card-text>
                     <v-list density="compact">
+                      <v-list-item>
+                        <template #prepend>
+                          <v-icon :color="checkRubro ? 'green' : 'red'">{{ checkRubro ? 'mdi-check-circle' : 'mdi-close-circle' }}</v-icon>
+                        </template>
+                        <v-list-item-title>Rubro seleccionado</v-list-item-title>
+                      </v-list-item>
                       <v-list-item>
                         <template #prepend>
                           <v-icon :color="checkResource ? 'green' : 'red'">{{ checkResource ? 'mdi-check-circle' : 'mdi-close-circle' }}</v-icon>
@@ -190,7 +251,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
 
@@ -208,13 +269,16 @@ const submitting = ref(false)
 const error = ref('')
 const successMessage = ref('')
 
+const rubros = ref([])
 const resources = ref([])
+const resourceDefinitions = ref([])
 const locations = ref([])
 
 const form = ref(buildDefaultForm())
 
 function buildDefaultForm() {
   return {
+    rubroId: null,
     resourceInstanceId: null,
     targetLocationId: null,
     quantity: 1,
@@ -272,13 +336,79 @@ function formatMoney(value) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num)
 }
 
+function formatStatus(value) {
+  const status = String(value || '').trim()
+  if (!status) return ''
+  return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
+}
+
+function statusColor(value) {
+  const normalized = normalizeKey(value)
+  if (normalized.includes('activo') || normalized.includes('activa')) return 'green'
+  if (normalized.includes('inactivo') || normalized.includes('inactiva')) return 'grey'
+  if (normalized.includes('bloqueado') || normalized.includes('bloqueada')) return 'orange'
+  return 'blue-grey'
+}
+
+const resourceDefinitionMap = computed(() => {
+  const map = {}
+  resourceDefinitions.value.forEach(row => {
+    const id = toNumber(readField(row, 'Id'))
+    if (id == null) return
+    const code = readField(row, 'Codigo')
+    const name = readField(row, 'Nombre')
+    map[id] = {
+      code: String(code || '').trim(),
+      name: String(name || '').trim(),
+      display: String(name || code || `Def#${id}`).trim(),
+      rubroId: toNumber(readField(row, 'RubroId')),
+      rubroNombre: String(readField(row, 'Rubronombre') || '')
+    }
+  })
+  return map
+})
+
+const rubroItems = computed(() => rubros.value
+  .map(row => {
+    const id = toNumber(readField(row, 'Id'))
+    const code = String(readField(row, 'Codigo') || '').trim()
+    const name = String(readField(row, 'Nombre') || '').trim()
+    const colorHex = String(readField(row, 'Colorhex') || '#64748b').trim()
+    return {
+      value: id,
+      title: code && name ? `${name} (${code})` : (name || code || `#${id}`),
+      code,
+      name,
+      colorHex
+    }
+  })
+  .filter(item => item.value != null)
+  .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
+
 const resourceItems = computed(() => resources.value
   .map(row => {
     const id = toNumber(readField(row, 'Id'))
     const code = readField(row, 'Codigointerno')
     const state = readField(row, 'Estado')
-    const title = state ? `${code || `#${id}`} · ${state}` : (code || `#${id}`)
-    return { value: id, title }
+    const definitionId = toNumber(readField(row, 'Resourcedefinitionid') ?? readField(row, 'ResourceDefinitionId'))
+    const definition = resourceDefinitionMap.value[definitionId || -1] || { code: '', name: '', display: `Def#${definitionId ?? '-'}` }
+    const rubroId = toNumber(readField(row, 'Rubroid')) ?? toNumber(definition.rubroId)
+    const safeCode = code || `#${id}`
+    const safeStatus = String(state || '').trim()
+    const title = safeCode
+    return {
+      value: id,
+      title,
+      code: safeCode,
+      status: safeStatus,
+      definitionDisplay: definition.display,
+      rubroId
+    }
+  })
+  .filter(item => {
+    const selectedRubroId = toNumber(form.value.rubroId)
+    if (selectedRubroId == null) return true
+    return item.rubroId === selectedRubroId
   })
   .filter(item => item.value != null)
   .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
@@ -288,19 +418,43 @@ const locationItems = computed(() => locations.value
     const id = toNumber(readField(row, 'Id'))
     const code = readField(row, 'Codigo')
     const name = readField(row, 'Nombre')
+    const rubroId = toNumber(readField(row, 'Rubroid'))
     const title = code && name ? `${code} · ${name}` : (name || code || `#${id}`)
-    return { value: id, title }
+    return { value: id, title, rubroId }
+  })
+  .filter(item => {
+    const selectedRubroId = toNumber(form.value.rubroId)
+    if (selectedRubroId == null) return true
+    return item.rubroId === selectedRubroId
   })
   .filter(item => item.value != null)
   .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
 
-const selectedResourceLabel = computed(() => resourceItems.value.find(item => item.value === toNumber(form.value.resourceInstanceId))?.title || '')
+const selectedRubroLabel = computed(() => rubroItems.value.find(item => item.value === toNumber(form.value.rubroId))?.title || '')
+const selectedResourceLabel = computed(() => {
+  const selected = resourceItems.value.find(item => item.value === toNumber(form.value.resourceInstanceId))
+  if (!selected) return ''
+  if (selected.definitionDisplay) return `${selected.code} · ${selected.definitionDisplay}`
+  return selected.code
+})
 const selectedLocationLabel = computed(() => locationItems.value.find(item => item.value === toNumber(form.value.targetLocationId))?.title || '')
 
+const checkRubro = computed(() => toNumber(form.value.rubroId) != null)
 const checkResource = computed(() => toNumber(form.value.resourceInstanceId) != null)
 const checkQuantity = computed(() => (toNumber(form.value.quantity) || 0) > 0)
 const checkLocation = computed(() => toNumber(form.value.targetLocationId) != null)
-const isFormValid = computed(() => checkResource.value && checkQuantity.value && checkLocation.value)
+const isFormValid = computed(() => checkRubro.value && checkResource.value && checkQuantity.value && checkLocation.value)
+
+watch(() => form.value.rubroId, () => {
+  const selectedResourceId = toNumber(form.value.resourceInstanceId)
+  const selectedLocationId = toNumber(form.value.targetLocationId)
+  if (selectedResourceId != null && !resourceItems.value.some(item => item.value === selectedResourceId)) {
+    form.value.resourceInstanceId = null
+  }
+  if (selectedLocationId != null && !locationItems.value.some(item => item.value === selectedLocationId)) {
+    form.value.targetLocationId = null
+  }
+})
 
 function goTo(path) {
   if (!path) return
@@ -309,6 +463,7 @@ function goTo(path) {
 
 function validateStep(currentStep) {
   if (currentStep === 1) {
+    if (!checkRubro.value) return 'Selecciona un rubro.'
     if (!checkResource.value) return 'Selecciona un recurso.'
     if (!checkQuantity.value) return 'La cantidad debe ser mayor a 0.'
   }
@@ -333,13 +488,21 @@ async function loadCatalogs() {
   error.value = ''
 
   try {
-    const [resourcesRes, locationsRes] = await Promise.all([
+    const [rubrosRes, resourcesRes, resourceDefsRes, locationsRes] = await Promise.all([
+      runtimeApi.list('rubro'),
       runtimeApi.list('resource-instance'),
+      runtimeApi.list('resource-definition'),
       runtimeApi.list('location')
     ])
 
+    rubros.value = toArray(rubrosRes?.data)
     resources.value = toArray(resourcesRes?.data)
+    resourceDefinitions.value = toArray(resourceDefsRes?.data)
     locations.value = toArray(locationsRes?.data)
+
+    if (toNumber(form.value.rubroId) == null && rubroItems.value.length === 1) {
+      form.value.rubroId = rubroItems.value[0].value
+    }
   } catch (err) {
     const payload = err?.response?.data
     error.value = payload?.message || payload?.error || 'No se pudo cargar catálogo de recepción.'
@@ -358,6 +521,7 @@ async function submitRecepcion() {
   }
 
   const payload = {
+    rubroid: toNumber(form.value.rubroId),
     resourceinstanceid: toNumber(form.value.resourceInstanceId),
     targetlocationid: toNumber(form.value.targetLocationId),
     quantity: Number(form.value.quantity),
@@ -446,5 +610,58 @@ onMounted(loadCatalogs)
 .recepcion-view :deep(.v-stepper-item__title),
 .recepcion-view :deep(.v-stepper-item__subtitle) {
   color: var(--sb-text, #0f172a) !important;
+}
+
+.resource-selection {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resource-selection-code {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-selection-subtitle {
+  color: var(--sb-text-muted, #64748b);
+  font-size: 0.78rem;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-item {
+  min-height: 58px;
+}
+
+.resource-option-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  font-weight: 600;
+}
+
+.resource-option-subtitle {
+  display: inline-block;
+  color: var(--sb-text-soft, #64748b);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rubro-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid rgba(15, 23, 42, 0.2);
 }
 </style>

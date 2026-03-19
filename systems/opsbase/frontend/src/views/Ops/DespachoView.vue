@@ -34,7 +34,7 @@
         <template #item.1>
           <v-card-text>
             <v-row dense>
-              <v-col cols="12" md="4">
+              <v-col cols="12" md="3">
                 <v-select
                   v-model="form.movementType"
                   :items="movementTypeItems"
@@ -45,17 +45,71 @@
                   density="comfortable"
                 />
               </v-col>
-              <v-col cols="12" md="8">
+              <v-col cols="12" md="3">
+                <v-select
+                  v-model="form.rubroId"
+                  :items="rubroItems"
+                  item-title="title"
+                  item-value="value"
+                  label="Rubro"
+                  :loading="loadingCatalogs"
+                  variant="outlined"
+                  density="comfortable"
+                >
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props">
+                      <template #prepend>
+                        <span
+                          class="rubro-dot"
+                          :style="{ backgroundColor: item.raw.colorHex || '#64748b' }"
+                        />
+                      </template>
+                    </v-list-item>
+                  </template>
+                </v-select>
+              </v-col>
+              <v-col cols="12" md="6">
                 <v-select
                   v-model="form.resourceInstanceId"
                   :items="resourceItems"
                   item-title="title"
                   item-value="value"
-                  label="Recurso"
+                  label="Recurso (instancia)"
                   :loading="loadingCatalogs"
                   variant="outlined"
                   density="comfortable"
-                />
+                >
+                  <template #selection="{ item }">
+                    <div class="resource-selection">
+                      <strong class="resource-selection-code">{{ item.raw.code || item.raw.title }}</strong>
+                      <span v-if="item.raw.definitionDisplay" class="resource-selection-subtitle">
+                        {{ item.raw.definitionDisplay }}
+                      </span>
+                    </div>
+                  </template>
+                  <template #item="{ props, item }">
+                    <v-list-item v-bind="props" class="resource-item">
+                      <template #title>
+                        <div class="resource-option-title">
+                          <span>{{ item.raw.code || item.raw.title }}</span>
+                          <v-chip
+                            v-if="item.raw.status"
+                            size="x-small"
+                            variant="tonal"
+                            :color="statusColor(item.raw.status)"
+                          >
+                            {{ formatStatus(item.raw.status) }}
+                          </v-chip>
+                        </div>
+                      </template>
+                      <template #subtitle>
+                        <span class="resource-option-subtitle">
+                          {{ item.raw.definitionDisplay || 'Sin tipo de recurso' }}
+                        </span>
+                      </template>
+                    </v-list-item>
+                  </template>
+                </v-select>
               </v-col>
               <v-col cols="12" md="4">
                 <v-text-field
@@ -160,6 +214,7 @@
                   <v-card-title>Resumen</v-card-title>
                   <v-card-text>
                     <div class="summary-row"><span>Tipo</span><strong>{{ movementTypeLabel }}</strong></div>
+                    <div class="summary-row"><span>Rubro</span><strong>{{ selectedRubroLabel || '—' }}</strong></div>
                     <div class="summary-row"><span>Recurso</span><strong>{{ selectedResourceLabel || '—' }}</strong></div>
                     <div class="summary-row"><span>Cantidad</span><strong>{{ formatNumber(form.quantity) }}</strong></div>
                     <div class="summary-row"><span>Costo unitario</span><strong>{{ form.unitCost == null ? '—' : formatMoney(form.unitCost) }}</strong></div>
@@ -174,6 +229,12 @@
                   <v-card-title>Checks</v-card-title>
                   <v-card-text>
                     <v-list density="compact">
+                      <v-list-item>
+                        <template #prepend>
+                          <v-icon :color="checkRubro ? 'green' : 'red'">{{ checkRubro ? 'mdi-check-circle' : 'mdi-close-circle' }}</v-icon>
+                        </template>
+                        <v-list-item-title>Rubro seleccionado</v-list-item-title>
+                      </v-list-item>
                       <v-list-item>
                         <template #prepend>
                           <v-icon :color="checkResource ? 'green' : 'red'">{{ checkResource ? 'mdi-check-circle' : 'mdi-close-circle' }}</v-icon>
@@ -216,15 +277,114 @@
         </div>
       </v-card-actions>
     </v-card>
+
+    <v-card class="despacho-card mt-4">
+      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+        <div class="d-flex align-center ga-2">
+          <v-icon color="primary">mdi-history</v-icon>
+          <span>Historial de {{ movementTypeLabel }}</span>
+        </div>
+        <div class="d-flex align-center ga-2">
+          <v-chip size="small" variant="tonal">Mostrando {{ filteredHistory.length }}</v-chip>
+          <v-btn size="small" variant="text" color="primary" :loading="loadingCatalogs" @click="loadCatalogs">
+            <v-icon start>mdi-refresh</v-icon>
+            Actualizar
+          </v-btn>
+        </div>
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="pb-0">
+        <v-row dense>
+          <v-col cols="12" md="5">
+            <v-text-field
+              v-model="historySearch"
+              variant="outlined"
+              density="comfortable"
+              label="Buscar referencia, origen o destino"
+              clearable
+              prepend-inner-icon="mdi-magnify"
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="historyStatusFilter"
+              :items="historyStatusItems"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="comfortable"
+              label="Estado"
+              clearable
+            />
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field
+              v-model="historyDateFrom"
+              variant="outlined"
+              density="comfortable"
+              label="Desde"
+              type="date"
+            />
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field
+              v-model="historyDateTo"
+              variant="outlined"
+              density="comfortable"
+              label="Hasta"
+              type="date"
+            />
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-divider class="mt-2" />
+      <v-data-table
+        class="history-table"
+        :headers="historyHeaders"
+        :items="filteredHistory"
+        :loading="loadingCatalogs"
+        :items-per-page="8"
+        density="comfortable"
+        no-data-text="No hay movimientos para este tipo."
+      >
+        <template #item.referenceNo="{ item }">
+          <div class="history-reference">
+            <strong>{{ item.referenceNo }}</strong>
+            <div class="history-reference__sub">#{{ item.id }}</div>
+          </div>
+        </template>
+        <template #item.movementType="{ item }">
+          <v-chip size="x-small" :color="item.movementType === 'transferencia' ? 'blue' : 'orange'" variant="tonal">
+            {{ item.movementTypeLabel }}
+          </v-chip>
+        </template>
+        <template #item.status="{ item }">
+          <v-chip size="x-small" :color="statusColor(item.status)" variant="tonal">
+            {{ formatStatus(item.status) || '—' }}
+          </v-chip>
+        </template>
+        <template #item.quantity="{ item }">{{ formatNumber(item.quantity) }}</template>
+        <template #item.operationAt="{ item }">{{ formatDate(item.operationAt) }}</template>
+        <template #item.route="{ item }">
+          <span class="history-route">{{ item.sourceLabel }} → {{ item.targetLabel }}</span>
+        </template>
+        <template #item.actions="{ item }">
+          <v-btn size="x-small" variant="text" color="primary" @click="goTo(`/movement?focus=${item.id}`)">
+            Abrir
+          </v-btn>
+        </template>
+      </v-data-table>
+    </v-card>
   </v-container>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import runtimeApi from '../../api/runtime.service'
 
 const router = useRouter()
+const route = useRoute()
 
 const step = ref(1)
 const stepItems = [
@@ -243,14 +403,22 @@ const submitting = ref(false)
 const error = ref('')
 const successMessage = ref('')
 
+const rubros = ref([])
 const resources = ref([])
+const resourceDefinitions = ref([])
 const locations = ref([])
+const movements = ref([])
+const historySearch = ref('')
+const historyStatusFilter = ref(null)
+const historyDateFrom = ref('')
+const historyDateTo = ref('')
 
 const form = ref(buildDefaultForm())
 
 function buildDefaultForm() {
   return {
     movementType: 'egreso',
+    rubroId: null,
     resourceInstanceId: null,
     sourceLocationId: null,
     targetLocationId: null,
@@ -269,6 +437,13 @@ function toArray(data) {
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+}
+
+function applyMovementTypePreset(value) {
+  const preset = normalizeKey(value)
+  if (preset === 'egreso' || preset === 'transferencia') {
+    form.value.movementType = preset
+  }
 }
 
 function readField(item, name) {
@@ -309,19 +484,97 @@ function formatMoney(value) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num)
 }
 
+function formatStatus(value) {
+  const status = String(value || '').trim()
+  if (!status) return ''
+  return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
+}
+
+function formatDate(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('es-AR')
+}
+
+function statusColor(value) {
+  const normalized = normalizeKey(value)
+  if (normalized.includes('confirmado') || normalized.includes('ok')) return 'green'
+  if (normalized.includes('borrador') || normalized.includes('pendiente')) return 'orange'
+  if (normalized.includes('anulado') || normalized.includes('cancelado') || normalized.includes('error')) return 'red'
+  if (normalized.includes('activo') || normalized.includes('activa')) return 'green'
+  if (normalized.includes('inactivo') || normalized.includes('inactiva')) return 'grey'
+  if (normalized.includes('bloqueado') || normalized.includes('bloqueada')) return 'orange'
+  return 'blue-grey'
+}
+
 const requiresTargetLocation = computed(() => form.value.movementType === 'transferencia')
 
 watch(requiresTargetLocation, enabled => {
   if (!enabled) form.value.targetLocationId = null
 })
 
+watch(() => route.query.tipo, value => {
+  applyMovementTypePreset(value)
+}, { immediate: true })
+
+const resourceDefinitionMap = computed(() => {
+  const map = {}
+  resourceDefinitions.value.forEach(row => {
+    const id = toNumber(readField(row, 'Id'))
+    if (id == null) return
+    const code = readField(row, 'Codigo')
+    const name = readField(row, 'Nombre')
+    map[id] = {
+      code: String(code || '').trim(),
+      name: String(name || '').trim(),
+      display: String(name || code || `Def#${id}`).trim(),
+      rubroId: toNumber(readField(row, 'RubroId'))
+    }
+  })
+  return map
+})
+
+const rubroItems = computed(() => rubros.value
+  .map(row => {
+    const id = toNumber(readField(row, 'Id'))
+    const code = String(readField(row, 'Codigo') || '').trim()
+    const name = String(readField(row, 'Nombre') || '').trim()
+    const colorHex = String(readField(row, 'Colorhex') || '#64748b').trim()
+    return {
+      value: id,
+      title: code && name ? `${name} (${code})` : (name || code || `#${id}`),
+      code,
+      name,
+      colorHex
+    }
+  })
+  .filter(item => item.value != null)
+  .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
+
 const resourceItems = computed(() => resources.value
   .map(row => {
     const id = toNumber(readField(row, 'Id'))
     const code = readField(row, 'Codigointerno')
     const state = readField(row, 'Estado')
-    const title = state ? `${code || `#${id}`} · ${state}` : (code || `#${id}`)
-    return { value: id, title }
+    const definitionId = toNumber(readField(row, 'Resourcedefinitionid') ?? readField(row, 'ResourceDefinitionId'))
+    const definition = resourceDefinitionMap.value[definitionId || -1] || { code: '', name: '', display: `Def#${definitionId ?? '-'}` }
+    const rubroId = toNumber(readField(row, 'Rubroid')) ?? toNumber(definition.rubroId)
+    const safeCode = code || `#${id}`
+    const safeStatus = String(state || '').trim()
+    return {
+      value: id,
+      title: safeCode,
+      code: safeCode,
+      status: safeStatus,
+      definitionDisplay: definition.display,
+      rubroId
+    }
+  })
+  .filter(item => {
+    const selectedRubroId = toNumber(form.value.rubroId)
+    if (selectedRubroId == null) return true
+    return item.rubroId === selectedRubroId
   })
   .filter(item => item.value != null)
   .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
@@ -331,8 +584,14 @@ const locationItems = computed(() => locations.value
     const id = toNumber(readField(row, 'Id'))
     const code = readField(row, 'Codigo')
     const name = readField(row, 'Nombre')
+    const rubroId = toNumber(readField(row, 'Rubroid'))
     const title = code && name ? `${code} · ${name}` : (name || code || `#${id}`)
-    return { value: id, title }
+    return { value: id, title, rubroId }
+  })
+  .filter(item => {
+    const selectedRubroId = toNumber(form.value.rubroId)
+    if (selectedRubroId == null) return true
+    return item.rubroId === selectedRubroId
   })
   .filter(item => item.value != null)
   .sort((a, b) => String(a.title).localeCompare(String(b.title), 'es')))
@@ -342,11 +601,39 @@ const targetLocationOptions = computed(() => {
   return locationItems.value.filter(item => item.value !== source)
 })
 
+const locationMap = computed(() => {
+  const map = new Map()
+  toArray(locations.value)
+    .map(row => {
+      const id = toNumber(readField(row, 'Id'))
+      const code = readField(row, 'Codigo')
+      const name = readField(row, 'Nombre')
+      const title = code && name ? `${code} · ${name}` : (name || code || `#${id}`)
+      return { id, title }
+    })
+    .filter(item => item.id != null)
+    .forEach(item => map.set(item.id, item.title))
+  return map
+})
+
+const movementTypeLabelByKey = computed(() => {
+  const map = new Map()
+  movementTypeItems.forEach(item => map.set(item.value, item.title))
+  return map
+})
+
 const movementTypeLabel = computed(() => movementTypeItems.find(item => item.value === form.value.movementType)?.title || 'Egreso')
-const selectedResourceLabel = computed(() => resourceItems.value.find(item => item.value === toNumber(form.value.resourceInstanceId))?.title || '')
+const selectedRubroLabel = computed(() => rubroItems.value.find(item => item.value === toNumber(form.value.rubroId))?.title || '')
+const selectedResourceLabel = computed(() => {
+  const selected = resourceItems.value.find(item => item.value === toNumber(form.value.resourceInstanceId))
+  if (!selected) return ''
+  if (selected.definitionDisplay) return `${selected.code} · ${selected.definitionDisplay}`
+  return selected.code
+})
 const selectedSourceLabel = computed(() => locationItems.value.find(item => item.value === toNumber(form.value.sourceLocationId))?.title || '')
 const selectedTargetLabel = computed(() => locationItems.value.find(item => item.value === toNumber(form.value.targetLocationId))?.title || '')
 
+const checkRubro = computed(() => toNumber(form.value.rubroId) != null)
 const checkResource = computed(() => toNumber(form.value.resourceInstanceId) != null)
 const checkQuantity = computed(() => (toNumber(form.value.quantity) || 0) > 0)
 const checkSource = computed(() => toNumber(form.value.sourceLocationId) != null)
@@ -357,7 +644,112 @@ const checkTarget = computed(() => {
   return target != null && source != null && target !== source
 })
 
-const isFormValid = computed(() => checkResource.value && checkQuantity.value && checkSource.value && checkTarget.value)
+const isFormValid = computed(() => checkRubro.value && checkResource.value && checkQuantity.value && checkSource.value && checkTarget.value)
+
+const historyHeaders = [
+  { title: 'Referencia', key: 'referenceNo' },
+  { title: 'Tipo', key: 'movementType' },
+  { title: 'Estado', key: 'status' },
+  { title: 'Ruta', key: 'route', sortable: false },
+  { title: 'Cant.', key: 'quantity', align: 'end' },
+  { title: 'Fecha', key: 'operationAt' },
+  { title: 'Acciones', key: 'actions', sortable: false, align: 'end' }
+]
+
+const historyItems = computed(() => toArray(movements.value)
+  .map(row => {
+    const movementType = String(readField(row, 'Movementtype') || readField(row, 'MovementType') || '').trim().toLowerCase()
+    const sourceId = toNumber(readField(row, 'Sourcelocationid') ?? readField(row, 'SourceLocationId'))
+    const targetId = toNumber(readField(row, 'Targetlocationid') ?? readField(row, 'TargetLocationId'))
+    const quantity = toNumber(readField(row, 'Totalquantity') ?? readField(row, 'TotalQuantity')) ?? 0
+    const status = String(readField(row, 'Status') || '').trim().toLowerCase()
+    const id = toNumber(readField(row, 'Id'))
+    return {
+      id,
+      movementType,
+      movementTypeLabel: movementTypeLabelByKey.value.get(movementType) || formatStatus(movementType) || '—',
+      status,
+      quantity,
+      referenceNo: readField(row, 'Referenceno') || readField(row, 'ReferenceNo') || `MOV-${id ?? '—'}`,
+      operationAt: readField(row, 'Operationat') || readField(row, 'OperationAt') || readField(row, 'Createdat') || readField(row, 'CreatedAt') || null,
+      sourceLabel: sourceId != null ? (locationMap.value.get(sourceId) || `#${sourceId}`) : '—',
+      targetLabel: targetId != null ? (locationMap.value.get(targetId) || `#${targetId}`) : (movementType === 'egreso' ? 'Salida externa' : '—')
+    }
+  })
+  .filter(item => item.id != null)
+  .sort((a, b) => {
+    const da = new Date(a.operationAt || 0).getTime()
+    const db = new Date(b.operationAt || 0).getTime()
+    return db - da
+  }))
+
+const historyStatusItems = computed(() => {
+  const set = new Set(
+    historyItems.value
+      .filter(item => item.movementType === form.value.movementType)
+      .map(item => String(item.status || '').trim().toLowerCase())
+      .filter(Boolean)
+  )
+  return Array.from(set)
+    .sort((a, b) => a.localeCompare(b, 'es'))
+    .map(value => ({ value, title: formatStatus(value) }))
+})
+
+function toDateStart(value) {
+  if (!value) return null
+  const d = new Date(`${value}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function toDateEnd(value) {
+  if (!value) return null
+  const d = new Date(`${value}T23:59:59`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+const filteredHistory = computed(() => {
+  const query = String(historySearch.value || '').trim().toLowerCase()
+  const selectedStatus = String(historyStatusFilter.value || '').trim().toLowerCase()
+  const from = toDateStart(historyDateFrom.value)
+  const to = toDateEnd(historyDateTo.value)
+
+  return historyItems.value
+    .filter(item => item.movementType === form.value.movementType)
+    .filter(item => {
+      if (selectedStatus && String(item.status || '').trim().toLowerCase() !== selectedStatus) return false
+      const itemDate = item.operationAt ? new Date(item.operationAt) : null
+      if (from && itemDate && itemDate < from) return false
+      if (to && itemDate && itemDate > to) return false
+      if (!query) return true
+      const haystack = [
+        item.referenceNo,
+        item.sourceLabel,
+        item.targetLabel,
+        item.movementTypeLabel,
+        formatStatus(item.status)
+      ]
+        .map(v => String(v || '').toLowerCase())
+        .join(' ')
+      return haystack.includes(query)
+    })
+    .slice(0, 80)
+})
+
+watch(() => form.value.rubroId, () => {
+  const selectedResourceId = toNumber(form.value.resourceInstanceId)
+  const selectedSourceId = toNumber(form.value.sourceLocationId)
+  const selectedTargetId = toNumber(form.value.targetLocationId)
+
+  if (selectedResourceId != null && !resourceItems.value.some(item => item.value === selectedResourceId)) {
+    form.value.resourceInstanceId = null
+  }
+  if (selectedSourceId != null && !locationItems.value.some(item => item.value === selectedSourceId)) {
+    form.value.sourceLocationId = null
+  }
+  if (selectedTargetId != null && !targetLocationOptions.value.some(item => item.value === selectedTargetId)) {
+    form.value.targetLocationId = null
+  }
+})
 
 function goTo(path) {
   if (!path) return
@@ -366,6 +758,7 @@ function goTo(path) {
 
 function validateStep(currentStep) {
   if (currentStep === 1) {
+    if (!checkRubro.value) return 'Selecciona un rubro.'
     if (!checkResource.value) return 'Selecciona un recurso.'
     if (!checkQuantity.value) return 'La cantidad debe ser mayor a 0.'
   }
@@ -391,13 +784,23 @@ async function loadCatalogs() {
   error.value = ''
 
   try {
-    const [resourcesRes, locationsRes] = await Promise.all([
+    const [rubrosRes, resourcesRes, resourceDefsRes, locationsRes, movementsRes] = await Promise.all([
+      runtimeApi.list('rubro'),
       runtimeApi.list('resource-instance'),
-      runtimeApi.list('location')
+      runtimeApi.list('resource-definition'),
+      runtimeApi.list('location'),
+      runtimeApi.list('movement')
     ])
 
+    rubros.value = toArray(rubrosRes?.data)
     resources.value = toArray(resourcesRes?.data)
+    resourceDefinitions.value = toArray(resourceDefsRes?.data)
     locations.value = toArray(locationsRes?.data)
+    movements.value = toArray(movementsRes?.data)
+
+    if (toNumber(form.value.rubroId) == null && rubroItems.value.length === 1) {
+      form.value.rubroId = rubroItems.value[0].value
+    }
   } catch (err) {
     const payload = err?.response?.data
     error.value = payload?.message || payload?.error || 'No se pudo cargar catálogo de despacho.'
@@ -416,6 +819,7 @@ async function submitDespacho() {
   }
 
   const payload = {
+    rubroid: toNumber(form.value.rubroId),
     movementtype: form.value.movementType,
     resourceinstanceid: toNumber(form.value.resourceInstanceId),
     sourcelocationid: toNumber(form.value.sourceLocationId),
@@ -495,6 +899,35 @@ onMounted(loadCatalogs)
   border-bottom: 0;
 }
 
+.history-route {
+  color: var(--sb-text-soft, #475569);
+  font-size: 0.86rem;
+}
+
+.history-reference {
+  display: grid;
+  line-height: 1.2;
+}
+
+.history-reference__sub {
+  font-size: 0.75rem;
+  color: var(--sb-text-soft, #64748b);
+}
+
+.despacho-view :deep(.history-table thead th) {
+  color: var(--sb-text, #0f172a) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.12)) 42%, transparent);
+  border-bottom: 1px solid var(--sb-border-soft);
+}
+
+.despacho-view :deep(.history-table tbody td) {
+  color: var(--sb-text, #0f172a) !important;
+}
+
 .despacho-view :deep(.v-stepper-header) {
   border-bottom: 1px solid var(--sb-border-soft);
 }
@@ -506,5 +939,55 @@ onMounted(loadCatalogs)
 .despacho-view :deep(.v-stepper-item__title),
 .despacho-view :deep(.v-stepper-item__subtitle) {
   color: var(--sb-text, #0f172a) !important;
+}
+
+.resource-selection {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resource-selection-code {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-selection-subtitle {
+  color: var(--sb-text-muted, #64748b);
+  font-size: 0.78rem;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resource-item {
+  min-height: 58px;
+}
+
+.resource-option-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.resource-option-subtitle {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rubro-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  display: inline-block;
+  border: 1px solid rgba(15, 23, 42, 0.2);
 }
 </style>

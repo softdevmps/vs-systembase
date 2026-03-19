@@ -5,6 +5,7 @@ namespace Backend.Models.OpsDashboard
         public DateTime GeneratedAt { get; set; }
         public bool UsesSyntheticCoordinates { get; set; }
         public OpsDepositosMapaKpisResponse Kpis { get; set; } = new();
+        public List<OpsRubroOptionResponse> Rubros { get; set; } = new();
         public List<OpsDepositoMarkerResponse> Depositos { get; set; } = new();
     }
 
@@ -24,6 +25,10 @@ namespace Backend.Models.OpsDashboard
         public string Codigo { get; set; } = string.Empty;
         public string Nombre { get; set; } = string.Empty;
         public string Tipo { get; set; } = string.Empty;
+        public int? RubroId { get; set; }
+        public string RubroCodigo { get; set; } = string.Empty;
+        public string RubroNombre { get; set; } = string.Empty;
+        public string RubroColorHex { get; set; } = string.Empty;
         public int? ParentLocationId { get; set; }
         public decimal? Capacidad { get; set; }
         public bool IsActive { get; set; }
@@ -40,5 +45,14 @@ namespace Backend.Models.OpsDashboard
         public int PendingMovements { get; set; }
         public int ConfirmedToday { get; set; }
         public DateTime? LastOperationAt { get; set; }
+    }
+
+    public class OpsRubroOptionResponse
+    {
+        public int Id { get; set; }
+        public string Codigo { get; set; } = string.Empty;
+        public string Nombre { get; set; } = string.Empty;
+        public string ColorHex { get; set; } = string.Empty;
+        public int Depositos { get; set; }
     }
 }

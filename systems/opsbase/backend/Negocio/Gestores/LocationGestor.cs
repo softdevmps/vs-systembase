@@ -9,8 +9,9 @@ namespace Backend.Negocio.Gestores
         public static List<LocationResponse> ObtenerTodos(string? search, int? take, int? skip)
         {
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
             var sql = new System.Text.StringBuilder();
-            sql.Append("SELECT [Id], [Codigo], [Nombre], [Tipo], [ParentLocationId], [Capacidad], [IsActive], [CreatedAt], [UpdatedAt] FROM [sys_opsbase].[Location]");
+            sql.Append("SELECT [Id], [Codigo], [Nombre], [Tipo], [RubroId], [ParentLocationId], [Capacidad], [IsActive], [CreatedAt], [UpdatedAt] FROM [sys_opsbase].[Location]");
             sql.Append(" WHERE [IsActive] = 1");
             sql.Append(" ORDER BY [Id] ASC");
             using var cmd = new SqlCommand(sql.ToString(), conn);
@@ -28,7 +29,8 @@ namespace Backend.Negocio.Gestores
         public static LocationResponse? ObtenerPorId(int id)
         {
             using var conn = Db.Open();
-            var sql = "SELECT [Id], [Codigo], [Nombre], [Tipo], [ParentLocationId], [Capacidad], [IsActive], [CreatedAt], [UpdatedAt] FROM [sys_opsbase].[Location] WHERE [Id] = @id";
+            RubroSchemaHelper.EnsureSchema(conn);
+            var sql = "SELECT [Id], [Codigo], [Nombre], [Tipo], [RubroId], [ParentLocationId], [Capacidad], [IsActive], [CreatedAt], [UpdatedAt] FROM [sys_opsbase].[Location] WHERE [Id] = @id";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@id", id);
 
@@ -42,6 +44,7 @@ namespace Backend.Negocio.Gestores
         public static (bool Ok, string? Error) Crear(LocationCreateRequest request)
         {
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
             if (string.IsNullOrWhiteSpace(request.Codigo)) return (false, "Campo requerido: Codigo");
             if (request.Codigo != null && request.Codigo.Length > 80) return (false, "MaxLength excedido: Codigo");
             if (!string.IsNullOrWhiteSpace(request.Codigo) && ExistsByValue(conn, "sys_opsbase", "Location", "Codigo", request.Codigo!, null, null)) return (false, "Valor duplicado en Codigo");
@@ -49,13 +52,16 @@ namespace Backend.Negocio.Gestores
             if (request.Nombre != null && request.Nombre.Length > 160) return (false, "MaxLength excedido: Nombre");
             if (string.IsNullOrWhiteSpace(request.Tipo)) return (false, "Campo requerido: Tipo");
             if (request.Tipo != null && request.Tipo.Length > 30) return (false, "MaxLength excedido: Tipo");
+            if (request.Rubroid.HasValue && !RubroSchemaHelper.ExistsActiveRubro(conn, request.Rubroid.Value))
+                return (false, "Rubro inexistente o inactivo (RubroId)");
             if (request.Parentlocationid != null && !ExistsByValue(conn, "sys_opsbase", "Location", "Id", request.Parentlocationid!, null, null)) return (false, "Location inexistente (ParentLocationId)");
 
-            var sql = "INSERT INTO [sys_opsbase].[Location] ([Codigo], [Nombre], [Tipo], [ParentLocationId], [Capacidad], [IsActive], [CreatedAt], [UpdatedAt]) VALUES (@Codigo, @Nombre, @Tipo, @ParentLocationId, @Capacidad, @IsActive, @CreatedAt, @UpdatedAt);";
+            var sql = "INSERT INTO [sys_opsbase].[Location] ([Codigo], [Nombre], [Tipo], [RubroId], [ParentLocationId], [Capacidad], [IsActive], [CreatedAt], [UpdatedAt]) VALUES (@Codigo, @Nombre, @Tipo, @RubroId, @ParentLocationId, @Capacidad, @IsActive, @CreatedAt, @UpdatedAt);";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Codigo", request.Codigo ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@Nombre", request.Nombre ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@Tipo", request.Tipo ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@RubroId", request.Rubroid ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@ParentLocationId", request.Parentlocationid ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@Capacidad", request.Capacidad ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@IsActive", request.Isactive);
@@ -68,6 +74,7 @@ namespace Backend.Negocio.Gestores
         public static (bool Ok, string? Error) Editar(int id, LocationUpdateRequest request)
         {
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
             if (string.IsNullOrWhiteSpace(request.Codigo)) return (false, "Campo requerido: Codigo");
             if (request.Codigo != null && request.Codigo.Length > 80) return (false, "MaxLength excedido: Codigo");
             if (!string.IsNullOrWhiteSpace(request.Codigo) && ExistsByValue(conn, "sys_opsbase", "Location", "Codigo", request.Codigo!, "Id", id)) return (false, "Valor duplicado en Codigo");
@@ -75,12 +82,15 @@ namespace Backend.Negocio.Gestores
             if (request.Nombre != null && request.Nombre.Length > 160) return (false, "MaxLength excedido: Nombre");
             if (string.IsNullOrWhiteSpace(request.Tipo)) return (false, "Campo requerido: Tipo");
             if (request.Tipo != null && request.Tipo.Length > 30) return (false, "MaxLength excedido: Tipo");
+            if (request.Rubroid.HasValue && !RubroSchemaHelper.ExistsActiveRubro(conn, request.Rubroid.Value))
+                return (false, "Rubro inexistente o inactivo (RubroId)");
             if (request.Parentlocationid != null && !ExistsByValue(conn, "sys_opsbase", "Location", "Id", request.Parentlocationid!, null, null)) return (false, "Location inexistente (ParentLocationId)");
-            var sql = "UPDATE [sys_opsbase].[Location] SET [Codigo] = @Codigo, [Nombre] = @Nombre, [Tipo] = @Tipo, [ParentLocationId] = @ParentLocationId, [Capacidad] = @Capacidad, [IsActive] = @IsActive, [CreatedAt] = @CreatedAt, [UpdatedAt] = @UpdatedAt WHERE [Id] = @id";
+            var sql = "UPDATE [sys_opsbase].[Location] SET [Codigo] = @Codigo, [Nombre] = @Nombre, [Tipo] = @Tipo, [RubroId] = @RubroId, [ParentLocationId] = @ParentLocationId, [Capacidad] = @Capacidad, [IsActive] = @IsActive, [CreatedAt] = @CreatedAt, [UpdatedAt] = @UpdatedAt WHERE [Id] = @id";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@Codigo", request.Codigo ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@Nombre", request.Nombre ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@Tipo", request.Tipo ?? (object)DBNull.Value);
+            cmd.Parameters.AddWithValue("@RubroId", request.Rubroid ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@ParentLocationId", request.Parentlocationid ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@Capacidad", request.Capacidad ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@IsActive", request.Isactive);
@@ -95,6 +105,7 @@ namespace Backend.Negocio.Gestores
         public static bool Eliminar(int id)
         {
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
             var sql = "UPDATE [sys_opsbase].[Location] SET [IsActive] = 0 WHERE [Id] = @id";
             using var cmd = new SqlCommand(sql, conn);
             cmd.Parameters.AddWithValue("@id", id);
@@ -111,6 +122,7 @@ namespace Backend.Negocio.Gestores
                 Codigo = reader["Codigo"] == DBNull.Value ? null : reader["Codigo"].ToString(),
                 Nombre = reader["Nombre"] == DBNull.Value ? null : reader["Nombre"].ToString(),
                 Tipo = reader["Tipo"] == DBNull.Value ? null : reader["Tipo"].ToString(),
+                Rubroid = reader["RubroId"] == DBNull.Value ? null : (int)Convert.ChangeType(reader["RubroId"], typeof(int)),
                 Parentlocationid = reader["ParentLocationId"] == DBNull.Value ? null : (int)Convert.ChangeType(reader["ParentLocationId"], typeof(int)),
                 Capacidad = reader["Capacidad"] == DBNull.Value ? null : (decimal)Convert.ChangeType(reader["Capacidad"], typeof(decimal)),
                 Isactive = reader["IsActive"] == DBNull.Value ? default(bool) : (bool)Convert.ChangeType(reader["IsActive"], typeof(bool)),

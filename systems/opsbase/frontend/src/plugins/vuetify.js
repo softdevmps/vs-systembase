@@ -22,6 +22,13 @@ const brandDark = themeDark?.brand || brand
 export const vuetify = createVuetify({
     components,
     directives,
+    defaults: {
+        VBtn: {
+            rounded: 'lg',
+            elevation: 0,
+            ripple: true
+        }
+    },
     icons: {
         defaultSet: 'mdi',
         aliases,

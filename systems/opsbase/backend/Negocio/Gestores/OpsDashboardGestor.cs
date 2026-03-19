@@ -12,9 +12,10 @@ namespace Backend.Negocio.Gestores
         private static readonly string[] LatCoordinateCandidates = { "Lat", "Latitude", "Latitud", "GeoLat", "MapLat" };
         private static readonly string[] LngCoordinateCandidates = { "Lng", "Longitude", "Longitud", "Lon", "GeoLng", "MapLng" };
 
-        public static OpsDepositosMapaResponse ObtenerDepositosMapa()
+        public static OpsDepositosMapaResponse ObtenerDepositosMapa(int? rubroId = null)
         {
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
 
             var latColumn = ResolveCoordinateColumn(conn, LatCoordinateCandidates);
             var lngColumn = ResolveCoordinateColumn(conn, LngCoordinateCandidates);
@@ -88,6 +89,10 @@ SELECT
     l.[Codigo],
     l.[Nombre],
     l.[Tipo],
+    l.[RubroId],
+    ISNULL(rb.[Codigo], '') AS [RubroCodigo],
+    ISNULL(rb.[Nombre], '') AS [RubroNombre],
+    ISNULL(rb.[ColorHex], '') AS [RubroColorHex],
     l.[ParentLocationId],
     l.[Capacidad],
     l.[IsActive],
@@ -101,17 +106,20 @@ SELECT
     ISNULL(c.[ConfirmedToday], 0) AS [ConfirmedToday],
     lo.[LastOperationAt]
 FROM [{Schema}].[Location] l
+LEFT JOIN [{Schema}].[Rubro] rb ON rb.[Id] = l.[RubroId]
 LEFT JOIN stock s ON s.[LocationId] = l.[Id]
 LEFT JOIN pending p ON p.[LocationId] = l.[Id]
 LEFT JOIN confirmed_today c ON c.[LocationId] = l.[Id]
 LEFT JOIN lastop lo ON lo.[LocationId] = l.[Id]
 WHERE l.[IsActive] = 1
+  AND (@RubroId IS NULL OR l.[RubroId] = @RubroId)
 ORDER BY l.[Tipo] ASC, l.[Nombre] ASC, l.[Id] ASC;";
 
             var rows = new List<OpsDepositoMarkerResponse>();
             using (var cmd = new SqlCommand(sql, conn))
-            using (var reader = cmd.ExecuteReader())
             {
+                cmd.Parameters.AddWithValue("@RubroId", rubroId ?? (object)DBNull.Value);
+                using var reader = cmd.ExecuteReader();
                 while (reader.Read())
                 {
                     rows.Add(new OpsDepositoMarkerResponse
@@ -120,6 +128,10 @@ ORDER BY l.[Tipo] ASC, l.[Nombre] ASC, l.[Id] ASC;";
                         Codigo = reader["Codigo"] == DBNull.Value ? string.Empty : reader["Codigo"].ToString() ?? string.Empty,
                         Nombre = reader["Nombre"] == DBNull.Value ? string.Empty : reader["Nombre"].ToString() ?? string.Empty,
                         Tipo = reader["Tipo"] == DBNull.Value ? string.Empty : reader["Tipo"].ToString() ?? string.Empty,
+                        RubroId = reader["RubroId"] == DBNull.Value ? null : Convert.ToInt32(reader["RubroId"]),
+                        RubroCodigo = reader["RubroCodigo"] == DBNull.Value ? string.Empty : reader["RubroCodigo"].ToString() ?? string.Empty,
+                        RubroNombre = reader["RubroNombre"] == DBNull.Value ? string.Empty : reader["RubroNombre"].ToString() ?? string.Empty,
+                        RubroColorHex = reader["RubroColorHex"] == DBNull.Value ? string.Empty : reader["RubroColorHex"].ToString() ?? string.Empty,
                         ParentLocationId = reader["ParentLocationId"] == DBNull.Value ? null : Convert.ToInt32(reader["ParentLocationId"]),
                         Capacidad = ToNullableDecimal(reader["Capacidad"]),
                         IsActive = reader["IsActive"] != DBNull.Value && Convert.ToBoolean(reader["IsActive"]),
@@ -146,6 +158,7 @@ ORDER BY l.[Tipo] ASC, l.[Nombre] ASC, l.[Id] ASC;";
             {
                 GeneratedAt = DateTime.UtcNow,
                 UsesSyntheticCoordinates = depositos.Any(d => d.CoordinateMode == "synthetic"),
+                Rubros = ObtenerRubros(conn),
                 Kpis = new OpsDepositosMapaKpisResponse
                 {
                     TotalDepositos = depositos.Count,
@@ -169,6 +182,7 @@ ORDER BY l.[Tipo] ASC, l.[Nombre] ASC, l.[Id] ASC;";
             var safeLimit = Math.Clamp(limit, 10, 200);
 
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
 
             var latColumn = ResolveCoordinateColumn(conn, LatCoordinateCandidates);
             var lngColumn = ResolveCoordinateColumn(conn, LngCoordinateCandidates);
@@ -183,9 +197,13 @@ ORDER BY l.[Tipo] ASC, l.[Nombre] ASC, l.[Id] ASC;";
             OpsDepositoLocationResponse? location = null;
 
             var sqlLocation = $@"SELECT TOP 1
-    l.[Id], l.[Codigo], l.[Nombre], l.[Tipo], l.[IsActive], l.[ParentLocationId], l.[Capacidad],
+    l.[Id], l.[Codigo], l.[Nombre], l.[Tipo], l.[RubroId], l.[IsActive], l.[ParentLocationId], l.[Capacidad],
+    ISNULL(rb.[Codigo], '') AS [RubroCodigo],
+    ISNULL(rb.[Nombre], '') AS [RubroNombre],
+    ISNULL(rb.[ColorHex], '') AS [RubroColorHex],
     {latExpr} AS [Lat], {lngExpr} AS [Lng]
 FROM [{Schema}].[Location] l
+LEFT JOIN [{Schema}].[Rubro] rb ON rb.[Id] = l.[RubroId]
 WHERE l.[Id] = @id;";
 
             using (var cmd = new SqlCommand(sqlLocation, conn))
@@ -201,6 +219,10 @@ WHERE l.[Id] = @id;";
                         Codigo = reader["Codigo"] == DBNull.Value ? string.Empty : reader["Codigo"].ToString() ?? string.Empty,
                         Nombre = reader["Nombre"] == DBNull.Value ? string.Empty : reader["Nombre"].ToString() ?? string.Empty,
                         Tipo = reader["Tipo"] == DBNull.Value ? string.Empty : reader["Tipo"].ToString() ?? string.Empty,
+                        RubroId = reader["RubroId"] == DBNull.Value ? null : Convert.ToInt32(reader["RubroId"]),
+                        RubroCodigo = reader["RubroCodigo"] == DBNull.Value ? string.Empty : reader["RubroCodigo"].ToString() ?? string.Empty,
+                        RubroNombre = reader["RubroNombre"] == DBNull.Value ? string.Empty : reader["RubroNombre"].ToString() ?? string.Empty,
+                        RubroColorHex = reader["RubroColorHex"] == DBNull.Value ? string.Empty : reader["RubroColorHex"].ToString() ?? string.Empty,
                         IsActive = reader["IsActive"] != DBNull.Value && Convert.ToBoolean(reader["IsActive"]),
                         ParentLocationId = reader["ParentLocationId"] == DBNull.Value ? null : Convert.ToInt32(reader["ParentLocationId"]),
                         Capacidad = ToNullableDecimal(reader["Capacidad"]),
@@ -271,6 +293,8 @@ WHERE l.[Id] = @id;";
                 return (false, "Codigo es requerido.", null);
             if (string.IsNullOrWhiteSpace(request.Nombre))
                 return (false, "Nombre es requerido.", null);
+            if (!request.RubroId.HasValue || request.RubroId.Value <= 0)
+                return (false, "Rubro es requerido.", null);
 
             var codigo = request.Codigo.Trim();
             var nombre = request.Nombre.Trim();
@@ -288,6 +312,7 @@ WHERE l.[Id] = @id;";
                 return (false, "Lng fuera de rango.", null);
 
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
 
             EnsureCoordinateColumns(conn);
 
@@ -305,14 +330,19 @@ WHERE l.[Id] = @id;";
                     tx.Rollback();
                     return (false, "ParentLocationId no existe.", null);
                 }
+                if (!RubroSchemaHelper.ExistsActiveRubro(conn, request.RubroId.Value, tx))
+                {
+                    tx.Rollback();
+                    return (false, "Rubro inexistente o inactivo (RubroId).", null);
+                }
 
                 var now = DateTime.UtcNow;
                 var createdBy = string.IsNullOrWhiteSpace(actor) ? "runtime-ui" : actor.Trim();
 
-                const string sql = @"INSERT INTO [sys_opsbase].[Location]
-([Codigo], [Nombre], [Tipo], [ParentLocationId], [Capacidad], [IsActive], [Lat], [Lng], [CreatedAt], [UpdatedAt])
+const string sql = @"INSERT INTO [sys_opsbase].[Location]
+([Codigo], [Nombre], [Tipo], [RubroId], [ParentLocationId], [Capacidad], [IsActive], [Lat], [Lng], [CreatedAt], [UpdatedAt])
 VALUES
-(@Codigo, @Nombre, @Tipo, @ParentLocationId, @Capacidad, @IsActive, @Lat, @Lng, @CreatedAt, @UpdatedAt);
+(@Codigo, @Nombre, @Tipo, @RubroId, @ParentLocationId, @Capacidad, @IsActive, @Lat, @Lng, @CreatedAt, @UpdatedAt);
 SELECT CAST(SCOPE_IDENTITY() AS INT);";
 
                 int locationId;
@@ -321,6 +351,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     cmd.Parameters.AddWithValue("@Codigo", codigo);
                     cmd.Parameters.AddWithValue("@Nombre", nombre);
                     cmd.Parameters.AddWithValue("@Tipo", tipo);
+                    cmd.Parameters.AddWithValue("@RubroId", request.RubroId.Value);
                     cmd.Parameters.AddWithValue("@ParentLocationId", request.ParentLocationId ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@Capacidad", request.Capacidad ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@IsActive", request.IsActive);
@@ -348,6 +379,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                         codigo,
                         nombre,
                         tipo,
+                        request.RubroId,
                         request.ParentLocationId,
                         request.Capacidad,
                         request.IsActive,
@@ -363,6 +395,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     Codigo = codigo,
                     Nombre = nombre,
                     Tipo = tipo,
+                    RubroId = request.RubroId,
                     Lat = request.Lat,
                     Lng = request.Lng,
                     IsActive = request.IsActive,
@@ -387,6 +420,8 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                 return (false, "Codigo es requerido.", null);
             if (string.IsNullOrWhiteSpace(request.Nombre))
                 return (false, "Nombre es requerido.", null);
+            if (!request.RubroId.HasValue || request.RubroId.Value <= 0)
+                return (false, "Rubro es requerido.", null);
 
             var codigo = request.Codigo.Trim();
             var nombre = request.Nombre.Trim();
@@ -406,6 +441,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                 return (false, "ParentLocationId no puede ser el mismo depósito.", null);
 
             using var conn = Db.Open();
+            RubroSchemaHelper.EnsureSchema(conn);
 
             EnsureCoordinateColumns(conn);
 
@@ -429,6 +465,11 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
                     tx.Rollback();
                     return (false, "ParentLocationId no existe.", null);
                 }
+                if (!RubroSchemaHelper.ExistsActiveRubro(conn, request.RubroId.Value, tx))
+                {
+                    tx.Rollback();
+                    return (false, "Rubro inexistente o inactivo (RubroId).", null);
+                }
 
                 var now = DateTime.UtcNow;
                 var createdBy = string.IsNullOrWhiteSpace(actor) ? "runtime-ui" : actor.Trim();
@@ -437,6 +478,7 @@ SELECT CAST(SCOPE_IDENTITY() AS INT);";
 SET [Codigo] = @Codigo,
     [Nombre] = @Nombre,
     [Tipo] = @Tipo,
+    [RubroId] = @RubroId,
     [ParentLocationId] = @ParentLocationId,
     [Capacidad] = @Capacidad,
     [IsActive] = @IsActive,
@@ -451,6 +493,7 @@ WHERE [Id] = @Id;";
                     cmd.Parameters.AddWithValue("@Codigo", codigo);
                     cmd.Parameters.AddWithValue("@Nombre", nombre);
                     cmd.Parameters.AddWithValue("@Tipo", tipo);
+                    cmd.Parameters.AddWithValue("@RubroId", request.RubroId.Value);
                     cmd.Parameters.AddWithValue("@ParentLocationId", request.ParentLocationId ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@Capacidad", request.Capacidad ?? (object)DBNull.Value);
                     cmd.Parameters.AddWithValue("@IsActive", request.IsActive);
@@ -477,6 +520,7 @@ WHERE [Id] = @Id;";
                         codigo,
                         nombre,
                         tipo,
+                        request.RubroId,
                         request.ParentLocationId,
                         request.Capacidad,
                         request.IsActive,
@@ -492,6 +536,7 @@ WHERE [Id] = @Id;";
                     Codigo = codigo,
                     Nombre = nombre,
                     Tipo = tipo,
+                    RubroId = request.RubroId,
                     Lat = request.Lat,
                     Lng = request.Lng,
                     IsActive = request.IsActive,
@@ -611,6 +656,9 @@ WHERE [Id] = @Id
     sb.[ResourceInstanceId],
     ISNULL(rd.[Codigo], '') AS [ResourceCode],
     ISNULL(rd.[Nombre], '') AS [ResourceName],
+    rd.[RubroId],
+    ISNULL(rb.[Codigo], '') AS [RubroCodigo],
+    ISNULL(rb.[Nombre], '') AS [RubroNombre],
     ISNULL(ri.[CodigoInterno], '') AS [InstanceCode],
     ISNULL(ri.[Estado], '') AS [Estado],
     sb.[StockReal],
@@ -620,6 +668,7 @@ WHERE [Id] = @Id
 FROM [sys_opsbase].[StockBalance] sb
 LEFT JOIN [sys_opsbase].[ResourceInstance] ri ON ri.[Id] = sb.[ResourceInstanceId]
 LEFT JOIN [sys_opsbase].[ResourceDefinition] rd ON rd.[Id] = ri.[ResourceDefinitionId]
+LEFT JOIN [sys_opsbase].[Rubro] rb ON rb.[Id] = rd.[RubroId]
 WHERE sb.[LocationId] = @locationId
 ORDER BY sb.[StockDisponible] ASC, sb.[StockReservado] DESC, sb.[Id] ASC;";
 
@@ -637,6 +686,9 @@ ORDER BY sb.[StockDisponible] ASC, sb.[StockReservado] DESC, sb.[Id] ASC;";
                     ResourceInstanceId = Convert.ToInt32(reader["ResourceInstanceId"]),
                     ResourceCode = reader["ResourceCode"] == DBNull.Value ? string.Empty : reader["ResourceCode"].ToString() ?? string.Empty,
                     ResourceName = reader["ResourceName"] == DBNull.Value ? string.Empty : reader["ResourceName"].ToString() ?? string.Empty,
+                    RubroId = reader["RubroId"] == DBNull.Value ? null : Convert.ToInt32(reader["RubroId"]),
+                    RubroCodigo = reader["RubroCodigo"] == DBNull.Value ? string.Empty : reader["RubroCodigo"].ToString() ?? string.Empty,
+                    RubroNombre = reader["RubroNombre"] == DBNull.Value ? string.Empty : reader["RubroNombre"].ToString() ?? string.Empty,
                     InstanceCode = reader["InstanceCode"] == DBNull.Value ? string.Empty : reader["InstanceCode"].ToString() ?? string.Empty,
                     Estado = reader["Estado"] == DBNull.Value ? string.Empty : reader["Estado"].ToString() ?? string.Empty,
                     StockReal = ToDecimal(reader["StockReal"]),
@@ -764,6 +816,43 @@ ORDER BY oa.[ExecutedAt] DESC, oa.[Id] DESC;";
                     Message = reader["Message"] == DBNull.Value ? null : reader["Message"].ToString(),
                     Actor = reader["Actor"] == DBNull.Value ? null : reader["Actor"].ToString(),
                     ExecutedAt = reader["ExecutedAt"] == DBNull.Value ? null : Convert.ToDateTime(reader["ExecutedAt"])
+                });
+            }
+
+            return rows;
+        }
+
+        private static List<OpsRubroOptionResponse> ObtenerRubros(SqlConnection conn)
+        {
+            const string sql = @"SELECT
+    rb.[Id],
+    rb.[Codigo],
+    rb.[Nombre],
+    ISNULL(rb.[ColorHex], '') AS [ColorHex],
+    ISNULL(loc.[Depositos], 0) AS [Depositos]
+FROM [sys_opsbase].[Rubro] rb
+LEFT JOIN (
+    SELECT [RubroId], COUNT(1) AS [Depositos]
+    FROM [sys_opsbase].[Location]
+    WHERE [IsActive] = 1
+      AND [RubroId] IS NOT NULL
+    GROUP BY [RubroId]
+) loc ON loc.[RubroId] = rb.[Id]
+WHERE rb.[IsActive] = 1
+ORDER BY rb.[Nombre] ASC;";
+
+            var rows = new List<OpsRubroOptionResponse>();
+            using var cmd = new SqlCommand(sql, conn);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                rows.Add(new OpsRubroOptionResponse
+                {
+                    Id = Convert.ToInt32(reader["Id"]),
+                    Codigo = reader["Codigo"] == DBNull.Value ? string.Empty : reader["Codigo"].ToString() ?? string.Empty,
+                    Nombre = reader["Nombre"] == DBNull.Value ? string.Empty : reader["Nombre"].ToString() ?? string.Empty,
+                    ColorHex = reader["ColorHex"] == DBNull.Value ? string.Empty : reader["ColorHex"].ToString() ?? string.Empty,
+                    Depositos = reader["Depositos"] == DBNull.Value ? 0 : Convert.ToInt32(reader["Depositos"])
                 });
             }
 

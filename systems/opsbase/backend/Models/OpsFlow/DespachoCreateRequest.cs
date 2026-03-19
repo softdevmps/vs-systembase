@@ -2,6 +2,8 @@ namespace Backend.Models.OpsFlow
 {
     public class DespachoCreateRequest
     {
+        public int? Rubroid { get; set; }
+
         [System.ComponentModel.DataAnnotations.Required]
         public int Resourceinstanceid { get; set; }
 

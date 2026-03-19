@@ -18,6 +18,10 @@ namespace Backend.Models.OpsDashboard
         public string Codigo { get; set; } = string.Empty;
         public string Nombre { get; set; } = string.Empty;
         public string Tipo { get; set; } = string.Empty;
+        public int? RubroId { get; set; }
+        public string RubroCodigo { get; set; } = string.Empty;
+        public string RubroNombre { get; set; } = string.Empty;
+        public string RubroColorHex { get; set; } = string.Empty;
         public bool IsActive { get; set; }
         public int? ParentLocationId { get; set; }
         public decimal? Capacidad { get; set; }
@@ -42,6 +46,9 @@ namespace Backend.Models.OpsDashboard
         public int ResourceInstanceId { get; set; }
         public string ResourceCode { get; set; } = string.Empty;
         public string ResourceName { get; set; } = string.Empty;
+        public int? RubroId { get; set; }
+        public string RubroCodigo { get; set; } = string.Empty;
+        public string RubroNombre { get; set; } = string.Empty;
         public string InstanceCode { get; set; } = string.Empty;
         public string Estado { get; set; } = string.Empty;
 

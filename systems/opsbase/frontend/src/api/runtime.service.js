@@ -37,8 +37,12 @@ export default {
     return api.post('/ops-flow/despacho', payload)
   },
 
-  getOpsDepositosMapa() {
-    return api.get('/ops-dashboard/depositos/mapa')
+  getOpsDepositosMapa(rubroId = null) {
+    return api.get('/ops-dashboard/depositos/mapa', {
+      params: {
+        rubroId: rubroId ?? undefined
+      }
+    })
   },
 
   getOpsDepositoContext(locationId, limit = 40) {

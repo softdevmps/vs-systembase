@@ -165,20 +165,21 @@
 }
 
 .sb-btn {
-  border-radius: 999px;
+  border-radius: 12px;
   text-transform: none;
-  font-weight: 600;
-  letter-spacing: 0.3px;
-  padding: 6px 18px;
-  min-height: 36px;
-  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.15px;
+  padding: 8px 16px;
+  min-height: 38px;
+  font-size: 0.9rem;
+  transition: transform 0.12s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .sb-btn.primary,
 .sb-btn.primary.v-btn {
   background: linear-gradient(135deg, var(--sb-primary), var(--sb-secondary));
   color: #fff !important;
-  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.25);
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
 }
 
 .sb-btn.primary.v-btn .v-btn__content,
@@ -188,9 +189,9 @@
 }
 
 .sb-btn.ghost {
-  color: #475569;
-  border: 1px solid color-mix(in srgb, var(--sb-border) 70%, transparent);
-  background: #f8fafc;
+  color: var(--sb-text-soft, #475569);
+  border: 1px solid color-mix(in srgb, var(--sb-border) 76%, transparent);
+  background: color-mix(in srgb, var(--sb-surface) 92%, transparent);
 }
 
 .sb-btn.warning {
@@ -204,13 +205,112 @@
 }
 
 .sb-btn.ghost:hover {
-  background: rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+  background: color-mix(in srgb, var(--sb-primary-soft) 55%, var(--sb-surface));
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
 }
 
 .sb-dark .sb-btn.ghost {
   background: rgba(148, 163, 184, 0.12);
   border-color: rgba(148, 163, 184, 0.28);
   color: #e2e8f0;
+}
+
+.app-shell .v-btn {
+  text-transform: none;
+  letter-spacing: 0.15px;
+  font-weight: 650;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.18s ease,
+    border-color 0.18s ease,
+    background-color 0.18s ease;
+}
+
+.app-shell .v-btn:not(.v-btn--icon):not(.v-btn--size-x-small) {
+  border-radius: 12px;
+  min-height: 38px;
+  padding-inline: 16px;
+}
+
+.app-shell .v-btn:not(.v-btn--icon) .v-btn__content {
+  gap: 8px;
+}
+
+.app-shell .v-btn.bg-primary {
+  background: linear-gradient(135deg, var(--sb-primary), var(--sb-secondary));
+  color: #fff !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.24);
+}
+
+.app-shell .v-btn.bg-primary .v-btn__content,
+.app-shell .v-btn.bg-primary .v-icon {
+  color: #fff !important;
+}
+
+.app-shell .v-btn.bg-primary:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.28);
+}
+
+.app-shell .v-btn.v-btn--variant-tonal {
+  border: 1px solid color-mix(in srgb, var(--sb-border) 70%, transparent);
+  background: color-mix(in srgb, var(--sb-primary-soft) 50%, var(--sb-surface));
+}
+
+.app-shell .v-btn.v-btn--variant-tonal:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--sb-primary) 45%, var(--sb-border));
+  box-shadow: 0 10px 18px rgba(15, 23, 42, 0.08);
+}
+
+.app-shell .v-btn.v-btn--variant-outlined {
+  border-width: 1px;
+  border-color: color-mix(in srgb, var(--sb-border) 76%, transparent);
+  background: color-mix(in srgb, var(--sb-surface) 96%, transparent);
+}
+
+.app-shell .v-btn.v-btn--variant-outlined:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--sb-primary) 45%, var(--sb-border));
+  background: color-mix(in srgb, var(--sb-primary-soft) 35%, var(--sb-surface));
+}
+
+.app-shell .v-btn.v-btn--variant-text {
+  border: 1px solid transparent;
+}
+
+.app-shell .v-btn.v-btn--variant-text:hover {
+  border-color: color-mix(in srgb, var(--sb-border) 70%, transparent);
+  background: color-mix(in srgb, var(--sb-primary-soft) 40%, var(--sb-surface));
+}
+
+.app-shell .v-btn.v-btn--icon {
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--sb-border) 72%, transparent);
+  background: color-mix(in srgb, var(--sb-primary-soft) 34%, var(--sb-surface));
+}
+
+.app-shell .v-btn.v-btn--icon:hover {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--sb-primary) 45%, var(--sb-border));
+}
+
+.app-shell .v-btn:focus-visible {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--sb-primary) 30%, transparent);
+}
+
+.app-shell .v-btn.v-btn--disabled {
+  opacity: 0.58;
+  filter: saturate(0.65);
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.app-shell .v-pagination .v-btn {
+  min-height: 34px;
+  padding-inline: 8px;
 }
 
 .sb-dark .sb-dialog {

@@ -87,6 +87,37 @@
       </v-col>
     </v-row>
 
+    <v-row dense class="mb-3">
+      <v-col cols="12" md="3">
+        <v-text-field
+          v-model="dateFrom"
+          type="date"
+          label="Desde"
+          density="comfortable"
+          variant="outlined"
+          clearable
+        />
+      </v-col>
+      <v-col cols="12" md="3">
+        <v-text-field
+          v-model="dateTo"
+          type="date"
+          label="Hasta"
+          density="comfortable"
+          variant="outlined"
+          clearable
+        />
+      </v-col>
+      <v-col cols="12" md="6" class="d-flex align-center justify-end ga-2 flex-wrap">
+        <v-chip size="small" variant="tonal" color="primary">
+          Filtros activos: {{ activeFiltersCount }}
+        </v-chip>
+        <v-btn variant="text" color="primary" :disabled="!hasActiveFilters" @click="resetFilters">
+          Limpiar filtros
+        </v-btn>
+      </v-col>
+    </v-row>
+
     <v-row dense class="mb-4">
       <v-col cols="12" sm="6" md="2">
         <v-card class="metric-card">
@@ -133,10 +164,16 @@
         :headers="headers"
         :items="filteredRows"
         :loading="loading"
-        :items-per-page="15"
+        :items-per-page="20"
+        :sort-by="[{ key: 'operationDate', order: 'desc' }]"
+        fixed-header
+        height="560"
         class="kardex-table"
         no-data-text="Sin movimientos para los filtros seleccionados."
       >
+        <template #item.operationDate="{ item }">
+          {{ formatDateTime(item.operationDate, item.operationAt) }}
+        </template>
         <template #item.movementType="{ item }">
           <v-chip size="small" :color="movementTypeColor(item.movementType)">
             {{ pretty(item.movementType) }}
@@ -155,6 +192,29 @@
         </template>
         <template #item.totalCost="{ item }">
           {{ item.totalCost == null ? '—' : formatMoney(item.totalCost) }}
+        </template>
+        <template #item.referenceNo="{ item }">
+          {{ item.referenceNo || `MOV-${item.movementId || '—'}` }}
+        </template>
+        <template #item.resourceLabel="{ item }">
+          <span class="text-truncate d-inline-block row-label" :title="item.resourceLabel">
+            {{ item.resourceLabel }}
+          </span>
+        </template>
+        <template #item.sourceLabel="{ item }">
+          <span class="text-truncate d-inline-block row-label" :title="item.sourceLabel">
+            {{ item.sourceLabel }}
+          </span>
+        </template>
+        <template #item.targetLabel="{ item }">
+          <span class="text-truncate d-inline-block row-label" :title="item.targetLabel">
+            {{ item.targetLabel }}
+          </span>
+        </template>
+        <template #item.actions="{ item }">
+          <v-btn size="x-small" variant="tonal" color="primary" @click="goTo(`/movement?focus=${item.movementId}`)">
+            Abrir
+          </v-btn>
         </template>
       </v-data-table>
     </v-card>
@@ -183,6 +243,8 @@ const selectedLocation = ref(null)
 const selectedType = ref(null)
 const selectedStatus = ref(null)
 const search = ref('')
+const dateFrom = ref('')
+const dateTo = ref('')
 
 const MOVEMENT_TYPES = ['ingreso', 'egreso', 'transferencia', 'ajuste', 'reserva', 'liberacion']
 const MOVEMENT_STATUS = ['borrador', 'confirmado', 'anulado']
@@ -253,6 +315,18 @@ function formatMoney(value) {
   return new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(num)
 }
 
+function formatDateTime(dateValue, rawValue) {
+  const date = dateValue instanceof Date ? dateValue : toDate(rawValue)
+  if (!date) return '—'
+  return new Intl.DateTimeFormat('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
+
 const movementMap = computed(() => {
   const map = {}
   movementRows.value.forEach(row => {
@@ -320,7 +394,7 @@ const joinedRows = computed(() => {
     const operationDate = toDate(operationAt)
 
     return {
-      id: `${movementId || 'x'}-${readField(line, 'Id') || Math.random()}`,
+      id: `${movementId || 'x'}-${readField(line, 'Id') || readField(line, 'CreatedAt') || '0'}`,
       lineId: toNumber(readField(line, 'Id')),
       movementId,
       movementType: String(readField(movement, 'MovementType') || '').toLowerCase(),
@@ -349,6 +423,9 @@ const joinedRows = computed(() => {
 
 const filteredRows = computed(() => {
   const term = String(search.value || '').trim().toLowerCase()
+  const fromDate = dateFrom.value ? new Date(`${dateFrom.value}T00:00:00`) : null
+  const toDateValue = dateTo.value ? new Date(`${dateTo.value}T23:59:59.999`) : null
+
   return joinedRows.value.filter(row => {
     if (selectedResource.value != null && Number(selectedResource.value) !== Number(row.resourceInstanceId)) return false
     if (selectedLocation.value != null) {
@@ -357,9 +434,16 @@ const filteredRows = computed(() => {
     }
     if (selectedType.value && normalizeKey(selectedType.value) !== normalizeKey(row.movementType)) return false
     if (selectedStatus.value && normalizeKey(selectedStatus.value) !== normalizeKey(row.status)) return false
+    if (fromDate || toDateValue) {
+      if (!row.operationDate) return false
+      const ts = row.operationDate.getTime()
+      if (fromDate && ts < fromDate.getTime()) return false
+      if (toDateValue && ts > toDateValue.getTime()) return false
+    }
 
     if (!term) return true
     const haystack = [
+      row.movementId,
       row.referenceNo,
       row.resourceLabel,
       row.sourceLabel,
@@ -374,6 +458,19 @@ const filteredRows = computed(() => {
 
 const totalQuantity = computed(() => filteredRows.value.reduce((sum, row) => sum + (row.quantity || 0), 0))
 const totalCost = computed(() => filteredRows.value.reduce((sum, row) => sum + (row.totalCost || 0), 0))
+const activeFiltersCount = computed(() => {
+  const checks = [
+    selectedResource.value != null,
+    selectedLocation.value != null,
+    Boolean(selectedType.value),
+    Boolean(selectedStatus.value),
+    Boolean(String(search.value || '').trim()),
+    Boolean(dateFrom.value),
+    Boolean(dateTo.value)
+  ]
+  return checks.filter(Boolean).length
+})
+const hasActiveFilters = computed(() => activeFiltersCount.value > 0)
 
 const statusCounts = computed(() => filteredRows.value.reduce((acc, row) => {
   const key = normalizeKey(row.status)
@@ -383,7 +480,7 @@ const statusCounts = computed(() => filteredRows.value.reduce((acc, row) => {
 }, {}))
 
 const headers = [
-  { title: 'Fecha', key: 'operationAt' },
+  { title: 'Fecha', key: 'operationDate' },
   { title: 'Tipo', key: 'movementType' },
   { title: 'Estado', key: 'status' },
   { title: 'Referencia', key: 'referenceNo' },
@@ -392,8 +489,19 @@ const headers = [
   { title: 'Destino', key: 'targetLabel' },
   { title: 'Cantidad', key: 'quantity', align: 'end' },
   { title: 'Costo unitario', key: 'unitCost', align: 'end' },
-  { title: 'Costo total', key: 'totalCost', align: 'end' }
+  { title: 'Costo total', key: 'totalCost', align: 'end' },
+  { title: 'Acciones', key: 'actions', sortable: false, align: 'center' }
 ]
+
+function resetFilters() {
+  selectedResource.value = null
+  selectedLocation.value = null
+  selectedType.value = null
+  selectedStatus.value = null
+  search.value = ''
+  dateFrom.value = ''
+  dateTo.value = ''
+}
 
 function goTo(path) {
   if (!path) return
@@ -456,6 +564,10 @@ onMounted(loadData)
   font-size: 1.2rem;
 }
 
+.row-label {
+  max-width: 220px;
+}
+
 .kardex-table :deep(th .v-data-table-header__content) {
   white-space: nowrap;
 }
@@ -480,5 +592,13 @@ onMounted(loadData)
 
 .kardex-view :deep(.v-data-table tbody tr:hover) {
   background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.1)) 70%, transparent);
+}
+
+.kardex-view :deep(.v-data-table .v-table__wrapper) {
+  border-top: 1px solid var(--sb-border-soft);
+}
+
+.kardex-view :deep(.v-data-table tbody td) {
+  vertical-align: middle;
 }
 </style>
