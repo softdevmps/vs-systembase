@@ -59,6 +59,36 @@
             </div>
             <div class="d-flex align-center ga-2">
               <v-chip size="small" variant="tonal">{{ filteredStockItems.length }} / {{ stockItems.length }} ítems</v-chip>
+              <v-btn
+                size="small"
+                color="orange"
+                variant="tonal"
+                :disabled="selectedStockIds.length === 0 || stockSaving"
+                @click="applyBulkReserve(1)"
+              >
+                <v-icon start>mdi-lock-plus-outline</v-icon>
+                Reservar
+              </v-btn>
+              <v-btn
+                size="small"
+                color="teal"
+                variant="tonal"
+                :disabled="selectedStockIds.length === 0 || stockSaving"
+                @click="applyBulkReserve(-1)"
+              >
+                <v-icon start>mdi-lock-open-outline</v-icon>
+                Liberar
+              </v-btn>
+              <v-btn
+                size="small"
+                color="primary"
+                variant="tonal"
+                :disabled="selectedStockIds.length === 0 || stockSaving"
+                @click="openBulkAdjustDialog"
+              >
+                <v-icon start>mdi-tune-variant</v-icon>
+                Ajustar varios
+              </v-btn>
               <v-btn size="small" color="primary" variant="tonal" @click="openNewStockDialog">
                 <v-icon start>mdi-plus</v-icon>
                 Nuevo ítem
@@ -89,6 +119,16 @@
                   clearable
                 />
               </v-col>
+              <v-col cols="12" md="2">
+                <v-select
+                  v-model="stockTypeFilter"
+                  :items="stockTypeItems"
+                  label="Tipo recurso"
+                  variant="outlined"
+                  density="comfortable"
+                  clearable
+                />
+              </v-col>
               <v-col cols="12" md="2" class="d-flex align-center">
                 <v-switch
                   v-model="stockOnlyCritical"
@@ -102,12 +142,18 @@
                 <v-chip size="small" :color="stockCriticalCount > 0 ? 'red' : 'green'" variant="tonal">
                   Críticos: {{ stockCriticalCount }}
                 </v-chip>
+                <v-chip size="small" color="primary" variant="tonal">
+                  Seleccionados: {{ selectedStockIds.length }}
+                </v-chip>
               </v-col>
             </v-row>
           </v-card-text>
 
           <v-data-table
             class="ops-table"
+            v-model="selectedStockIds"
+            show-select
+            item-value="stockBalanceId"
             :headers="stockHeaders"
             :items="filteredStockItems"
             :loading="loading"
@@ -481,6 +527,54 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog v-model="stockBulkDialog" max-width="620">
+      <v-card class="stock-dialog sb-dialog">
+        <div class="sb-dialog-title stock-dialog__header">
+          <div class="sb-dialog-icon">
+            <v-icon color="primary">mdi-tune</v-icon>
+          </div>
+          <div>
+            <div class="sb-dialog-title-text">Ajuste masivo</div>
+            <div class="sb-dialog-subtitle">Aplicar cambios sobre {{ selectedStockRows.length }} ítems seleccionados.</div>
+          </div>
+        </div>
+        <v-divider />
+        <v-card-text class="sb-dialog-body stock-dialog__body">
+          <v-alert v-if="stockError" type="error" variant="tonal">{{ stockError }}</v-alert>
+          <v-row dense>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model.number="bulkAdjustForm.deltaReal"
+                label="Delta stock real"
+                type="number"
+                step="0.001"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model.number="bulkAdjustForm.deltaReservado"
+                label="Delta stock reservado"
+                type="number"
+                step="0.001"
+                variant="outlined"
+                density="comfortable"
+              />
+            </v-col>
+          </v-row>
+        </v-card-text>
+        <v-divider />
+        <v-card-actions class="sb-dialog-actions stock-dialog__actions d-flex justify-end ga-2">
+          <v-btn class="sb-btn ghost" variant="text" @click="stockBulkDialog = false">Cancelar</v-btn>
+          <v-btn class="sb-btn primary" color="primary" :loading="stockSaving" @click="applyBulkAdjust">
+            <v-icon start>mdi-check-circle-outline</v-icon>
+            Aplicar ajuste
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-container>
 </template>
 
@@ -497,13 +591,16 @@ const error = ref('')
 const response = ref({})
 const stockSearch = ref('')
 const stockEstadoFilter = ref(null)
+const stockTypeFilter = ref(null)
 const stockOnlyCritical = ref(false)
 const stockAdjustDialog = ref(false)
 const stockCreateDialog = ref(false)
 const stockDeleteDialog = ref(false)
+const stockBulkDialog = ref(false)
 const stockSaving = ref(false)
 const stockError = ref('')
 const resourceInstances = ref([])
+const selectedStockIds = ref([])
 const stockDeleteTarget = ref({
   stockBalanceId: null,
   resourceCode: '',
@@ -530,6 +627,11 @@ const stockCreateForm = ref({
   resourceInstanceId: null,
   stockReal: 0,
   stockReservado: 0
+})
+
+const bulkAdjustForm = ref({
+  deltaReal: 0,
+  deltaReservado: 0
 })
 
 function normalizeKey(value) {
@@ -667,15 +769,31 @@ const stockEstadoItems = computed(() => {
   return Array.from(unique).sort((a, b) => String(a).localeCompare(String(b), 'es'))
 })
 
+const stockTypeItems = computed(() => {
+  const unique = new Set()
+  stockItems.value.forEach(item => {
+    const type = String(item.resourceName || '').trim()
+    if (type) unique.add(type)
+  })
+  return Array.from(unique).sort((a, b) => String(a).localeCompare(String(b), 'es'))
+})
+
 const stockCriticalCount = computed(() =>
   stockItems.value.filter(item => (item.stockDisponible || 0) <= 0).length)
+
+const selectedStockRows = computed(() => {
+  const selected = new Set((selectedStockIds.value || []).map(v => Number(v)))
+  return stockItems.value.filter(item => selected.has(Number(item.stockBalanceId)))
+})
 
 const filteredStockItems = computed(() => {
   const query = String(stockSearch.value || '').trim().toLowerCase()
   const estado = String(stockEstadoFilter.value || '').trim().toLowerCase()
+  const type = String(stockTypeFilter.value || '').trim().toLowerCase()
   return stockItems.value.filter(item => {
     if (stockOnlyCritical.value && (item.stockDisponible || 0) > 0) return false
     if (estado && String(item.estado || '').trim().toLowerCase() !== estado) return false
+    if (type && String(item.resourceName || '').trim().toLowerCase() !== type) return false
     if (!query) return true
     return String(item.resourceCode || '').toLowerCase().includes(query) ||
       String(item.resourceName || '').toLowerCase().includes(query) ||
@@ -813,6 +931,8 @@ async function loadData() {
     const data = contextRes?.data
     response.value = data || {}
     resourceInstances.value = toArray(instancesRes?.data)
+    const validIds = new Set(stockItems.value.map(item => Number(item.stockBalanceId)))
+    selectedStockIds.value = (selectedStockIds.value || []).filter(id => validIds.has(Number(id)))
   } catch (err) {
     const payload = err?.response?.data
     error.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo cargar el contexto del depósito.')
@@ -908,6 +1028,102 @@ async function saveStockAdjust() {
   } catch (err) {
     const payload = err?.response?.data
     stockError.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo guardar el ajuste de stock.')
+  } finally {
+    stockSaving.value = false
+  }
+}
+
+async function updateSingleStockBalance(item, stockReal, stockReservado) {
+  const stockBalanceId = toNumber(item?.stockBalanceId)
+  const resourceInstanceId = toNumber(item?.resourceInstanceId)
+  const locationId = toNumber(location.value.id)
+  if (!stockBalanceId || !resourceInstanceId || !locationId) {
+    throw new Error('No se pudo resolver el ítem para ajuste.')
+  }
+  if (stockReal < 0 || stockReservado < 0) {
+    throw new Error('Stock real/reservado no puede ser negativo.')
+  }
+  if (stockReservado > stockReal) {
+    throw new Error('Stock reservado no puede ser mayor a stock real.')
+  }
+
+  const existingRes = await runtimeApi.get('stock-balance', stockBalanceId)
+  const existing = existingRes?.data || {}
+  const createdAt = readField(existing, 'CreatedAt') || readField(existing, 'Createdat') || new Date().toISOString()
+  await runtimeApi.update('stock-balance', stockBalanceId, {
+    resourceinstanceid: resourceInstanceId,
+    locationid: locationId,
+    stockreal: stockReal,
+    stockreservado: stockReservado,
+    stockdisponible: stockReal - stockReservado,
+    createdat: createdAt,
+    updatedat: new Date().toISOString()
+  })
+}
+
+function openBulkAdjustDialog() {
+  stockError.value = ''
+  bulkAdjustForm.value = {
+    deltaReal: 0,
+    deltaReservado: 0
+  }
+  stockBulkDialog.value = true
+}
+
+async function applyBulkAdjust() {
+  stockError.value = ''
+  if (selectedStockRows.value.length === 0) {
+    stockError.value = 'Selecciona al menos un ítem.'
+    return
+  }
+
+  const deltaReal = toNumber(bulkAdjustForm.value.deltaReal) ?? 0
+  const deltaReservado = toNumber(bulkAdjustForm.value.deltaReservado) ?? 0
+  if (deltaReal === 0 && deltaReservado === 0) {
+    stockError.value = 'Indica al menos un delta distinto de cero.'
+    return
+  }
+
+  stockSaving.value = true
+  try {
+    for (const item of selectedStockRows.value) {
+      const nextReal = (toNumber(item.stockReal) ?? 0) + deltaReal
+      const nextReservado = (toNumber(item.stockReservado) ?? 0) + deltaReservado
+      await updateSingleStockBalance(item, nextReal, nextReservado)
+    }
+    stockBulkDialog.value = false
+    selectedStockIds.value = []
+    await loadData()
+  } catch (err) {
+    const payload = err?.response?.data
+    stockError.value = payload?.message || payload?.error || err?.message || 'No se pudo aplicar ajuste masivo.'
+  } finally {
+    stockSaving.value = false
+  }
+}
+
+async function applyBulkReserve(deltaReservadoSign) {
+  stockError.value = ''
+  if (selectedStockRows.value.length === 0) {
+    stockError.value = 'Selecciona al menos un ítem.'
+    return
+  }
+
+  stockSaving.value = true
+  try {
+    for (const item of selectedStockRows.value) {
+      const currentReal = toNumber(item.stockReal) ?? 0
+      const currentReservado = toNumber(item.stockReservado) ?? 0
+      const nextReservado = deltaReservadoSign > 0
+        ? currentReservado + 1
+        : Math.max(0, currentReservado - 1)
+      await updateSingleStockBalance(item, currentReal, nextReservado)
+    }
+    selectedStockIds.value = []
+    await loadData()
+  } catch (err) {
+    const payload = err?.response?.data
+    stockError.value = payload?.message || payload?.error || err?.message || 'No se pudo ejecutar acción masiva.'
   } finally {
     stockSaving.value = false
   }

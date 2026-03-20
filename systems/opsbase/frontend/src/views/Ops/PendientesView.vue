@@ -15,9 +15,14 @@
         </div>
       </v-col>
       <v-col cols="auto" class="d-flex ga-2 flex-wrap justify-end">
+        <v-chip color="primary" variant="tonal" size="small">Paso 4/6</v-chip>
         <v-btn variant="tonal" color="primary" @click="goTo('/operaciones')">
           <v-icon start>mdi-transit-transfer</v-icon>
           Operaciones
+        </v-btn>
+        <v-btn variant="tonal" color="success" @click="goTo('/kardex')">
+          <v-icon start>mdi-arrow-right-circle-outline</v-icon>
+          Siguiente: Kardex
         </v-btn>
         <v-btn variant="text" color="primary" :loading="loading" @click="loadData">
           <v-icon start>mdi-refresh</v-icon>

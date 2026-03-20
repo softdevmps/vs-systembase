@@ -65,3 +65,9 @@ Thumbs.db
 # =====================
 *.swp
 *.tmp
+
+# =====================
+# Local ops docs/scripts (no commit)
+# =====================
+docs/sql/
+docs/scripts/

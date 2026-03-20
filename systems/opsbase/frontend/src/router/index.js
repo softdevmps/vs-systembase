@@ -28,6 +28,7 @@ const routes = [
     children: [
       { path: 'home', component: Home },
       { path: 'operaciones', component: OperacionesView },
+      { path: 'operaciones/ajuste', component: OperacionesView },
       { path: 'setup-inicial', component: SetupInicialView },
       { path: 'pendientes', component: PendientesView },
       { path: 'kardex', component: KardexView },

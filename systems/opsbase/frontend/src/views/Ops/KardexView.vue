@@ -14,10 +14,15 @@
           </div>
         </div>
       </v-col>
-      <v-col cols="auto" class="d-flex ga-2">
+      <v-col cols="auto" class="d-flex ga-2 flex-wrap justify-end">
+        <v-chip color="primary" variant="tonal" size="small">Paso 5/6</v-chip>
         <v-btn variant="tonal" color="primary" @click="goTo(movementRoute)">
           <v-icon start>mdi-swap-horizontal-bold</v-icon>
           Movimientos
+        </v-btn>
+        <v-btn variant="tonal" color="success" @click="goTo('/trazabilidad')">
+          <v-icon start>mdi-arrow-right-circle-outline</v-icon>
+          Siguiente: Trazabilidad
         </v-btn>
         <v-btn color="primary" @click="loadData" :loading="loading">
           <v-icon start>mdi-refresh</v-icon>

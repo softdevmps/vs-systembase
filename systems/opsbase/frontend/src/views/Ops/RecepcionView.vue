@@ -14,10 +14,15 @@
           </div>
         </div>
       </v-col>
-      <v-col cols="auto" class="d-flex ga-2">
+      <v-col cols="auto" class="d-flex ga-2 flex-wrap justify-end">
+        <v-chip color="primary" variant="tonal" size="small">Paso 2/6</v-chip>
         <v-btn variant="tonal" color="primary" @click="goTo('/kardex')">
           <v-icon start>mdi-notebook-outline</v-icon>
           Kardex
+        </v-btn>
+        <v-btn variant="tonal" color="success" @click="goTo('/despacho')">
+          <v-icon start>mdi-arrow-right-circle-outline</v-icon>
+          Siguiente: Despachar
         </v-btn>
         <v-btn variant="text" color="primary" :loading="loadingCatalogs" @click="loadCatalogs">
           <v-icon start>mdi-refresh</v-icon>
@@ -65,40 +70,10 @@
                   item-value="value"
                   label="Recurso (instancia)"
                   :loading="loadingCatalogs"
+                  :menu-props="{ maxHeight: 420 }"
                   variant="outlined"
                   density="comfortable"
-                >
-                  <template #selection="{ item }">
-                    <div class="resource-selection">
-                      <strong class="resource-selection-code">{{ item.raw.code || item.raw.title }}</strong>
-                      <span v-if="item.raw.definitionDisplay" class="resource-selection-subtitle">
-                        {{ item.raw.definitionDisplay }}
-                      </span>
-                    </div>
-                  </template>
-                  <template #item="{ props, item }">
-                    <v-list-item v-bind="props" class="resource-item">
-                      <template #title>
-                        <div class="resource-option-title">
-                          <span>{{ item.raw.code || item.raw.title }}</span>
-                          <v-chip
-                            v-if="item.raw.status"
-                            size="x-small"
-                            variant="tonal"
-                            :color="statusColor(item.raw.status)"
-                          >
-                            {{ formatStatus(item.raw.status) }}
-                          </v-chip>
-                        </div>
-                      </template>
-                      <template #subtitle>
-                        <span class="resource-option-subtitle">
-                          {{ item.raw.definitionDisplay || 'Sin tipo de recurso' }}
-                        </span>
-                      </template>
-                    </v-list-item>
-                  </template>
-                </v-select>
+                />
               </v-col>
               <v-col cols="12" md="4">
                 <v-text-field
@@ -247,6 +222,131 @@
         </div>
       </v-card-actions>
     </v-card>
+
+    <v-card class="recepcion-card mt-4">
+      <v-card-title class="d-flex align-center justify-space-between flex-wrap ga-2">
+        <div class="d-flex align-center ga-2">
+          <v-icon color="primary">mdi-history</v-icon>
+          <span>Historial de Recepción</span>
+        </div>
+        <div class="d-flex align-center ga-2">
+          <v-chip size="small" variant="tonal">Mostrando {{ filteredHistory.length }}</v-chip>
+          <v-btn size="small" variant="text" color="primary" :loading="loadingCatalogs" @click="loadCatalogs">
+            <v-icon start>mdi-refresh</v-icon>
+            Actualizar
+          </v-btn>
+        </div>
+      </v-card-title>
+      <v-divider />
+      <v-card-text class="pb-0">
+        <v-row dense>
+          <v-col cols="12" md="5">
+            <v-text-field
+              v-model="historySearch"
+              variant="outlined"
+              density="comfortable"
+              label="Buscar referencia o depósito"
+              clearable
+              prepend-inner-icon="mdi-magnify"
+            />
+          </v-col>
+          <v-col cols="12" md="3">
+            <v-select
+              v-model="historyStatusFilter"
+              :items="historyStatusItems"
+              item-title="title"
+              item-value="value"
+              variant="outlined"
+              density="comfortable"
+              label="Estado"
+              clearable
+            />
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field
+              v-model="historyDateFrom"
+              variant="outlined"
+              density="comfortable"
+              label="Desde"
+              type="date"
+            />
+          </v-col>
+          <v-col cols="6" md="2">
+            <v-text-field
+              v-model="historyDateTo"
+              variant="outlined"
+              density="comfortable"
+              label="Hasta"
+              type="date"
+            />
+          </v-col>
+        </v-row>
+      </v-card-text>
+      <v-divider class="mt-2" />
+      <v-data-table
+        class="history-table"
+        :headers="historyHeaders"
+        :items="filteredHistory"
+        :loading="loadingCatalogs"
+        :items-per-page="8"
+        density="comfortable"
+        no-data-text="No hay recepciones registradas."
+      >
+        <template #item.referenceNo="{ item }">
+          <div class="history-reference">
+            <strong>{{ item.referenceNo }}</strong>
+            <div class="history-reference__sub">#{{ item.id }}</div>
+          </div>
+        </template>
+        <template #item.status="{ item }">
+          <v-chip size="x-small" :color="historyStatusColor(item.status)" variant="tonal">
+            {{ formatStatus(item.status) || '—' }}
+          </v-chip>
+        </template>
+        <template #item.quantity="{ item }">{{ formatNumber(item.quantity) }}</template>
+        <template #item.operationAt="{ item }">{{ formatDate(item.operationAt) }}</template>
+        <template #item.targetLabel="{ item }">
+          <span class="history-route">{{ item.targetLabel }}</span>
+        </template>
+        <template #item.actions="{ item }">
+          <div class="history-actions">
+            <v-btn
+              v-if="canConfirm(item)"
+              size="x-small"
+              variant="text"
+              color="green"
+              :loading="Boolean(rowActionLoading[item.id])"
+              @click="updateMovementStatus(item, 'confirmado')"
+            >
+              Confirmar
+            </v-btn>
+            <v-btn
+              v-if="canCancel(item)"
+              size="x-small"
+              variant="text"
+              color="error"
+              :loading="Boolean(rowActionLoading[item.id])"
+              @click="updateMovementStatus(item, 'anulado')"
+            >
+              Anular
+            </v-btn>
+            <v-btn
+              v-if="canRetry(item)"
+              size="x-small"
+              variant="text"
+              color="orange"
+              :loading="Boolean(rowActionLoading[item.id])"
+              @click="retryMovement(item)"
+            >
+              Reintentar
+            </v-btn>
+            <v-btn size="x-small" variant="text" color="primary" @click="goTo(`/movement?focus=${item.id}`)">
+              Abrir
+            </v-btn>
+          </div>
+        </template>
+      </v-data-table>
+    </v-card>
   </v-container>
 </template>
 
@@ -273,6 +373,13 @@ const rubros = ref([])
 const resources = ref([])
 const resourceDefinitions = ref([])
 const locations = ref([])
+const movements = ref([])
+const movementLines = ref([])
+const rowActionLoading = ref({})
+const historySearch = ref('')
+const historyStatusFilter = ref(null)
+const historyDateFrom = ref('')
+const historyDateTo = ref('')
 
 const form = ref(buildDefaultForm())
 
@@ -342,12 +449,25 @@ function formatStatus(value) {
   return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase()
 }
 
-function statusColor(value) {
+function truncateText(value, max = 34) {
+  const text = String(value || '').trim()
+  if (!text || text.length <= max) return text
+  return `${text.slice(0, Math.max(1, max - 1))}…`
+}
+
+function formatDate(value) {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString('es-AR')
+}
+
+function historyStatusColor(value) {
   const normalized = normalizeKey(value)
-  if (normalized.includes('activo') || normalized.includes('activa')) return 'green'
-  if (normalized.includes('inactivo') || normalized.includes('inactiva')) return 'grey'
-  if (normalized.includes('bloqueado') || normalized.includes('bloqueada')) return 'orange'
-  return 'blue-grey'
+  if (normalized.includes('confirmado') || normalized.includes('ok')) return 'green'
+  if (normalized.includes('borrador') || normalized.includes('pendiente')) return 'orange'
+  if (normalized.includes('anulado') || normalized.includes('cancelado') || normalized.includes('error')) return 'red'
+  return 'grey'
 }
 
 const resourceDefinitionMap = computed(() => {
@@ -388,20 +508,15 @@ const rubroItems = computed(() => rubros.value
 const resourceItems = computed(() => resources.value
   .map(row => {
     const id = toNumber(readField(row, 'Id'))
-    const code = readField(row, 'Codigointerno')
-    const state = readField(row, 'Estado')
     const definitionId = toNumber(readField(row, 'Resourcedefinitionid') ?? readField(row, 'ResourceDefinitionId'))
     const definition = resourceDefinitionMap.value[definitionId || -1] || { code: '', name: '', display: `Def#${definitionId ?? '-'}` }
     const rubroId = toNumber(readField(row, 'Rubroid')) ?? toNumber(definition.rubroId)
-    const safeCode = code || `#${id}`
-    const safeStatus = String(state || '').trim()
-    const title = safeCode
+    const definitionLabel = truncateText(definition.display || '', 34)
+    const rubroLabel = truncateText(String(readField(row, 'Rubronombre') || definition.rubroNombre || ''), 20)
+    const title = [definitionLabel, normalizeKey(rubroLabel) === 'general' ? '' : rubroLabel].filter(Boolean).join(' · ')
     return {
       value: id,
-      title,
-      code: safeCode,
-      status: safeStatus,
-      definitionDisplay: definition.display,
+      title: title || (definitionLabel || `Recurso #${id}`),
       rubroId
     }
   })
@@ -434,8 +549,7 @@ const selectedRubroLabel = computed(() => rubroItems.value.find(item => item.val
 const selectedResourceLabel = computed(() => {
   const selected = resourceItems.value.find(item => item.value === toNumber(form.value.resourceInstanceId))
   if (!selected) return ''
-  if (selected.definitionDisplay) return `${selected.code} · ${selected.definitionDisplay}`
-  return selected.code
+  return selected.title || ''
 })
 const selectedLocationLabel = computed(() => locationItems.value.find(item => item.value === toNumber(form.value.targetLocationId))?.title || '')
 
@@ -444,6 +558,114 @@ const checkResource = computed(() => toNumber(form.value.resourceInstanceId) != 
 const checkQuantity = computed(() => (toNumber(form.value.quantity) || 0) > 0)
 const checkLocation = computed(() => toNumber(form.value.targetLocationId) != null)
 const isFormValid = computed(() => checkRubro.value && checkResource.value && checkQuantity.value && checkLocation.value)
+
+const locationMap = computed(() => {
+  const map = new Map()
+  toArray(locations.value).forEach(row => {
+    const id = toNumber(readField(row, 'Id'))
+    const code = readField(row, 'Codigo')
+    const name = readField(row, 'Nombre')
+    if (id == null) return
+    map.set(id, code && name ? `${code} · ${name}` : (name || code || `#${id}`))
+  })
+  return map
+})
+
+const movementLinesByMovementId = computed(() => {
+  const map = {}
+  toArray(movementLines.value).forEach(row => {
+    const movementId = toNumber(readField(row, 'Movementid') ?? readField(row, 'MovementId'))
+    if (movementId == null) return
+    if (!map[movementId]) map[movementId] = []
+    map[movementId].push({
+      resourceInstanceId: toNumber(readField(row, 'Resourceinstanceid') ?? readField(row, 'ResourceInstanceId')),
+      quantity: toNumber(readField(row, 'Quantity')) || 0,
+      unitCost: toNumber(readField(row, 'Unitcost') ?? readField(row, 'UnitCost')),
+      serie: readField(row, 'Serie') || null,
+      lote: readField(row, 'Lote') || null
+    })
+  })
+  return map
+})
+
+const quantityByMovementId = computed(() => {
+  const map = {}
+  Object.entries(movementLinesByMovementId.value).forEach(([movementId, lines]) => {
+    map[Number(movementId)] = (lines || []).reduce((acc, line) => acc + (toNumber(line.quantity) || 0), 0)
+  })
+  return map
+})
+
+const historyRows = computed(() => toArray(movements.value)
+  .map(row => {
+    const movementType = String(readField(row, 'Movementtype') || readField(row, 'MovementType') || '').trim().toLowerCase()
+    const id = toNumber(readField(row, 'Id'))
+    const targetLocationId = toNumber(readField(row, 'Targetlocationid') ?? readField(row, 'TargetLocationId'))
+    return {
+      id,
+      movementType,
+      status: String(readField(row, 'Status') || '').trim().toLowerCase(),
+      referenceNo: readField(row, 'Referenceno') || readField(row, 'ReferenceNo') || `MOV-${id ?? '—'}`,
+      targetLocationId,
+      targetLabel: targetLocationId != null ? (locationMap.value.get(targetLocationId) || `#${targetLocationId}`) : '—',
+      quantity: quantityByMovementId.value[id || -1] ?? (toNumber(readField(row, 'Totalquantity') ?? readField(row, 'TotalQuantity')) ?? 0),
+      operationAt: readField(row, 'Operationat') || readField(row, 'OperationAt') || readField(row, 'Createdat') || readField(row, 'CreatedAt') || null,
+      createdAt: readField(row, 'Createdat') || readField(row, 'CreatedAt') || null,
+      createdBy: readField(row, 'Createdby') || readField(row, 'CreatedBy') || null,
+      notes: readField(row, 'Notes') || null
+    }
+  })
+  .filter(item => item.id != null && item.movementType === 'ingreso')
+  .sort((a, b) => new Date(b.operationAt || 0).getTime() - new Date(a.operationAt || 0).getTime()))
+
+const historyStatusItems = computed(() => {
+  const set = new Set(historyRows.value.map(item => item.status).filter(Boolean))
+  return Array.from(set)
+    .sort((a, b) => a.localeCompare(b, 'es'))
+    .map(value => ({ value, title: formatStatus(value) }))
+})
+
+function toDateStart(value) {
+  if (!value) return null
+  const d = new Date(`${value}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function toDateEnd(value) {
+  if (!value) return null
+  const d = new Date(`${value}T23:59:59`)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+const filteredHistory = computed(() => {
+  const query = String(historySearch.value || '').trim().toLowerCase()
+  const selectedStatus = String(historyStatusFilter.value || '').trim().toLowerCase()
+  const from = toDateStart(historyDateFrom.value)
+  const to = toDateEnd(historyDateTo.value)
+
+  return historyRows.value
+    .filter(item => {
+      if (selectedStatus && String(item.status || '').trim().toLowerCase() !== selectedStatus) return false
+      const itemDate = item.operationAt ? new Date(item.operationAt) : null
+      if (from && itemDate && itemDate < from) return false
+      if (to && itemDate && itemDate > to) return false
+      if (!query) return true
+      const haystack = [item.referenceNo, item.targetLabel, formatStatus(item.status)]
+        .map(v => String(v || '').toLowerCase())
+        .join(' ')
+      return haystack.includes(query)
+    })
+    .slice(0, 80)
+})
+
+const historyHeaders = [
+  { title: 'Referencia', key: 'referenceNo' },
+  { title: 'Estado', key: 'status' },
+  { title: 'Destino', key: 'targetLabel' },
+  { title: 'Cant.', key: 'quantity', align: 'end' },
+  { title: 'Fecha', key: 'operationAt' },
+  { title: 'Acciones', key: 'actions', sortable: false, align: 'end' }
+]
 
 watch(() => form.value.rubroId, () => {
   const selectedResourceId = toNumber(form.value.resourceInstanceId)
@@ -483,25 +705,154 @@ function nextStep() {
   if (step.value < 3) step.value += 1
 }
 
+function normalizeStatus(value) {
+  return normalizeKey(value)
+}
+
+function canConfirm(item) {
+  return normalizeStatus(item?.status) === 'borrador'
+}
+
+function canCancel(item) {
+  return normalizeStatus(item?.status) === 'borrador'
+}
+
+function canRetry(item) {
+  return normalizeStatus(item?.status) === 'anulado'
+}
+
+function buildMovementUpdatePayload(row, nextStatus) {
+  const nowIso = new Date().toISOString()
+  return {
+    movementtype: 'ingreso',
+    status: nextStatus,
+    sourcelocationid: null,
+    targetlocationid: row.targetLocationId,
+    referenceno: row.referenceNo || null,
+    notes: row.notes || null,
+    operationat: row.operationAt || nowIso,
+    createdby: row.createdBy || null,
+    createdat: row.createdAt || nowIso
+  }
+}
+
+async function updateMovementStatus(row, nextStatus) {
+  const id = toNumber(row?.id)
+  if (!id) return
+  error.value = ''
+  successMessage.value = ''
+  rowActionLoading.value = { ...rowActionLoading.value, [id]: true }
+  try {
+    await runtimeApi.update('movement', id, buildMovementUpdatePayload(row, nextStatus))
+    await loadCatalogs()
+    successMessage.value = `Movimiento ${row.referenceNo || `#${id}`} actualizado a ${nextStatus}.`
+  } catch (err) {
+    const payload = err?.response?.data
+    error.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : 'No se pudo actualizar el movimiento.')
+  } finally {
+    const next = { ...rowActionLoading.value }
+    delete next[id]
+    rowActionLoading.value = next
+  }
+}
+
+function buildRetryReference(referenceNo, id) {
+  const base = (String(referenceNo || `MOV-${id || 'X'}`)).trim()
+  const suffix = `-R${Date.now().toString().slice(-6)}`
+  const maxBase = Math.max(1, 80 - suffix.length)
+  return `${base.slice(0, maxBase)}${suffix}`
+}
+
+async function retryMovement(row) {
+  const id = toNumber(row?.id)
+  if (!id) return
+  error.value = ''
+  successMessage.value = ''
+  rowActionLoading.value = { ...rowActionLoading.value, [id]: true }
+  try {
+    const nowIso = new Date().toISOString()
+    const retryReference = buildRetryReference(row.referenceNo, id)
+    await runtimeApi.create('movement', {
+      movementtype: 'ingreso',
+      status: 'borrador',
+      sourcelocationid: null,
+      targetlocationid: row.targetLocationId,
+      referenceno: retryReference,
+      notes: row.notes || `Reintento de ${row.referenceNo || `MOV-${id}`}`,
+      operationat: nowIso,
+      createdby: row.createdBy || null,
+      createdat: nowIso
+    })
+
+    await loadCatalogs()
+    const created = historyRows.value.find(item => item.referenceNo === retryReference)
+    if (!created?.id) {
+      throw new Error('No se pudo resolver el nuevo movimiento reintentado.')
+    }
+    const lines = movementLinesByMovementId.value[id] || []
+    for (const line of lines) {
+      await runtimeApi.create('movement-line', {
+        movementid: created.id,
+        resourceinstanceid: line.resourceInstanceId,
+        quantity: line.quantity,
+        unitcost: line.unitCost,
+        serie: line.serie,
+        lote: line.lote,
+        createdat: nowIso
+      })
+    }
+    await loadCatalogs()
+    successMessage.value = `Reintento creado (${retryReference}) en borrador.`
+  } catch (err) {
+    const payload = err?.response?.data
+    error.value = payload?.message || payload?.error || (typeof payload === 'string' ? payload : err?.message || 'No se pudo reintentar el movimiento.')
+  } finally {
+    const next = { ...rowActionLoading.value }
+    delete next[id]
+    rowActionLoading.value = next
+  }
+}
+
 async function loadCatalogs() {
   loadingCatalogs.value = true
   error.value = ''
 
   try {
-    const [rubrosRes, resourcesRes, resourceDefsRes, locationsRes] = await Promise.all([
-      runtimeApi.list('rubro'),
-      runtimeApi.list('resource-instance'),
-      runtimeApi.list('resource-definition'),
-      runtimeApi.list('location')
+    const withTimeout = (promise, ms, label) =>
+      Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout en ${label}`)), ms))
+      ])
+
+    const [rubrosRes, resourcesRes, resourceDefsRes, locationsRes, movementsRes, movementLinesRes] = await Promise.allSettled([
+      withTimeout(runtimeApi.list('rubro'), 10000, 'rubro'),
+      withTimeout(runtimeApi.list('resource-instance'), 10000, 'resource-instance'),
+      withTimeout(runtimeApi.list('resource-definition'), 10000, 'resource-definition'),
+      withTimeout(runtimeApi.list('location'), 10000, 'location'),
+      withTimeout(runtimeApi.list('movement'), 10000, 'movement'),
+      withTimeout(runtimeApi.list('movement-line'), 10000, 'movement-line')
     ])
 
-    rubros.value = toArray(rubrosRes?.data)
-    resources.value = toArray(resourcesRes?.data)
-    resourceDefinitions.value = toArray(resourceDefsRes?.data)
-    locations.value = toArray(locationsRes?.data)
+    const warnings = []
+    const takeData = (result, label) => {
+      if (result.status === 'fulfilled') return toArray(result.value?.data)
+      warnings.push(label)
+      return []
+    }
+
+    rubros.value = takeData(rubrosRes, 'rubros')
+    resources.value = takeData(resourcesRes, 'instancias')
+    resourceDefinitions.value = takeData(resourceDefsRes, 'tipos de recurso')
+    locations.value = takeData(locationsRes, 'ubicaciones')
+    movements.value = takeData(movementsRes, 'movimientos')
+    movementLines.value = takeData(movementLinesRes, 'líneas de movimiento')
 
     if (toNumber(form.value.rubroId) == null && rubroItems.value.length === 1) {
       form.value.rubroId = rubroItems.value[0].value
+    }
+
+    if (warnings.length > 0) {
+      error.value = `Carga parcial: no se pudieron obtener ${warnings.join(', ')}.`
     }
   } catch (err) {
     const payload = err?.response?.data
@@ -599,6 +950,38 @@ onMounted(loadCatalogs)
   border-bottom: 0;
 }
 
+.history-route {
+  color: var(--sb-text-soft, #475569);
+  font-size: 0.86rem;
+}
+
+.history-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.history-reference {
+  display: grid;
+  line-height: 1.2;
+}
+
+.history-reference__sub {
+  font-size: 0.75rem;
+  color: var(--sb-text-soft, #64748b);
+}
+
+.recepcion-view :deep(.history-table thead th) {
+  color: var(--sb-text, #0f172a) !important;
+  font-weight: 700 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.72rem;
+  background: color-mix(in srgb, var(--sb-primary-soft, rgba(37,99,235,0.12)) 42%, transparent);
+  border-bottom: 1px solid var(--sb-border-soft);
+}
+
 .recepcion-view :deep(.v-stepper-header) {
   border-bottom: 1px solid var(--sb-border-soft);
 }
@@ -610,51 +993,6 @@ onMounted(loadCatalogs)
 .recepcion-view :deep(.v-stepper-item__title),
 .recepcion-view :deep(.v-stepper-item__subtitle) {
   color: var(--sb-text, #0f172a) !important;
-}
-
-.resource-selection {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-  min-width: 0;
-}
-
-.resource-selection-code {
-  max-width: 180px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.resource-selection-subtitle {
-  color: var(--sb-text-muted, #64748b);
-  font-size: 0.78rem;
-  max-width: 220px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.resource-item {
-  min-height: 58px;
-}
-
-.resource-option-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  width: 100%;
-  font-weight: 600;
-}
-
-.resource-option-subtitle {
-  display: inline-block;
-  color: var(--sb-text-soft, #64748b);
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .rubro-dot {

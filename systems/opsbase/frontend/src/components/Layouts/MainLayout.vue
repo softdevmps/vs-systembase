@@ -169,7 +169,7 @@ const menuItems = computed(() => {
       id: 'ops-ajustar',
       titulo: 'Ajustar stock',
       icono: 'mdi-tune-variant',
-      ruta: '/operaciones?task=ajuste'
+      ruta: '/operaciones/ajuste'
     }
   ]
 

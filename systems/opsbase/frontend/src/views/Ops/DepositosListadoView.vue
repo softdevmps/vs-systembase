@@ -56,7 +56,31 @@
           clearable
         />
       </v-col>
-      <v-col cols="12" md="3" lg="2" class="d-flex align-center">
+      <v-col cols="12" md="3" lg="2">
+        <v-select
+          v-model="selectedOpsStatus"
+          :items="opsStatusItems"
+          item-title="title"
+          item-value="value"
+          label="Estado operativo"
+          variant="outlined"
+          density="comfortable"
+          clearable
+        />
+      </v-col>
+      <v-col cols="12" md="3" lg="2">
+        <v-select
+          v-model="selectedCoordsMode"
+          :items="coordsModeItems"
+          item-title="title"
+          item-value="value"
+          label="Coordenadas"
+          variant="outlined"
+          density="comfortable"
+          clearable
+        />
+      </v-col>
+      <v-col cols="12" md="3" lg="1" class="d-flex align-center">
         <v-chip size="small" color="primary" variant="tonal">
           {{ filteredDepositos.length }} resultados
         </v-chip>
@@ -121,12 +145,18 @@
         </template>
 
         <template #item.actions="{ item }">
-          <div class="d-flex ga-1 justify-end">
-            <v-btn size="x-small" variant="text" color="primary" @click="openContext(item.locationId)">
+          <div class="list-actions">
+            <v-btn size="small" variant="tonal" color="primary" @click="openContext(item.locationId)">
+              <v-icon start size="16">mdi-warehouse</v-icon>
               Contexto
             </v-btn>
-            <v-btn size="x-small" variant="text" color="primary" @click="openConfig(item.locationId)">
+            <v-btn size="small" variant="text" color="primary" @click="openConfig(item.locationId)">
+              <v-icon start size="16">mdi-cog-outline</v-icon>
               Configurar
+            </v-btn>
+            <v-btn size="small" variant="text" color="primary" @click="goTo('/depositos')">
+              <v-icon start size="16">mdi-map-outline</v-icon>
+              Mapa
             </v-btn>
           </div>
         </template>
@@ -147,6 +177,8 @@ const error = ref('')
 const response = ref({})
 const search = ref('')
 const selectedRubroId = ref(null)
+const selectedOpsStatus = ref(null)
+const selectedCoordsMode = ref(null)
 
 function normalizeKey(value) {
   return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '')
@@ -230,12 +262,27 @@ const depositos = computed(() => toArray(readField(response.value, 'Depositos'))
 const filteredDepositos = computed(() => {
   const query = String(search.value || '').trim().toLowerCase()
   return depositos.value.filter(item => {
+    if (selectedCoordsMode.value && item.coordinateMode !== selectedCoordsMode.value) return false
+    if (selectedOpsStatus.value === 'pendiente' && !(item.pendingMovements > 0)) return false
+    if (selectedOpsStatus.value === 'critico' && !((item.stockDisponible || 0) <= 0)) return false
+    if (selectedOpsStatus.value === 'ok' && ((item.pendingMovements > 0) || ((item.stockDisponible || 0) <= 0))) return false
     if (!query) return true
     return String(item.codigo || '').toLowerCase().includes(query) ||
       String(item.nombre || '').toLowerCase().includes(query) ||
       String(item.rubroNombre || '').toLowerCase().includes(query)
   })
 })
+
+const opsStatusItems = [
+  { value: 'pendiente', title: 'Con pendientes' },
+  { value: 'critico', title: 'Stock crítico' },
+  { value: 'ok', title: 'Operativo OK' }
+]
+
+const coordsModeItems = [
+  { value: 'db', title: 'Coordenadas reales' },
+  { value: 'synthetic', title: 'Coordenadas sintéticas' }
+]
 
 const kpiCards = computed(() => {
   const total = filteredDepositos.value.length
@@ -341,6 +388,13 @@ onMounted(() => {
 .cell-name {
   font-weight: 600;
   color: var(--sb-text-main, #0f172a);
+}
+
+.list-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
 }
 
 .depositos-listado-view :deep(.v-data-table th),

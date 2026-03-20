@@ -177,8 +177,14 @@ const movementRoute = computed(() => {
 })
 
 function isTaskActive(task) {
-  const key = normalizeKey(route.query?.task)
-  return key === normalizeKey(task)
+  const queryTask = normalizeKey(route.query?.task)
+  const path = normalizeKey(route.path)
+  const target = normalizeKey(task)
+
+  if (queryTask) return queryTask === target
+  if (target === 'ajuste' && path.endsWith('operacionesajuste')) return true
+  if (target === 'panel' && path.endsWith('operaciones')) return true
+  return false
 }
 </script>
 
