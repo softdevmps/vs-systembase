@@ -1,0 +1,26 @@
+.sb-warehouse-marker-wrap {
+  background: transparent;
+  border: none;
+}
+
+.sb-warehouse-marker {
+  width: var(--sb-marker-size, 22px);
+  height: var(--sb-marker-size, 22px);
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sb-marker-color, #16a34a);
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.35);
+}
+
+.sb-warehouse-marker i {
+  font-size: calc(var(--sb-marker-size, 22px) * 0.58);
+  line-height: 1;
+}
+
+.sb-warehouse-marker.is-selected {
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.3), 0 2px 8px rgba(15, 23, 42, 0.35);
+}
